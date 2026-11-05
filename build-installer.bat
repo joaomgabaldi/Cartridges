@@ -1,8 +1,7 @@
 :inicio
 @echo off
 rem Gera o instalador do Kyron: online pelo workflow do GitHub ou offline aqui.
-rem A logica esta em build-aux\windows\instalador-online.ps1 e build-installer.ps1;
-rem este arquivo existe para dar dois cliques.
+rem A logica esta nos .ps1 de build-aux\windows; este arquivo existe para dar dois cliques.
 
 title Kyron - build do instalador
 echo [1] Online: gera a pre-release pelo GitHub Actions e faz o git pull

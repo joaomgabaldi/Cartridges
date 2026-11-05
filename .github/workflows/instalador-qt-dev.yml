@@ -1,7 +1,7 @@
 name: Gerar instalador Qt (desenvolvimento)
 
-# O app Qt da migração, em cópia à parte do instalado (outro AppId, pasta e dados "-dev").
-# Só gera o instalador e o guarda como artefato: não publica release, não faz commit nem push.
+# Cópia à parte do app instalado (outro AppId, pasta e dados "-dev"). Só gera o instalador como artefato:
+# não publica release, não faz commit nem push.
 on:
   workflow_dispatch:
 
@@ -43,7 +43,7 @@ jobs:
       - name: Montar o app
         run: python build-aux/windows/montar_app_qt.py --canal desenvolvimento --destino _dist/qt-dev
 
-      # A mesma versão do PC do desenvolvedor, instalada como no instalador.yml.
+      # Como no instalador.yml.
       - name: Inno Setup 7
         run: |
           $url = 'https://github.com/jrsoftware/issrc/releases/download/is-7_1_0/innosetup-7.1.0-x64.exe'

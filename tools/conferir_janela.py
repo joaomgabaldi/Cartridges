@@ -48,7 +48,6 @@ user32.GetMonitorInfoW.argtypes = [wintypes.HMONITOR, ctypes.c_void_p]
 user32.GetMonitorInfoW.restype = wintypes.BOOL
 
 
-# --- conferências pela API do Windows ---
 NOMES_DO_HITTEST = {
     1: "conteúdo", 2: "barra (arrastar)", 8: "minimizar", 9: "maximizar (Snap Layouts)",
     20: "fechar", 10: "borda esquerda", 11: "borda direita", 12: "borda de cima",

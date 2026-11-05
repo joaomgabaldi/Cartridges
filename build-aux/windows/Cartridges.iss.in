@@ -41,8 +41,7 @@ DefaultDirName={autopf64}\Kyron
 #endif
 DisableProgramGroupPage=yes
 LicenseFile={#Repo}\LICENSE
-; Sempre como administrador: a pasta fica em Program Files. A migração de uma
-; instalação antiga "só para mim" lê {userprograms}/{userdesktop}.
+; Sempre como administrador: a pasta fica em Program Files.
 PrivilegesRequired=admin
 UsedUserAreasWarning=no
 #ifdef DESENVOLVIMENTO
@@ -58,17 +57,8 @@ WizardStyle=modern
 [Languages]
 Name: "brazilianportuguese"; MessagesFile: "compiler:Languages\BrazilianPortuguese.isl"
 
-; Overrides for the messages the wizard actually shows. Two problems with the
-; stock translation: it is written informally throughout ("pra" for "para",
-; "Aonde" for "Onde"), which clashes with the Portuguese in the app itself; and
-; each page has three text slots that it fills with near-identical sentences —
-; the licence page said "leia as seguintes informações" and then "leia o
-; seguinte Acordo de Licença" directly below it.
-;
-; The rule applied here: the heading names the page, the subtitle says
-; something the body does not, and the body says what to do. Overriding from
-; this script rather than editing the .isl in the Inno Setup folder means an
-; update to Inno Setup cannot quietly undo any of it.
+; A tradução padrão é informal ("pra", "Aonde") e repete frases entre os três textos de cada página.
+; As mensagens ficam aqui, e não no .isl do Inno Setup, para uma atualização dele não desfazê-las.
 [Messages]
 brazilianportuguese.WelcomeLabel1=Bem-vindo ao instalador do [name]
 brazilianportuguese.WelcomeLabel2=O [name/ver] será instalado no seu computador.%n%nRecomendamos fechar os outros aplicativos antes de continuar.
@@ -103,9 +93,7 @@ brazilianportuguese.FinishedLabel=O [name] foi instalado e já pode ser aberto p
 brazilianportuguese.FinishedLabelNoIcons=O [name] foi instalado no seu computador.
 brazilianportuguese.ClickFinish=Clique em Concluir para sair.
 
-; Referenced by {cm:...} in [Tasks] and [Run]. A separate section: Inno keeps
-; these apart from the wizard's own strings, and putting them above would be
-; rejected as unknown message names.
+; Seção à parte: em [Messages] o Inno rejeitaria estes nomes como desconhecidos.
 [CustomMessages]
 brazilianportuguese.AdditionalIcons=Atalhos:
 brazilianportuguese.CreateDesktopIcon=Criar atalho na &área de trabalho
@@ -115,17 +103,15 @@ brazilianportuguese.LaunchProgram=Iniciar o %1
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [InstallDelete]
-; Atualizar por cima deixaria em {app} tudo o que saiu do app entre versões. As
-; pastas saem inteiras e voltam do pacote, e por isso `.py` e `.pyc` (por hash, sem
-; conferir a fonte) são sempre trocados juntos. No canal final saem as duas árvores:
-; a da versão GTK (bin, etc, lib, share) e a do Qt (bin, python, lib, app). A
-; biblioteca e as preferências ficam fora de {app} e não são tocadas.
+; Atualizar por cima deixaria em {app} o que saiu do app entre versões, e `.py` e `.pyc` (por hash)
+; precisam ser trocados juntos. No canal final saem também as pastas da versão anterior (GTK).
+; A biblioteca e as preferências ficam fora de {app}.
 #ifdef DESENVOLVIMENTO
 Type: filesandordirs; Name: "{app}\bin"
 Type: filesandordirs; Name: "{app}\python"
 Type: filesandordirs; Name: "{app}\lib"
 Type: filesandordirs; Name: "{app}\app"
-; Atalhos do nome antigo (o app agora se chama Kyron)
+; Atalhos do nome anterior (Cartridges)
 Type: files; Name: "{autoprograms}\Cartridges Qt (desenvolvimento).lnk"
 Type: files; Name: "{autodesktop}\Cartridges Qt (desenvolvimento).lnk"
 #else
@@ -136,13 +122,12 @@ Type: filesandordirs; Name: "{app}\share"
 Type: filesandordirs; Name: "{app}\python"
 Type: filesandordirs; Name: "{app}\app"
 Type: filesandordirs; Name: "{app}\licencas"
-; Atalhos do nome antigo (o app agora se chama Kyron)
+; Atalhos do nome anterior (Cartridges)
 Type: files; Name: "{autoprograms}\Cartridges.lnk"
 Type: files; Name: "{autodesktop}\Cartridges.lnk"
 #endif
 
 [Files]
-; A pasta que o montar_app_qt.py monta: só o que o app usa.
 Source: "{#PastaApp}\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion
 Source: "{#Repo}\build-aux\windows\icon.ico"; DestDir: "{app}"; Flags: ignoreversion
 
@@ -154,19 +139,13 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\bin\{#MyAppExeName}"; IconF
 Filename: "{app}\bin\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall
 
 [Code]
-// Migração de uma instalação antiga "só para mim" (%LOCALAPPDATA%\Programs),
-// de quando o instalador ainda oferecia esse modo. O instalador elevado não a
-// enxerga e criaria uma segunda cópia. O desinstalador dela não serve: o código
-// antigo pergunta se apaga a biblioteca, e numa atualização silenciosa ninguém
-// responde. A limpeza é feita aqui, depois de a instalação nova dar certo (se
-// ela falhar, a antiga continua de pé), e só no que o instalador antigo criou:
-// a pasta pode ter sido escolhida pela pessoa e ter outros arquivos, que ficam.
-// A biblioteca e as configurações estão fora da pasta e não são tocadas; o app
-// não grava mais nada por usuário que aponte para ela (sem "abrir com o
-// Windows"). Os fixados na barra de tarefas que apontavam para o exe antigo
-// são corrigidos por CorrigirFixados.
-// Limite conhecido: com o UAC respondido por outra conta, o HKCU é o dela e a
-// instalação antiga não aparece; fica a cópia duplicada, sem perda de dados.
+// Migração da instalação "só para mim" (%LOCALAPPDATA%\Programs) da versão anterior (GTK): o
+// instalador elevado não a enxerga e criaria uma segunda cópia. O desinstalador dela não serve:
+// pergunta se apaga a biblioteca, e numa atualização silenciosa ninguém responde. A limpeza
+// roda depois de a instalação nova dar certo e só apaga o que o instalador antigo criou, pois
+// a pasta pode ter outros arquivos da pessoa. A biblioteca e as configurações ficam fora dela.
+// Limite conhecido: com o UAC respondido por outra conta, o HKCU é o dela e a instalação
+// antiga não aparece; fica a cópia duplicada, sem perda de dados.
 const
   ChaveDoUsuario = 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{88FC7AF8-9F74-40EC-AAED-FA6356261CBB}_is1';
 
@@ -175,7 +154,6 @@ begin
   Result := AddBackslash(Lowercase(Pasta));
 end;
 
-// Apaga o atalho só se ele apontar para dentro da pasta antiga
 procedure ApagarAtalhoAntigo(const Atalho, PastaAntiga: String);
 var
   Shell, Lnk: Variant;
@@ -196,7 +174,6 @@ begin
     Log('Migração: atalho mantido (aponta para outro lugar): ' + Atalho);
 end;
 
-// Um item que o instalador antigo criou. True se ele não existe mais.
 function ApagarItem(const Caminho: String): Boolean;
 begin
   if DirExists(Caminho) then
@@ -209,9 +186,8 @@ begin
     Log('Migração: não foi possível apagar ' + Caminho);
 end;
 
-// O que o instalador antigo pôs na pasta ([Files]: o conteúdo de _build\app e o
-// icon.ico; o Inno acrescenta o unins000). O unins000.exe sai por último e só se
-// todo o resto saiu: enquanto ele existir, a próxima instalação tenta de novo.
+// O unins000.exe sai por último e só se todo o resto saiu: enquanto ele existir, a próxima
+// instalação tenta de novo.
 function ApagarInstalacaoAntiga(const Pasta: String): Boolean;
 begin
   Result := ApagarItem(Pasta + 'bin');
@@ -222,12 +198,11 @@ begin
   Result := ApagarItem(Pasta + 'unins000.dat') and Result;
   if Result then
     Result := ApagarItem(Pasta + 'unins000.exe');
-  // Só sai se tiver ficado vazia: o que a pessoa guardou ali fica
+  // RemoveDir só apaga pasta vazia: o que a pessoa guardou ali fica
   RemoveDir(RemoveBackslash(Pasta));
 end;
 
-// Devolve a pasta da instalação antiga (normalizada) quando ela é válida, para
-// os fixados na barra de tarefas serem corrigidos; '' quando não há.
+// Devolve a pasta antiga (normalizada) para CorrigirFixados; '' quando não há.
 function MigrarInstalacaoDoUsuario: String;
 var
   Pasta, Dados, Destino: String;
@@ -265,14 +240,12 @@ begin
   end;
 end;
 
-// Fixados na barra de tarefas do usuário que abrem o app pelo caminho antigo:
-// o pythonw.exe ou o Cartridges.exe (nome antigo do lançador) desta instalação, ou o exe da
-// instalação "só para mim" que acabou de sair. Passam a abrir o Kyron.exe,
-// e a janela volta a se agrupar com o fixado. Os do menu Iniciar ficam num
-// arquivo sem formato documentado e não são tocados.
-// O instalador é de 32 bits: nele, o WScript.Shell lê "C:\Program Files" como
-// "C:\Program Files (x86)", então as duas formas valem. A regravação usa o
-// CreateShellLink do Inno (o mesmo do [Icons]), que grava o caminho certo.
+// Fixados na barra de tarefas que abrem o app pelo caminho da versão anterior (pythonw.exe ou
+// Cartridges.exe desta instalação, ou o exe da instalação "só para mim") passam a abrir o
+// Kyron.exe, e a janela volta a se agrupar com o fixado. Os do menu Iniciar ficam num arquivo
+// sem formato documentado e não são tocados.
+// O instalador é de 32 bits: nele o WScript.Shell lê "C:\Program Files" como "C:\Program Files
+// (x86)", então as duas formas valem. CreateShellLink grava o caminho certo.
 procedure CorrigirFixados(const PastaAntiga: String);
 var
   Pasta, Alvo, Pythonw, PythonwX86, CartridgesExe, CartridgesExeX86, Pf64: String;
@@ -321,21 +294,18 @@ begin
   if CurStep <> ssPostInstall then
     Exit;
 #ifdef DESENVOLVIMENTO
-  Exit; // sem migração da instalação antiga
+  Exit;
 #endif
   CorrigirFixados(MigrarInstalacaoDoUsuario);
 end;
 
-// Offer to remove the user's library and settings on uninstall. They live
-// outside the install folder (LocalAppData + GSettings in the registry), so the
-// default uninstall would otherwise leave them behind.
+// A biblioteca e as configurações ficam fora da pasta de instalação (LocalAppData e registro):
+// o desinstalador padrão as deixaria para trás.
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 begin
   if CurUninstallStep = usPostUninstall then
   begin
-    // Accented, like every other string here. The compiler reads this file as
-    // UTF-8 whether or not it carries a byte order mark — compiling the same
-    // script with and without one produces byte-identical installers.
+    // O compilador lê este arquivo como UTF-8 com ou sem BOM, então os acentos funcionam.
     // A pasta dos saves só sai se for a padrão (dentro de {localappdata}); uma
     // pasta escolhida em Preferências fica onde está, e o texto diz isso.
 #ifdef DESENVOLVIMENTO
@@ -355,7 +325,6 @@ begin
       // roda elevado, e se o UAC for respondido com outra conta, {localappdata}
       // e HKCU sao os dessa conta, nao os de quem usa o app.
 #ifdef DESENVOLVIMENTO
-      // A cópia de desenvolvimento só usa os dados "-dev"; os do app instalado não são tocados.
       DelTree(ExpandConstant('{localappdata}\io.github.joaomgabaldi.Cartridges-dev'), True, True, True);
       RegDeleteKeyIncludingSubkeys(HKEY_CURRENT_USER, 'Software\GSettings\io\github\joaomgabaldi\Cartridges-dev');
 #else

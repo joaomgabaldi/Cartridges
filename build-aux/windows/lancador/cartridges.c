@@ -46,7 +46,6 @@ int WINAPI wWinMain(HINSTANCE instancia, HINSTANCE anterior, PWSTR linha, int ex
     if (!argv || n == 0 || n >= MAX_PATH)
         return falha();
 
-    /* <instalação>\bin\Kyron.exe -> <instalação>\python\python315.dll */
     wcscpy_s(dll, MAX_PATH, exe);
     barra = wcsrchr(dll, L'\\');
     if (!barra || (barra - dll) + wcslen(L"\\..\\python\\python315.dll") >= MAX_PATH)

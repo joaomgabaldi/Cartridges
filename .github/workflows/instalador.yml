@@ -24,9 +24,8 @@ jobs:
         with:
           python-version: "3.15.1"
 
-      # A versão vem de cartridges/shared.py e as novidades já estão na <release> do topo do
-      # metainfo; aqui ela recebe a data de Brasília (UTC-3 o ano todo desde 2019). O commit
-      # volta para o branch só se a data mudou.
+      # A <release> do topo do metainfo recebe a data de Brasília (UTC-3 o ano todo desde 2019);
+      # o commit só sai se a data mudou.
       - name: Data da release
         shell: bash
         env:

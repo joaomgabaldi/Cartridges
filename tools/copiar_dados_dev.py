@@ -28,17 +28,13 @@ APP_ID = "io.github.joaomgabaldi.Cartridges"
 CHAVE = r"Software\GSettings\io\github\joaomgabaldi\Cartridges"
 RAIZ = winreg.HKEY_CURRENT_USER
 
-# O que a cópia -dev NÃO herda: valores e arquivos que guardam caminho absoluto para a pasta dos
-# dados reais. Copiados, o app -dev faria backup/restauração dos saves na pasta real.
-# Sem eles, o app -dev usa o padrão, dentro da própria pasta -dev (o ludusavi regrava os dois).
-# O estado da sessão em curso (papel de parede e fita de antes) é do app real: na -dev ele restauraria o do outro.
-# As contas das lojas (pasta `contas`, as chaves de renovação) e a chave da Steam: com a varredura de
-# conquistas ligada, o app -dev falaria com Microsoft, Epic, EA e Steam como a conta real (D57).
+# O que a cópia -dev não herda: caminhos absolutos para a pasta real (o app -dev faria backup dos saves
+# nela; sem eles usa o padrão dentro da pasta -dev), o estado da sessão em curso (é do app real) e as
+# contas das lojas e a chave da Steam (a varredura de conquistas falaria com elas como a conta real).
 IGNORAR_VALORES = frozenset(
     {"pasta-dos-saves", "conquistas-chave-steam", "session-wallpaper-saved", "fita-estado-anterior"}
 )
-# As fitas de LED e a conta Tuya levam as chaves locais dos aparelhos reais da casa: o app -dev
-# acende as fitas ao abrir e falaria com elas (D53).
+# As fitas de LED e a conta Tuya levam as chaves locais dos aparelhos reais: o app -dev acenderia as fitas.
 IGNORAR_ARQUIVOS = frozenset({"ludusavi/config.yaml", "ludusavi/cache.yaml", "fitas.json", "tuya_conta.json", "contas"})
 
 REPO = Path(__file__).resolve().parent.parent
@@ -48,9 +44,8 @@ ATALHOS_DE_TESTE = REPO / "_dev" / "atalhos-teste"
 def isolar_dev(chave_destino: str, pasta_atalhos: Path = ATALHOS_DE_TESTE) -> None:
     r"""Desliga na chave -dev o que faria o app do código-fonte mexer nos dados reais.
 
-    O lugar único dessa regra, aplicado depois da cópia e só na chave -dev. Por quê: soltar um
-    ``.lnk`` no app -dev o copia para ``shortcuts-location``; se fosse a ``Documents\Atalhos`` real, o
-    app GTK de uso diário o importaria para a biblioteca real. E com ``remove-missing`` ligado, uma
+    Soltar um ``.lnk`` no app -dev o copia para ``shortcuts-location``; se fosse a ``Documents\Atalhos``
+    real, o app de uso diário o importaria para a biblioteca real. E com ``remove-missing`` ligado, uma
     importação -dev numa pasta diferente da real marcaria jogos como removidos.
     """
     pasta_atalhos.mkdir(parents=True, exist_ok=True)

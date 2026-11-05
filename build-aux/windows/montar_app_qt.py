@@ -55,7 +55,6 @@ FFMPEG_LICENCA = f"{_FFMPEG_PASTA}/LICENSE"
 # GPLv3 §6: a fonte correspondente, o commit que a página do build publica para esta versão.
 FFMPEG_FONTE = "https://github.com/FFmpeg/FFmpeg/commit/946fcce07b"
 
-# A mesma versão e os mesmos SHA-256 que o instalador da versão GTK levava.
 _LUDUSAVI = "ludusavi-v0.31.0"
 _LUDUSAVI_BASE = "https://github.com/mtkennerly/ludusavi/releases/download/v0.31.0"
 LUDUSAVI_URL = f"{_LUDUSAVI_BASE}/{_LUDUSAVI}-win64.zip"
@@ -68,11 +67,10 @@ MARCADOR = ".montado-por-montar_app_qt"
 
 CANAIS = ("desenvolvimento", "final")
 
-# licencas\\<nome> a partir do repositório (o compilar.bat do QWindowKit já exige o SDK em `_deps`).
 LICENCAS = {
     "QWindowKit.txt": "build-aux/windows/qwk/_deps/qwindowkit/LICENSE",
     "qmsetup.txt": "build-aux/windows/qwk/_deps/qwindowkit/qmsetup/LICENSE",
-    # Os ícones de `data/icones`, os mesmos da versão GTK.
+    # Licenças dos ícones de `data/icones`.
     "adwaita-icon-theme.txt": "build-aux/windows/licencas/adwaita-icon-theme.txt",
     "libadwaita.txt": "build-aux/windows/licencas/libadwaita.txt",
 }
@@ -87,24 +85,18 @@ OBRIGATORIOS = (
     "data/library_placeholder_small.svg",
     *LICENCAS.values(),
 )
-# O que de `data/` o app instalado lê.
 DATA = (
     "io.github.joaomgabaldi.Cartridges.gschema.xml.in",
-    # O "Sobre o Cartridges" lê as novidades da versão e a descrição daqui.
     "io.github.joaomgabaldi.Cartridges.metainfo.xml.in",
     "library_placeholder.svg",
     "library_placeholder_small.svg",
-    # A capa e o ícone de conquista de exemplo do assistente da primeira abertura.
     "capa_de_exemplo.svg",
     "conquista_de_exemplo.svg",
     "sons",
     "icons/hicolor",
-    # Os ícones simbólicos da interface (`image://icone`).
     "icones",
 )
 
-# Do PySide6, o que o app não usa: WebEngine, 3D, PDF, o Designer, as ferramentas de
-# linha de comando, as traduções e o material para gerar bindings.
 SOBRAS_DO_PYSIDE = (
     "*WebEngine*", "Qt63D*", "Qt3D*", "Qt6Pdf*", "QtPdf*", "Qt6Designer*", "QtDesigner*",
     "*.exe", "*.pyi", "*.lib", "resources", "translations", "doc", "glue", "include",
@@ -147,7 +139,6 @@ def montar(
     if destino == raiz.resolve() or destino in raiz.resolve().parents:
         sys.exit(f"O destino {destino} é o repositório ou uma pasta que o contém.")
     if destino.exists() and any(destino.iterdir()):
-        # Só se apaga o que este script montou antes
         if not (destino / MARCADOR).is_file():
             sys.exit(f"O destino {destino} não está vazio nem foi montado por este script; nada foi apagado.")
         shutil.rmtree(destino)
@@ -200,7 +191,6 @@ def _sha256(caminho: Path) -> str:
 
 
 def baixar_python(cache: Path) -> Path:
-    """Baixa o Python embutido para `cache`, confere o SHA-256 e devolve a pasta extraída."""
     extraido = cache / "python-embutido"
     marcador = extraido / ".sha256"
     if marcador.is_file() and marcador.read_text() == PYTHON_SHA256:
@@ -236,7 +226,6 @@ def _extrair(arquivo: Path, membro: str, destino: Path) -> None:
 
 
 def baixar_ffmpeg(cache: Path) -> Path:
-    """O `ffmpeg.exe` conferido e extraído em `cache`, com o LICENSE do pacote ao lado."""
     arquivo = _baixar_conferido(FFMPEG_URL, FFMPEG_SHA256, cache)
     exe = cache / "ffmpeg" / "ffmpeg.exe"
     _extrair(arquivo, FFMPEG_EXE, exe)

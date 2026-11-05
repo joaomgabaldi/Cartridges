@@ -5,7 +5,7 @@
 """Baixa o que o `compilar.bat` do QWindowKit precisa: o SDK do Qt 6.12.0 e o código do QWindowKit 1.5.0.
 
 O SDK (`qtbase` e `qtdeclarative`, MSVC 2022 64 bits) vem direto do download.qt.io, com o SHA-256 de cada
-.7z fixado aqui (D108); o `aqtinstall` não entende esse repositório. O QWindowKit e o `qmsetup` também
+.7z fixado aqui; o `aqtinstall` não entende esse repositório. O QWindowKit e o `qmsetup` também
 têm o commit fixado e conferido. Tudo vai para `build-aux/windows/qwk/_deps` (fora do git). O que já
 existe e confere não é refeito.
 
@@ -27,7 +27,7 @@ BASE = (
     "qt6_6120_msvc2022_64/qt.qt6.6120.win64_msvc2022_64/"
 )
 SUFIXO = "Windows-Windows_11_24H2-MSVC2022-Windows-Windows_11_24H2-X86_64.7z"
-# nome -> (arquivo remoto, SHA-256). Os valores saem dos .7z já baixados e conferidos pelo SHA-1 publicado na época.
+# nome -> (arquivo remoto, SHA-256)
 PACOTES = {
     "qtbase": (
         f"6.12.0-0-202609280346qtbase-{SUFIXO}",
