@@ -87,7 +87,7 @@ def test_escolher_entrega_o_arquivo(classe, baixar, temp):
 
 
 def test_as_linhas_entram_uma_a_uma_quando_a_miniatura_chega(classe, baixar, temp):
-    """DE-72: até a primeira miniatura, o seletor só busca (spinner central); a linha entra quando a miniatura chega."""
+    """Até a primeira miniatura, o seletor só busca (spinner central); a linha entra quando a miniatura chega."""
     seletor, _ = _criar(classe)
     baixar.soltar.clear()
     seletor.abrir("Jogo")
@@ -100,7 +100,7 @@ def test_as_linhas_entram_uma_a_uma_quando_a_miniatura_chega(classe, baixar, tem
 
 
 def test_escolher_nao_interrompe_as_miniaturas(baixar, temp, monkeypatch):
-    """DE-86: a escolha tem a sua geração; a miniatura que faltava chega durante o download e depois dele."""
+    """A escolha tem a sua geração; a miniatura que faltava chega durante o download e depois dele."""
     import threading  # noqa: PLC0415
 
     liberar = threading.Event()
@@ -125,7 +125,7 @@ def test_escolher_nao_interrompe_as_miniaturas(baixar, temp, monkeypatch):
 
 
 def test_fechar_o_seletor_durante_a_conversao_mantem_a_capa_do_editor(edicao, temp, monkeypatch):
-    """I3/DE-49: quem desistiu (fechou o seletor) não vê a capa mudar depois; nada de temporário sobra."""
+    """Quem desistiu (fechou o seletor) não vê a capa mudar depois; nada de temporário sobra."""
     import threading  # noqa: PLC0415
 
     from cartridges import edicao as regra  # noqa: PLC0415
@@ -152,7 +152,7 @@ def test_fechar_o_seletor_durante_a_conversao_mantem_a_capa_do_editor(edicao, te
 
 
 def test_enter_no_campo_busca_mesmo_durante_o_download(baixar, temp):
-    """I2/DE-75: o campo está ativo, então o Enter também busca (a busca nova cancela o download)."""
+    """O campo está ativo, então o Enter também busca (a busca nova cancela o download)."""
     seletor, _ = _criar(seletores.SeletorDoSgdb)
     seletor.abrir("Jogo")
     assert _esperar(lambda: _prontos(seletor, 3))
@@ -167,7 +167,7 @@ def test_enter_no_campo_busca_mesmo_durante_o_download(baixar, temp):
 
 
 def test_capa_que_nao_converte_volta_a_grade(baixar, temp):
-    """DE-49: o seletor da capa só fecha com a capa pronta; se a conversão falha, a grade volta."""
+    """O seletor da capa só fecha com a capa pronta; se a conversão falha, a grade volta."""
     seletor, destino = _criar(seletores.SeletorDoSgdb)
     destino.convertida = False
     seletor.abrir("Jogo")
@@ -300,7 +300,7 @@ def test_animadas_filtra(baixar, temp, schema):
 
 
 def test_a_previa_animada_so_toca_a_copia_reduzida(baixar, temp, schema, monkeypatch):
-    """I1/DE-78: a original (até 200 MB) nunca é fonte animada; só a cópia reduzida, quando chega."""
+    """A original (até 200 MB) nunca é fonte animada; só a cópia reduzida, quando chega."""
     pedidos = []
     monkeypatch.setattr(seletores.copias_animadas, "pedir", lambda origem, destino, tamanho, pronto: pedidos.append((destino, pronto)))
     seletor, _ = _criar(seletores.SeletorDoSgdb, SgdbFalso(grids=lista_de_grades(2)))

@@ -2,14 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""The token bucket, and the history it restores across restarts.
-
-Persisting a pick history achieves nothing unless restoring it costs tokens. The
-Steam limiter reloads up to 200 timestamps at startup; with a bucket created
-full on top of that, a restart ten seconds after a big import could issue
-another 100 requests immediately — 300 inside a period the service documents as
-allowing 200.
-"""
+"""The token bucket, and the history it restores across restarts: a restart must not refill a bucket already spent."""
 
 import time
 
@@ -36,13 +29,11 @@ class Limiter(RateLimiter):
 
 
 def test_a_fresh_limiter_starts_full():
-    """The control: nothing restored, nothing consumed."""
     limiter = Limiter()
     assert limiter.n_tokens == limiter.burst_tokens
 
 
 def test_restored_history_consumes_tokens():
-    """T6.14 The bucket has to reflect what was already spent."""
     now = time.time()
     limiter = Limiter(seeded=[now - 5] * 4)
 
@@ -50,7 +41,6 @@ def test_restored_history_consumes_tokens():
 
 
 def test_expired_history_consumes_nothing():
-    """T6.15 Picks older than the period are not owed anything."""
     now = time.time()
     limiter = Limiter(seeded=[now - 600] * 8)
 
@@ -58,7 +48,7 @@ def test_expired_history_consumes_nothing():
 
 
 def test_history_larger_than_the_bucket_is_clamped():
-    """T6.16 Consuming more than the bucket holds would go negative."""
+    """Consuming more than the bucket holds would go negative."""
     now = time.time()
     limiter = Limiter(seeded=[now - 1] * 50)
 
@@ -74,11 +64,7 @@ def test_seed_history_reports_what_it_consumed():
 
 
 def test_seed_history_never_blocks():
-    """It runs inside __init__, before the refill thread exists.
-
-    Anything that waited for a token here would deadlock at startup rather than
-    fail, which is the worst shape this bug could take.
-    """
+    """Runs inside __init__ before the refill thread exists; waiting for a token here would deadlock startup."""
     now = time.time()
     limiter = Limiter(seeded=[now - 1] * 10)
     assert limiter.n_tokens == 0
@@ -89,7 +75,6 @@ def test_seed_history_never_blocks():
 
 
 def test_pick_history_drops_entries_outside_the_period():
-    """The window is what makes the restored count meaningful."""
     now = time.time()
     history = PickHistory(60)
     history.add(now - 120, now - 90, now - 5, now - 1)
@@ -98,12 +83,7 @@ def test_pick_history_drops_entries_outside_the_period():
 
 
 def test_spacing_respects_the_documented_limit():
-    """T6.17 The empirical check, formalised.
-
-    Not a timing assertion on wall-clock duration — that is flaky by
-    construction — but on the refill spacing the limiter derives, which is what
-    actually governs the rate.
-    """
+    """The refill spacing the limiter derives respects the documented limit (no wall-clock timing, which is flaky)."""
     limiter = Limiter()
     period = limiter.refill_period_seconds / limiter.refill_period_tokens
 

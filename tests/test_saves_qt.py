@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 """Os saves na sessão e as versões ("Restaurar save"): o fim da sessão, o `launch`, o menu do jogo, o diálogo de versões
-e a confirmação, no `Aplicativo.qml` inteiro. Os testes de `test_saves_ui.py` desta área vieram para cá com os mesmos nomes."""
+e a confirmação, no `Aplicativo.qml` inteiro."""
 
 import logging
 import time
@@ -102,7 +102,7 @@ def test_launch_durante_a_restauracao_avisa_e_nao_abre(monkeypatch):
     assert jogo.launch() is False
 
     assert avisos == [("Aguarde o fim da restauração dos saves de Probe.", "")]
-    assert pedidos == []  # antes do comando a conferir (a ordem da `main`)
+    assert pedidos == []  # antes do comando a conferir
     assert jogo.last_played == 0
 
 
@@ -433,7 +433,7 @@ def test_dialogo_lista_versoes_mais_recente_primeiro(janela_dos_saves, versoes):
 
 
 def test_versao_incompleta_chega_ao_leitor_como_descricao(janela_dos_saves):
-    """G-M9: o título é o nome da linha e o subtítulo (que diz se a versão é incompleta) é a descrição, como a `AdwActionRow`."""
+    """O título é o nome da linha e o subtítulo (que diz se a versão é incompleta) é a descrição."""
     janela = janela_dos_saves()
     assert janela.saves.abrir("imported_1") is True
     assert _esperar(lambda: janela.achar("dialogoDeVersoes").property("visible") is True)

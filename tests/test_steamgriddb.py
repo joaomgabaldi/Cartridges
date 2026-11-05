@@ -57,7 +57,7 @@ def responses(monkeypatch):
 
 
 def test_html_401_becomes_an_auth_error(responses, make_game):
-    """T6.24 A Cloudflare page is not JSON, and must not be read as one."""
+    """A Cloudflare page is not JSON, and must not be read as one."""
     responses.append(
         FakeResponse(401, "<html><body>Access denied</body></html>", is_json=False)
     )
@@ -67,7 +67,7 @@ def test_html_401_becomes_an_auth_error(responses, make_game):
 
 
 def test_json_401_without_an_errors_key_becomes_an_auth_error(responses, make_game):
-    """T6.25 A body of another shape used to raise KeyError instead."""
+    """A body of another shape used to raise KeyError instead."""
     responses.append(FakeResponse(401, {"message": "unauthorized"}))
 
     with pytest.raises(SgdbAuthError):
@@ -83,7 +83,7 @@ def test_a_well_formed_401_keeps_its_message(responses, make_game):
 
 
 def test_an_exact_title_match_wins_over_the_first_result(responses, make_game):
-    """T6.26 This is an autocomplete endpoint, so the first hit is fuzzy.
+    """This is an autocomplete endpoint, so the first hit is fuzzy.
 
     Taking ``results[0]`` blindly attaches another game's art, and — with the
     logo hit cached — makes that permanent.
@@ -128,7 +128,7 @@ def test_no_results_is_a_not_found(responses, make_game):
 
 
 def test_a_200_with_an_unexpected_shape_is_a_sgdb_error(responses, make_game):
-    """Auditoria 26/08, M9: um 200 de shape inesperado (proxy devolvendo
+    """Um 200 de shape inesperado (proxy devolvendo
     `{"success": false}`) estourava KeyError fora dos excepts dos pickers —
     a thread morria e o spinner ficava eterno. Shape errado agora é SgdbError."""
     responses.append(FakeResponse(200, {"success": False}))

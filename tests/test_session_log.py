@@ -64,7 +64,7 @@ def test_no_file_yet_is_not_an_error():
 
 
 def test_a_non_utf8_byte_costs_the_line_not_the_read():
-    """Auditoria 26/08, B3: UnicodeDecodeError é ValueError, escapava do guard
+    """UnicodeDecodeError é ValueError, escapava do guard
     de OSError e quebrava a tela de detalhes de todo jogo com playtime."""
     session_log.record("a", 60, end=1_700_001_000)
     with path().open("ab") as file:
@@ -75,7 +75,7 @@ def test_a_non_utf8_byte_costs_the_line_not_the_read():
 
 
 def test_an_out_of_range_end_costs_the_line_not_the_dialog():
-    """Auditoria 26/08, B2: `end` fora da faixa do fromtimestamp do Windows
+    """`end` fora da faixa do fromtimestamp do Windows
     passava no load (que só checava tipo) e derrubava o diálogo de histórico."""
     session_log.record("ok", 60, end=1_700_000_000)
     with path().open("a", encoding="utf-8") as file:

@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""A continuação da restauração (D81): o modelo `ContinuacaoDaRestauracao` e os quatro modais do `Aplicativo.qml`
+"""A continuação da restauração: o modelo `ContinuacaoDaRestauracao` e os quatro modais do `Aplicativo.qml`
 (pasta de atalhos, jogos sem atalho, escolha do atalho, dados do jogo). Os textos são os aprovados; o seletor de
 arquivos nunca abre (o modelo só emite `procurarPedido`)."""
 
@@ -166,7 +166,7 @@ def test_janela_lista_os_pendentes(modelo, store, make_game):
 
 
 def test_pendentes_e_candidatos_em_texto_puro(modelo, store, make_game, monkeypatch, tmp_path, aplicativo):
-    """Review Focus 3: o texto de fora chega como está ao QML (que o mostra em `PlainText`)."""
+    """O texto de fora chega como está ao QML (que o mostra em `PlainText`)."""
     _jogo(store, make_game, "t", "Tom & <b>Jerry</b>")
     restauracao.gravar(["t"], 1)
     atalho = tmp_path / "<Jogo> & 2.lnk"
@@ -295,7 +295,7 @@ def test_atalho_de_mesmo_nome_avisa_conforme_a_lista(modelo, aplicativo, store, 
 
 
 def test_falha_ao_copiar_o_atalho_sobe_para_o_erro_inesperado(modelo, store, make_game, monkeypatch, tmp_path):
-    """Como na `main`: a exceção sobe ao `sys.excepthook` (log e diálogo), sem engolir (D89)."""
+    """A exceção sobe ao `sys.excepthook` (log e diálogo), sem engolir."""
     _jogo(store, make_game, "gt", "Gran Turismo 7")
 
     def falha(_origem):

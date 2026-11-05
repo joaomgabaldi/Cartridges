@@ -17,9 +17,8 @@ from cartridges.jogo import Jogo
 from cartridges.store.managers.file_manager import FileManager
 from cartridges.store.managers.manager import Manager
 
-# O que a versão GTK grava para um jogo novo com estes campos (os padrões de
-# `Game` em game.py:128-252, `version` = SPEC_VERSION). Escrito à mão de propósito:
-# se um padrão ou uma chave mudar, a ficha deixa de ser a mesma para a versão GTK.
+# O que a versão anterior (GTK) grava para um jogo novo com estes campos. Escrito à mão de propósito: se um padrão
+# ou uma chave mudar, o arquivo do jogo deixa de ser o mesmo para a versão anterior.
 _FICHA_GTK = {
     "added": 1_700_000_000,
     "backup_dos_saves_desligado": False,

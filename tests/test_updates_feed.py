@@ -4,7 +4,7 @@
 
 """Checks for the repack update-feed reader.
 
-Runnable without the GTK stack — ``cartridges.utils.updates_feed`` imports only
+Runnable standalone — ``cartridges.utils.updates_feed`` imports only
 the standard library and ``requests`` — so a regression is caught with a plain::
 
     python3 tests/test_updates_feed.py
@@ -193,7 +193,7 @@ class TestExtractionFeedsMatcher(unittest.TestCase):
 
 
 class TestDoctypeGuard(unittest.TestCase):
-    """Auditoria 26/08, B6: a janela do guard terminava no primeiro `<`+letra,
+    """A janela do guard terminava no primeiro `<`+letra,
     inclusive dentro de um comentário — `<!-- <a -->` escondia o DOCTYPE."""
 
     def test_a_doctype_hidden_behind_a_comment_is_refused(self):

@@ -76,7 +76,7 @@ def test_cancelamento_impede_o_trabalho_e_reset_libera(app_qt):
     gerente.cancel_tasks()
     entregas = []
     gerente.process_game("a", {}, entregas.append)
-    # Como o Gio.Task: cancelada, a tarefa não roda mas a conclusão ainda chega,
+    # Cancelada, a tarefa não roda mas a conclusão ainda chega,
     # senão o pipeline (e a importação) nunca terminaria.
     assert _rodar_ate(lambda: entregas)
     assert gerente.rodou == []

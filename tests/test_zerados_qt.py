@@ -2,8 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Jogos Zerados (D85): as regras que moravam no `test_zerados.py` e no `test_auditoria_0923_zerados.py` (GTK) sobre o
-`Jogo` e a `Store`, o `SeletorDeZerados` e o `SeletorDeZerados.qml` no `Aplicativo.qml` inteiro.
+"""Jogos Zerados: as regras do `Jogo` e da `Store`, o `SeletorDeZerados` e o `SeletorDeZerados.qml` no `Aplicativo.qml` inteiro.
 
 Nada de verdade: a busca da Steam é sempre falsa (`zerado_manual.helper_da_steam` trocado) e a rede já é recusada pelo
 `sem_rede`; o `FileDialog` e o navegador nunca abrem.
@@ -597,7 +596,7 @@ def test_linhas_inativas_ficam_apagadas_e_nao_agem(janela, store, steam):
 
 
 def test_a_linha_que_ja_esta_fica_fora_do_foco(janela, store, steam):
-    """DE-94: a linha "já está em Jogos Zerados" é insensível: as setas passam por ela sem parar."""
+    """A linha "já está em Jogos Zerados" é insensível: as setas passam por ela sem parar."""
     jogo(store, 61, name="Hades", removed=True, status="beaten")
     steam.achados = [resultado(1145360, "Hades"), resultado(504230, "Celeste")]
     _abrir(janela)

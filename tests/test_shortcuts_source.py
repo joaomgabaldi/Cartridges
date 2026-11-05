@@ -4,19 +4,12 @@
 
 """Identity derivation and the batch guards around it.
 
-A game id is a hash of the game's launch identity, so what goes into that
-identity decides whether a library survives a bad scan. The rule the whole
-design turns on: **an id must not depend on anything that can fail.** A Store
-shortcut's AUMID is resolved through ``Get-StartApps``; when that PowerShell
-call timed out, the resolved value changed, the id changed with it, the game
-looked new, its old record looked missing, and ``remove_games`` deleted the
-playtime, cover, logo and update tracking — permanently.
+A game id is a hash of the game's launch identity, so it must not depend on anything that can fail: when ``Get-StartApps``
+timed out, the resolved AUMID changed, the id with it, and ``remove_games`` deleted the playtime, cover, logo and update
+tracking of a game that was still there. The identity is therefore the AUMID the shortcut *carries*; the resolved one is
+only a launch detail.
 
-So the identity is the AUMID the shortcut *carries*, which is a property of the
-file, and the resolved one is only a launch detail.
-
-These tests drive the real ``__iter__`` with the two PowerShell calls replaced,
-because the guards being tested live in the generator, not in the builders.
+These tests drive the real ``__iter__`` with the two PowerShell calls replaced, because the guards live in the generator.
 """
 
 import pytest
@@ -70,7 +63,7 @@ def only_game(results):
 
 
 def test_uwp_identity_is_stable_across_a_failed_resolution(scan, tmp_path):
-    """T3.1 The central test of the whole design.
+    """The central test of the whole design.
 
     The same shortcut file must hash to the same id whether or not the Start
     menu could tell us how to launch it.
@@ -93,7 +86,7 @@ def test_uwp_identity_is_stable_across_a_failed_resolution(scan, tmp_path):
 
 
 def test_identity_anchor_is_set_for_every_packaged_game(scan, tmp_path):
-    """T3.3 Including one whose AUMID the Start menu cannot resolve."""
+    """Including one whose AUMID the Start menu cannot resolve."""
     unresolvable = only_game(
         scan({"Halo.lnk": "x"}, {"Halo.lnk": {"Aumid": GROUPING_AUMID}},
              start_apps=[("Other", "Other_x!App")])
@@ -103,7 +96,6 @@ def test_identity_anchor_is_set_for_every_packaged_game(scan, tmp_path):
 
 
 def test_resolved_aumid_becomes_an_appsfolder_command(scan):
-    """T3.4"""
     result = only_game(
         scan({"Halo.lnk": "x"}, {"Halo.lnk": {"Aumid": GROUPING_AUMID}},
              start_apps=[("Halo", REAL_AUMID)])
@@ -112,7 +104,7 @@ def test_resolved_aumid_becomes_an_appsfolder_command(scan):
 
 
 def test_grouping_id_falls_back_to_launching_the_shortcut(scan, tmp_path):
-    """T3.5 And the string must match what the store rebuilds, byte for byte.
+    """And the string must match what the store rebuilds, byte for byte.
 
     ``shell:AppsFolder`` with a grouping id just opens the Apps folder, which
     looks like a game that starts and does nothing. Launching the .lnk itself is
@@ -134,7 +126,7 @@ def test_grouping_id_falls_back_to_launching_the_shortcut(scan, tmp_path):
 
 
 def test_unsafe_aumid_is_ignored(scan):
-    """T3.6 The AUMID lands unquoted in a shell command.
+    """The AUMID lands unquoted in a shell command.
 
     ``start_apps`` has to be non-empty or the batch guard fires first and this
     never reaches the per-shortcut validation.
@@ -148,7 +140,7 @@ def test_unsafe_aumid_is_ignored(scan):
 
 
 def test_unsafe_shortcut_path_is_ignored(tmp_path):
-    """T3.7 The grouping-id fallback embeds the .lnk path in a quoted argument.
+    """The grouping-id fallback embeds the .lnk path in a quoted argument.
 
     Called directly rather than through a scan: NTFS cannot hold a file whose
     name contains a quote, so the only way to reach this guard is to hand the
@@ -166,19 +158,19 @@ def test_unsafe_shortcut_path_is_ignored(tmp_path):
 
 
 def test_empty_lnk_resolution_for_a_non_empty_batch_is_a_failure(scan):
-    """T3.8 Treated as "no games", this marked every .lnk game as removed."""
+    """Treated as "no games", this marked every .lnk game as removed."""
     with pytest.raises(SourceScanError):
         scan({"Halo.lnk": "x", "Doom.lnk": "x"}, lnk_data={})
 
 
 def test_empty_lnk_resolution_for_an_empty_batch_is_fine(scan):
-    """T3.9 A folder with no .lnk files did not fail at anything."""
+    """A folder with no .lnk files did not fail at anything."""
     results = scan({"Steam.url": "[InternetShortcut]\nURL=steam://rungameid/440\n"})
     assert len(results) == 1
 
 
 def test_url_games_survive_a_failed_lnk_batch(scan):
-    """T3.10 A scan that has to give up still counts what it did see.
+    """A scan that has to give up still counts what it did see.
 
     The .url shortcuts are parsed in process and cannot be taken down by a
     PowerShell failure, so they are yielded before the risky part. Combined with
@@ -205,13 +197,13 @@ def test_url_games_survive_a_failed_lnk_batch(scan):
 
 
 def test_empty_start_apps_with_packaged_shortcuts_is_a_failure(scan):
-    """T3.11 A machine with Store shortcuts always has Start apps."""
+    """A machine with Store shortcuts always has Start apps."""
     with pytest.raises(SourceScanError):
         scan({"Halo.lnk": "x"}, {"Halo.lnk": {"Aumid": GROUPING_AUMID}}, start_apps=[])
 
 
 def test_no_packaged_shortcuts_never_asks_for_start_apps(scan, tmp_path, monkeypatch):
-    """T3.12 Get-StartApps spawns a whole PowerShell; do not pay for it blindly."""
+    """Get-StartApps spawns a whole PowerShell; do not pay for it blindly."""
     calls = []
 
     def counting():
@@ -253,23 +245,11 @@ def _script_lines():
 
 
 def test_the_namespace_path_is_backslashed_with_a_literal_replace():
-    """Defence in depth, and the reason it is only that.
+    """Defence in depth, and only that: the script hands `Namespace` a `Split-Path $p`, which normalises separators, so the
+    strict parser only sees backslashes (59 real shortcuts gave the same 29 AUMIDs without the `Replace`).
 
-    Two true facts that do *not* compose into a bug. `str(path)` is
-    slash-separated on this interpreter, and `IShellDispatch::NameSpace` really
-    does return null for a slash-separated path where `CreateShortcut` opens the
-    same file happily. But the script never hands `$p` to `Namespace` — it hands
-    `Split-Path $p`, and `Split-Path` normalises separators on the way out, so
-    the strict parser only ever sees backslashes.
-
-    Measured rather than reasoned: the pre-`Replace` script, run against 59 real
-    shortcuts, returned the same 29 AUMIDs as the current one.
-
-    The `.Replace` is kept because it costs nothing and would matter if
-    `Split-Path` were ever swapped for string handling that does not normalise.
-    If it is kept it has to be `.Replace` and not `-replace`, which is a regex
-    operator where a lone backslash is an escape and the substitution silently
-    does nothing.
+    It must be a literal `.Replace`, never `-replace`: a regex operator where a lone backslash is an escape and the
+    substitution silently does nothing.
     """
     code = _script_lines()
 
@@ -295,7 +275,7 @@ def test_the_result_key_is_echoed_unchanged():
 
 
 def test_shell_metacharacter_in_arguments_is_refused(scan, tmp_path):
-    """T3.13 Arguments are appended unquoted, so they need no quote to break out."""
+    """Arguments are appended unquoted, so they need no quote to break out."""
     exe = tmp_path / "game.exe"
     exe.write_text("x", encoding="utf-8")
 
@@ -315,7 +295,7 @@ def test_shell_metacharacter_in_arguments_is_refused(scan, tmp_path):
     ],
 )
 def test_quotes_and_control_chars_are_refused(scan, field, value):
-    """T3.14 Windows paths cannot legitimately contain either."""
+    """Windows paths cannot legitimately contain either."""
     assert scan({"Evil.lnk": "x"}, {"Evil.lnk": {field: value}}) == []
 
 
@@ -325,7 +305,7 @@ def test_quotes_and_control_chars_are_refused(scan, field, value):
 
 
 def test_classic_identity_is_target_and_arguments(scan, tmp_path):
-    """T3.15 Renaming the .lnk must not change the id.
+    """Renaming the .lnk must not change the id.
 
     Both names are scanned at once rather than in two runs, because the scan
     fixture reuses one folder — and because two files naming one game is the
@@ -345,7 +325,6 @@ def test_classic_identity_is_target_and_arguments(scan, tmp_path):
 
 
 def test_url_identity_is_the_url(scan):
-    """T3.16"""
     body = "[InternetShortcut]\nURL=steam://rungameid/440\n"
     results = scan({"Steam.url": body, "Renamed.url": body})
 
@@ -394,7 +373,6 @@ def test_identity_anchor_is_set_for_a_url_shortcut(scan, tmp_path):
 
 
 def test_game_id_shape(scan, tmp_path):
-    """T3.17"""
     import re
 
     exe = tmp_path / "game.exe"
@@ -422,20 +400,18 @@ def make_iterable(start_apps):
 
 
 def test_real_aumid_matches_by_display_name():
-    """T3.18"""
     iterable = make_iterable([("Halo Infinite", REAL_AUMID)])
     assert iterable._real_aumid("Halo Infinite", GROUPING_AUMID) == REAL_AUMID
 
 
 def test_real_aumid_matches_by_package_key():
-    """T3.18 The grouping id encodes the package and app names."""
+    """The grouping id encodes the package and app names."""
     iterable = make_iterable([("Something Else", REAL_AUMID)])
     grouping = "Microsoft.HaloInfinite_Game"
     assert iterable._real_aumid("no match", grouping) == REAL_AUMID
 
 
 def test_real_aumid_falls_back_to_the_raw_value():
-    """T3.18"""
     iterable = make_iterable([])
     assert iterable._real_aumid("nothing", GROUPING_AUMID) == GROUPING_AUMID
 
@@ -444,7 +420,6 @@ def test_real_aumid_falls_back_to_the_raw_value():
     "stem", ["Uninstall Halo", "Halo Readme", "Read Me", "Halo Benchmark", "Support"]
 )
 def test_non_game_shortcuts_are_skipped(scan, tmp_path, stem):
-    """T3.19"""
     exe = tmp_path / "game.exe"
     exe.write_text("x", encoding="utf-8")
     assert scan({f"{stem}.lnk": "x"}, {f"{stem}.lnk": {"Target": str(exe)}}) == []
@@ -460,7 +435,7 @@ def test_non_game_shortcuts_are_skipped(scan, tmp_path, stem):
     ],
 )
 def test_steam_appid_extraction(url, expected):
-    """T3.20 Composite 64-bit ids belong to mods, not to store pages."""
+    """Composite 64-bit ids belong to mods, not to store pages."""
     assert ss.steam_appid_from_url(url) == expected
 
 

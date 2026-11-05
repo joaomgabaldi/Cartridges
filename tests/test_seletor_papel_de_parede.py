@@ -372,7 +372,7 @@ def test_o_fechar_da_edicao_fecha_o_seletor_do_papel(edicao, wallhaven, arte, te
     assert seletor.aberto is False and _vazio_de(temp) == []
 
 
-# -- um arquivo do disco vai à mesma etapa de ajuste (como na `main`) ---------------------------------
+# -- um arquivo do disco vai à mesma etapa de ajuste  ---------------------------------
 
 
 def test_arquivo_do_disco_abre_direto_no_ajuste(app_qt, tmp_path, temp):
@@ -412,7 +412,7 @@ def test_arquivo_do_disco_ilegivel_mostra_o_erro(app_qt, tmp_path, temp):
     assert _vazio_de(temp) == []
 
 
-# -- rodada de correção 1 -----------------------------------------------------------------------------
+# -- falhas ao abrir o arquivo -----------------------------------------------------------------------------
 
 
 def test_arquivo_do_disco_com_excecao_inesperada_mostra_o_erro(app_qt, tmp_path, temp, monkeypatch):
@@ -455,7 +455,7 @@ def test_fechar_para_as_miniaturas_da_fila(app_qt, wallhaven, baixar, temp):
     assert _vazio_de(temp) == []
 
 
-# -- arquivo do disco que não abre (eram os testes da `WallpaperPicker` GTK) --------------------------
+# -- arquivo do disco que não abre  --------------------------
 
 
 def test_b9_bomba_na_tela_de_parede_sai_do_spinner(app_qt, tmp_path, temp, monkeypatch):
@@ -480,14 +480,14 @@ def test_h7_falha_de_leitura_nao_diz_nenhum_encontrado(app_qt, tmp_path, temp):
 
 
 def test_as_caixas_da_previa_do_ajuste_sao_as_da_main():
-    """DE-82: `PREVIEW_MAX`, `HYBRID_LANDSCAPE_MAX` e `HYBRID_PORTRAIT_MAX` do `wallpaper_picker.py`."""
+    """`PREVIEW_MAX`, `HYBRID_LANDSCAPE_MAX` e `HYBRID_PORTRAIT_MAX` são os da versão anterior (GTK)."""
     from cartridges.modelos import seletores  # noqa: PLC0415
 
     assert (seletores.CAIXA_UNICA, seletores.CAIXA_DEITADA, seletores.CAIXA_EM_PE) == ((800, 440), (600, 340), (220, 340))
 
 
 def test_buscar_no_ajuste_volta_a_grade(app_qt, wallhaven, arte, temp):
-    """I2/DE-75: com o campo ativo, digitar ou dar Enter na etapa de ajuste faz a busca e sai dela."""
+    """Com o campo ativo, digitar ou dar Enter na etapa de ajuste faz a busca e sai dela."""
     seletor, _ = criar()
     seletor.abrir("Jogo")
     assert _esperar(lambda: prontos(seletor, 3))

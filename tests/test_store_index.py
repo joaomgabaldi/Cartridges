@@ -50,24 +50,23 @@ def seed(store):
 
 
 # ---------------------------------------------------------------------------
-# 1.4 The anchor index
+# The anchor index
 # ---------------------------------------------------------------------------
 
 
 def test_new_game_with_a_shortcut_is_indexed(store, make_game, seed):
-    """T1.21"""
     game = seed(make_game(game_id=A_ID, shortcut_path=PATH))
     assert store._games_by_shortcut[KEY] is game
 
 
 def test_empty_shortcut_path_is_never_indexed(store, make_game, seed):
-    """T1.22 A game with no shortcut has no anchor to be found by."""
+    """A game with no shortcut has no anchor to be found by."""
     seed(make_game(game_id=A_ID, shortcut_path=""))
     assert store._games_by_shortcut == {}
 
 
 def test_a_second_claimant_poisons_the_key(store, make_game, seed):
-    """T1.23 Two records naming one path is ambiguous, and ambiguity is not a match."""
+    """Two records naming one path is ambiguous, and ambiguity is not a match."""
     seed(make_game(game_id=A_ID, shortcut_path=PATH))
     seed(make_game(game_id=B_ID, shortcut_path=PATH))
 
@@ -75,7 +74,7 @@ def test_a_second_claimant_poisons_the_key(store, make_game, seed):
 
 
 def test_a_poisoned_key_produces_no_adoption(store, make_game, seed):
-    """T1.24 The whole point: a guess here costs a game's save file."""
+    """The whole point: a guess here costs a game's save file."""
     seed(make_game(game_id=A_ID, shortcut_path=PATH))
     seed(make_game(game_id=B_ID, shortcut_path=PATH))
 
@@ -84,7 +83,7 @@ def test_a_poisoned_key_produces_no_adoption(store, make_game, seed):
 
 
 def test_a_third_claimant_does_not_settle_a_poisoned_key(store, make_game, seed):
-    """T1.25 Arriving later is not evidence of being right."""
+    """Arriving later is not evidence of being right."""
     seed(make_game(game_id=A_ID, shortcut_path=PATH))
     seed(make_game(game_id=B_ID, shortcut_path=PATH))
     seed(make_game(game_id=C_ID, shortcut_path=PATH))
@@ -93,7 +92,7 @@ def test_a_third_claimant_does_not_settle_a_poisoned_key(store, make_game, seed)
 
 
 def test_same_game_id_reclaims_the_key(store, make_game, seed):
-    """T1.26 The reinstall path swaps a tombstone for the game that came back."""
+    """The reinstall path swaps a tombstone for the game that came back."""
     seed(make_game(game_id=A_ID, shortcut_path=PATH, removed=True))
     returned = make_game(game_id=A_ID, shortcut_path=PATH)
 
@@ -104,7 +103,7 @@ def test_same_game_id_reclaims_the_key(store, make_game, seed):
 
 
 def test_reindex_retires_the_old_key_and_claims_the_new(store, make_game, seed):
-    """T1.27 Leaving the old key behind is what let a freed name steal a record."""
+    """Leaving the old key behind is what let a freed name steal a record."""
     game = seed(make_game(game_id=A_ID, shortcut_path=PATH))
     new_path = "D:\\Atalhos\\Halo Infinite.lnk"
 
@@ -119,7 +118,7 @@ def test_reindex_retires_the_old_key_and_claims_the_new(store, make_game, seed):
 def test_reindex_into_a_claimed_path_poisons_rather_than_steals(
     store, make_game, seed
 ):
-    """T1.28 Moving in on another record's path is still ambiguous."""
+    """Moving in on another record's path is still ambiguous."""
     seed(make_game(game_id=A_ID, shortcut_path=PATH))
     mover = seed(make_game(game_id=B_ID, shortcut_path="D:\\Atalhos\\Other.lnk"))
 
@@ -132,7 +131,7 @@ def test_reindex_into_a_claimed_path_poisons_rather_than_steals(
 def test_a_freed_key_is_reclaimed_without_waiting_for_a_restart(
     store, make_game, seed, tmp_path
 ):
-    """T1.29 A contested path that stops being contested must become usable again.
+    """A contested path that stops being contested must become usable again.
 
     Indexing only happened for genuinely new games, so once a poisoned key was
     popped by a rename the record still sitting on that path never re-indexed:
@@ -162,7 +161,7 @@ def test_a_freed_key_is_reclaimed_without_waiting_for_a_restart(
 def test_the_duplicate_branch_does_not_cure_a_still_contested_key(
     store, make_game, seed, tmp_path
 ):
-    """T1.30 Reclaiming a freed key must not be confused with resolving ambiguity."""
+    """Reclaiming a freed key must not be confused with resolving ambiguity."""
     lnk = tmp_path / "Halo.lnk"
     lnk.write_text("x", encoding="utf-8")
     key = key_for(str(lnk))
@@ -313,12 +312,12 @@ def test_one_path_in_two_conventions_is_not_two_claimants(store, make_game, seed
 
 
 # ---------------------------------------------------------------------------
-# 1.5 The duplicate branch
+# The duplicate branch
 # ---------------------------------------------------------------------------
 
 
 def test_shortcut_mtime_advances_but_never_goes_back(store, make_game, seed):
-    """T1.31 The tombstone must reflect the real file, and only ever move forward."""
+    """The tombstone must reflect the real file, and only ever move forward."""
     stored = seed(make_game(game_id=A_ID, shortcut_mtime=100))
 
     store.add_game(make_game(game_id=A_ID, shortcut_mtime=200), {})
@@ -329,7 +328,7 @@ def test_shortcut_mtime_advances_but_never_goes_back(store, make_game, seed):
 
 
 def test_packaged_command_is_refreshed_when_the_aumid_changes(store, make_game, seed):
-    """T1.32 A title update can re-issue the app id; nothing else would fix it."""
+    """A title update can re-issue the app id; nothing else would fix it."""
     stored = seed(
         make_game(game_id=A_ID, executable="explorer.exe shell:AppsFolder\\Old_h!App")
     )
@@ -344,7 +343,7 @@ def test_packaged_command_is_refreshed_when_the_aumid_changes(store, make_game, 
 
 
 def test_packaged_command_may_degrade_to_the_shortcut_fallback(store, make_game, seed):
-    """T1.33 An unresolvable AUMID falls back to launching the .lnk itself."""
+    """An unresolvable AUMID falls back to launching the .lnk itself."""
     stored = seed(
         make_game(
             game_id=A_ID,
@@ -362,7 +361,7 @@ def test_packaged_command_may_degrade_to_the_shortcut_fallback(store, make_game,
 
 
 def test_the_shortcut_fallback_is_not_absorbing(store, make_game, seed):
-    """T1.34 The way back has to be recognised as derived, or degradation is permanent.
+    """The way back has to be recognised as derived, or degradation is permanent.
 
     Testing only for an AUMID made the fallback a one-way door: one incomplete
     ``Get-StartApps`` degraded a working command forever, because the command
@@ -389,7 +388,7 @@ def test_the_shortcut_fallback_is_not_absorbing(store, make_game, seed):
 
 
 def test_classic_command_is_never_refreshed(store, make_game, seed):
-    """T1.35 For a classic game the command *is* the identity."""
+    """For a classic game the command *is* the identity."""
     stored = seed(
         make_game(game_id=A_ID, executable='start "" "C:\\Games\\halo.exe"')
     )
@@ -403,7 +402,7 @@ def test_classic_command_is_never_refreshed(store, make_game, seed):
 
 
 def test_url_command_is_never_refreshed(store, make_game, seed):
-    """T1.36 A .url hashes its URL, so a changed command is a different game."""
+    """A .url hashes its URL, so a changed command is a different game."""
     stored = seed(make_game(game_id=A_ID, executable='start "" "steam://rungameid/1"'))
 
     store.add_game(
@@ -414,7 +413,7 @@ def test_url_command_is_never_refreshed(store, make_game, seed):
 
 
 def test_an_identical_command_writes_nothing(store, make_game, seed):
-    """T1.37 The equality guard is the strongest lock, and it runs first."""
+    """The equality guard is the strongest lock, and it runs first."""
     command = "explorer.exe shell:AppsFolder\\Same_h!App"
     stored = seed(make_game(game_id=A_ID, executable=command))
 
@@ -426,7 +425,7 @@ def test_an_identical_command_writes_nothing(store, make_game, seed):
 def test_classic_shortcut_with_appsfolder_in_arguments_is_held_by_equality(
     store, make_game
 ):
-    """T1.38 Two locks in series: the shape test passes, the equality test stops it.
+    """Two locks in series: the shape test passes, the equality test stops it.
 
     A classic .lnk can carry ``shell:AppsFolder`` in its arguments, which makes
     it look derived. It is safe anyway, because its identity is
@@ -483,7 +482,6 @@ def test_a_command_naming_another_file_is_not_derived(store, make_game):
 def test_rename_is_followed_only_when_the_stored_path_is_gone(
     store, make_game, seed, tmp_path
 ):
-    """T1.39"""
     gone = tmp_path / "Halo.lnk"
     present = tmp_path / "Halo Infinite.lnk"
     present.write_text("x", encoding="utf-8")
@@ -502,7 +500,7 @@ def test_rename_is_followed_only_when_the_stored_path_is_gone(
 def test_two_shortcuts_for_one_game_save_once_and_settle(
     store, make_game, seed, tmp_path
 ):
-    """T1.40 They are duplicates of each other, not a rename.
+    """They are duplicates of each other, not a rename.
 
     Without the existence test they took turns claiming the record, saving it
     twice per scan and leaving which path it named up to iteration order.
@@ -523,7 +521,7 @@ def test_two_shortcuts_for_one_game_save_once_and_settle(
 
 
 def test_one_save_when_mtime_and_command_both_change(store, make_game, seed):
-    """T1.41 The branch batches its writes into a single save."""
+    """The branch batches its writes into a single save."""
     stored = seed(
         make_game(
             game_id=A_ID,
@@ -545,7 +543,7 @@ def test_one_save_when_mtime_and_command_both_change(store, make_game, seed):
 
 
 def test_nothing_changed_means_no_save(store, make_game, seed):
-    """T1.42 A rescan of an unchanged library must not rewrite it."""
+    """A rescan of an unchanged library must not rewrite it."""
     stored = seed(make_game(game_id=A_ID, shortcut_mtime=5, shortcut_path=PATH))
 
     store.add_game(make_game(game_id=A_ID, shortcut_mtime=5, shortcut_path=PATH), {})
@@ -554,12 +552,12 @@ def test_nothing_changed_means_no_save(store, make_game, seed):
 
 
 # ---------------------------------------------------------------------------
-# 1.6 Concurrency
+# Concurrency
 # ---------------------------------------------------------------------------
 
 
 def test_iteration_is_a_snapshot(store, make_game, seed):
-    """T1.43 ``for game in store`` used to die partway through an import."""
+    """``for game in store`` used to die partway through an import."""
     for index in range(5):
         seed(make_game(game_id=f"shortcuts_{index:016d}"))
 
@@ -573,7 +571,7 @@ def test_iteration_is_a_snapshot(store, make_game, seed):
 
 
 def test_concurrent_add_game_while_iterating(store, make_game):
-    """T1.44 Import workers add while the main thread lays out the library."""
+    """Import workers add while the main thread lays out the library."""
     errors: list = []
     total = 60
 
@@ -600,7 +598,7 @@ def test_concurrent_add_game_while_iterating(store, make_game):
 
 
 def test_clear_empties_all_three_indexes(store, make_game, seed):
-    """T1.45 A library reset must not leave an anchor pointing at a dropped game."""
+    """A library reset must not leave an anchor pointing at a dropped game."""
     seed(make_game(game_id=A_ID, shortcut_path=PATH))
 
     store.clear()
@@ -611,7 +609,7 @@ def test_clear_empties_all_three_indexes(store, make_game, seed):
 
 
 def test_cleanup_game_avisa_a_janela_pelo_sinal(store, make_game, seed):
-    """T1.46 Isto roda numa thread do importador: a store não toca no aviso de
+    """Isto roda numa thread do importador: a store não toca no aviso de
     desfazer, só emite `jogo_excluido` (a janela o recebe enfileirado)."""
     game = seed(make_game(game_id=A_ID))
     excluidos = []
@@ -623,7 +621,7 @@ def test_cleanup_game_avisa_a_janela_pelo_sinal(store, make_game, seed):
 
 
 def test_atomic_dump_replaces_without_leaving_scratch(tmp_path) -> None:
-    """Auditoria 26/08, M6: os regravadores da adoção escreviam no lugar
+    """Os regravadores da adoção escreviam no lugar
     (truncate + write); uma queda no meio deixava JSON truncado e o jogo
     voltava zerado. Agora é tmp + replace, o idioma do FileManager."""
     import json

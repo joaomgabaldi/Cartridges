@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""O `ModeloDaSessao`: o que os rastreadores pedem no lugar do `shared.win` (D48)."""
+"""O `ModeloDaSessao`: o que os rastreadores pedem no lugar do `shared.win`."""
 
 import pytest
 from PySide6.QtTest import QTest
@@ -119,7 +119,7 @@ def test_mesma_sessao_trocando_de_rastreador_nao_reveste(modelo, make_game, relo
 
 @pytest.mark.parametrize("rastreador", ["manual", "processo"])
 def test_encerrar_no_meio_da_sessao_grava_e_registra(modelo, make_game, relogio, rastreador):
-    """Review Focus 1: o tempo vai ao jogo e ao histórico, e nenhuma chamada chega à janela."""
+    """O tempo vai ao jogo e ao histórico, e nenhuma chamada chega à janela."""
     modelo.definir_janela(JanelaQueNaoSeToca())
     jogo = make_game(game_id="shortcuts_5", executable=CLASSICO)
     if rastreador == "manual":
@@ -140,7 +140,7 @@ def test_encerrar_no_meio_da_sessao_grava_e_registra(modelo, make_game, relogio,
 
 
 def test_encerrar_e_idempotente_e_desarma_a_manual(modelo, make_game, relogio, monkeypatch):
-    """I1: o `closing` da janela "Jogando" que o Qt manda depois do `encerrar()` não roda o fim normal."""
+    """O `closing` da janela "Jogando" que o Qt manda depois do `encerrar()` não roda o fim normal."""
     modelo.definir_janela(JanelaQueNaoSeToca())
     jogo = make_game(game_id="shortcuts_6", executable=CLASSICO)
     manual = SessionWindow(jogo)
@@ -157,7 +157,7 @@ def test_encerrar_e_idempotente_e_desarma_a_manual(modelo, make_game, relogio, m
 
     modelo.encerrar()
     modelo.encerrar()  # de novo: sem efeito
-    assert chamadas == []  # R1: o `saindo` não espera a parede nem as fitas
+    assert chamadas == []  # O `saindo` não espera a parede nem as fitas
     modelo.janelaManualFechada()  # o `closing` da manual, que o Qt fecha depois
     manual.close()
     modelo.devolver()  # o `aboutToQuit`: o `encerrar()` de dentro não grava de novo
@@ -170,7 +170,7 @@ def test_encerrar_e_idempotente_e_desarma_a_manual(modelo, make_game, relogio, m
 
 
 def test_trazer_de_volta_nao_desmaximiza(modelo):
-    """Review Focus 4: maximizada e minimizada volta maximizada."""
+    """Maximizada e minimizada volta maximizada."""
     janela = JanelaFalsa(Qt.WindowState.WindowMaximized)
     modelo.definir_janela(janela)
     modelo.minimizar()

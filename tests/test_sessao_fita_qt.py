@@ -4,7 +4,7 @@
 
 """As fitas de LED na sessão, pelo `ModeloDaSessao`: o que veste, o que despe e o que se avisa no fim.
 
-Eram os testes de `real_window` em `test_session_fita.py`. Nenhuma fita de verdade: o `comecar`, o `voltar` e
+Nenhuma fita de verdade: o `comecar`, o `voltar` e
 os avisos do módulo são espionados, e o `_dispositivo` levanta (conftest).
 """
 
@@ -136,7 +136,7 @@ def test_falha_nas_fitas_nao_impede_o_fim_da_sessao(modelo, make_game, monkeypat
 
 
 def test_encerrar_devolve_parede_e_fitas(modelo):
-    """Review Focus 1: o app fechando devolve a parede e as fitas, nessa ordem, sem tocar na janela."""
+    """O app fechando devolve a parede e as fitas, nessa ordem, sem tocar na janela."""
 
     class JanelaQueNaoSeToca:
         def __getattr__(self, nome):
@@ -144,7 +144,7 @@ def test_encerrar_devolve_parede_e_fitas(modelo):
 
     modelo.definir_janela(JanelaQueNaoSeToca())
 
-    modelo.encerrar()  # o `saindo`: as janelas ainda na tela, nada que espere (R1)
+    modelo.encerrar()  # o `saindo`: as janelas ainda na tela, nada que espere
     assert modelo.chamadas == []
     modelo.devolver()  # o `aboutToQuit`, com as janelas já fechadas
 

@@ -2,9 +2,8 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""O botão do canto e a janela "Tarefas em andamento" (QML offscreen, D77); a regra de quando o botão pode aparecer;
-fechar a principal com trabalho em andamento (D78). Os testes do fechamento vieram de `test_tarefas_ui.py` com os mesmos
-nomes."""
+"""O botão do canto e a janela "Tarefas em andamento" (QML offscreen); a regra de quando o botão pode aparecer;
+fechar a principal com trabalho em andamento."""
 
 import json
 import os
@@ -264,7 +263,7 @@ def test_janela_solta_nao_e_transiente_nem_modal_nem_redimensionavel(cena):
     janela = cena.abrir_a_janela()
     assert janela.transientParent() is None
     assert janela.modality() == Qt.WindowModality.NonModal
-    # Sem moldura nativa (K05): a barra é a do app, com só minimizar e fechar (`:minimize,close`); o QWindowKit a liga.
+    # Sem moldura nativa: a barra é a do app, com só minimizar e fechar (`:minimize,close`); o QWindowKit a liga.
     flags = janela.flags()
     assert not flags & Qt.WindowType.WindowMaximizeButtonHint
     assert not flags & Qt.WindowType.WindowTitleHint and not flags & Qt.WindowType.CustomizeWindowHint
@@ -359,7 +358,7 @@ def test_com_tarefa_aparece_so_nas_duas_bibliotecas_livres(cena, flush_idle):
 def test_painel_acompanha_a_lista(app_qt, flush_idle):  # noqa: ARG001
     painel = PainelDasTarefas()
     avisos = []
-    fraco = weakref.ref(painel)  # o lambda não prende o painel (M3 da revisão da Task 3)
+    fraco = weakref.ref(painel)  # o lambda não prende o painel
     painel.alterado.connect(lambda: avisos.append(fraco().quantas))
     tarefa = tarefas.comecar("Importação", 2)
     flush_idle()
@@ -604,7 +603,7 @@ def test_tarefa_que_comeca_com_o_mouse_parado_no_canto_nao_recua(cena, flush_idl
     assert _a_vista(cena)
 
 
-# -- fechar a principal com trabalho em andamento (D78) --------------------------------------------------------
+# -- fechar a principal com trabalho em andamento --------------------------------------------------------
 
 
 class _SessaoFalsa:
@@ -826,7 +825,7 @@ def test_fechar_logo_depois_de_pedir_o_backup_dos_saves_esconde(fechamento, monk
 
 
 def test_fechar_a_principal_com_a_sessao_manual_e_saves_em_andamento_esconde(fechamento, monkeypatch):
-    """D78: os saves (caso 1) vêm antes da sessão manual, que fecharia o app com o Ludusavi rodando."""
+    """Os saves (caso 1) vêm antes da sessão manual, que fecharia o app com o Ludusavi rodando."""
     f = fechamento
     sessao = ModeloDaSessao(FilaDeAvisos())
     sessao._manual = object()  # noqa: SLF001  (a janela "Jogando" na tela)
@@ -1014,7 +1013,7 @@ def _main_num_processo(tmp_path, modo):
 
 
 def test_fechar_as_tarefas_depois_do_fim_do_backup_encerra_o_app(tmp_path):
-    """Review Focus 1: com o backup rodando a principal some e a janela das tarefas fica. Fechada a janela das tarefas
+    """Com o backup rodando a principal some e a janela das tarefas fica. Fechada a janela das tarefas
     ainda no meio do backup, o processo segue vivo sem janela à vista; o backup acaba, e o app encerra pelo
     `aboutToQuit` inteiro."""
     anotado = _main_num_processo(tmp_path, "fechar_tarefas")
@@ -1025,7 +1024,7 @@ def test_fechar_as_tarefas_depois_do_fim_do_backup_encerra_o_app(tmp_path):
 
 
 def test_quit_com_a_principal_a_vista_e_saves_em_andamento_encerra(tmp_path):
-    """Um `quit()` de dentro do app (o reinício, o fim da sessão do Windows) não é recusado pelo caso 1 da D78."""
+    """Um `quit()` de dentro do app (o reinício, o fim da sessão do Windows) não é recusado pelo caso 1 (saves em andamento)."""
     anotado = _main_num_processo(tmp_path, "quit_saves")
     assert anotado == {"principal_visivel": True, "tarefas_visivel": False, "sobre_o_fim": True, "saves_no_fim": True, "codigo": 0}
 
@@ -1094,7 +1093,7 @@ def test_mostrar_principal_durante_a_espera_devolve_as_janelas_maximizadas(fecha
 
 
 def test_nome_longo_alarga_a_janela_e_o_vazio_e_centrado(cena, flush_idle):
-    """DA-52 e DA-51: o nome não quebra e a janela cresce em largura (360 de mínimo); o aviso de vazio fica centrado."""
+    """O nome não quebra e a janela cresce em largura (360 de mínimo); o aviso de vazio fica centrado."""
     tarefa = tarefas.comecar("Um nome de tarefa muito comprido " * 4, 3)
     flush_idle()
     janela = cena.abrir_a_janela()

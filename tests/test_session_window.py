@@ -47,7 +47,7 @@ def test_flush_grava_os_segundos_inteiros(make_game, clock, sessao):
 
 
 def test_manual_dormindo_conta_um_intervalo(make_game, clock, sessao):
-    """Review Focus 3: o PC dormiu a noite toda; só um intervalo de gravação conta."""
+    """O PC dormiu a noite toda; só um intervalo de gravação conta."""
     janela = SessionWindow(make_game())
     clock.now += 8 * 3600
 

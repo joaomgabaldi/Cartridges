@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""O app se reabre sozinho depois de agendar uma restauração ou uma redefinição (D75)."""
+"""O app se reabre sozinho depois de agendar uma restauração ou uma redefinição."""
 
 import subprocess
 import sys

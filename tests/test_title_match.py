@@ -4,7 +4,7 @@
 
 """Checks for the Steam title matcher.
 
-Runnable without the GTK stack — ``cartridges.utils.title_match`` imports
+Runnable standalone — ``cartridges.utils.title_match`` imports
 nothing from the app — so a regression is caught with a plain::
 
     python3 tests/test_title_match.py
@@ -205,7 +205,7 @@ class TestRanking(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
-# Properties that hold for every pair (T6.12 - T6.13)
+# Properties that hold for every pair
 # ---------------------------------------------------------------------------
 
 # Real titles, picked for the shapes that break tokenizers: bare numbers,
@@ -266,8 +266,7 @@ class TestFuzz(unittest.TestCase):
 class TestDirectionality(unittest.TestCase):
     """The comparison is deliberately *not* symmetric, and that is worth pinning.
 
-    T6.13 asked for symmetry, and the matcher does not have it — by design, not
-    by accident. ``wanted`` is the local title and ``candidate`` is the store
+    The matcher is not symmetric, by design. ``wanted`` is the local title and ``candidate`` is the store
     result, and the rule is a subset one: everything the wanted title says must
     be present in the candidate. So a store entry with *fewer* words than the
     local title is a mismatch, while the same pair the other way round is an
@@ -331,7 +330,7 @@ class TestDirectionality(unittest.TestCase):
 
 
 class TestNonLatinScripts(unittest.TestCase):
-    """Auditoria 26/08, M5: a tokenização apagava kana/kanji/cirílico.
+    """A tokenização apagava kana/kanji/cirílico.
 
     Sem dígito o título virava lista vazia — "empty title", metadado nunca
     resolvia. Com dígito era pior: "ペルソナ5" e "ペルソナ5 スクランブル"

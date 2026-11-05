@@ -136,7 +136,7 @@ def test_sidecar_corrompido_volta_para_a_capa(tmp_path, schema):
 
 
 def test_cor_vai_e_volta_entre_o_seletor_e_o_modulo():
-    """O seletor do editor (QML) e o do módulo falam em RGB de 0 a 1, sem GTK."""
+    """O seletor do editor (QML) e o do módulo falam em RGB de 0 a 1."""
     original = session_fita.Cor(340, 1000, 150)
     vermelho, verde, azul = session_fita.cor_para_rgb(original)
     # A cor cheia: o brilho da fita não escurece o quadradinho.
@@ -2417,9 +2417,8 @@ def test_troca_pequena_desliza_direto_a_15_por_segundo(fade_da_tela):
 
 
 def test_troca_grande_desliza_direto_sem_apagar(fade_da_tela):
-    """No terceiro teste, a troca grande pelo escuro (a luz apagando e
-    acendendo atrás do monitor) chamou mais atenção que qualquer cor: a troca
-    grande desliza direto, como a pequena."""
+    """A troca grande pelo escuro (a luz apagando e acendendo atrás do monitor)
+    chamava mais atenção que qualquer cor: ela desliza direto, como a pequena."""
     acompanhar = _comecar_com_tela(fade_da_tela)  # capa vermelha: matiz 0
     fade_da_tela.fila.extend([Amostra("cor", (200, 1000))] * 2)
     acompanhar()
@@ -2657,8 +2656,7 @@ def test_previa_em_curso_pinta_com_a_calibracao_gravada_depois(falsas, monkeypat
 
 def test_fade_entre_cores_quase_opostas_passa_por_um_tom_apagado():
     """Misturadas (e não giradas pela roda), cores quase opostas — azul
-    esverdeado e laranja, os pares do CONTROL no quinto teste — se dissolvem
-    por um tom de pouca saturação. (Entre azul puro e vermelho, a mistura das
+    esverdeado e laranja — se dissolvem por um tom de pouca saturação. (Entre azul puro e vermelho, a mistura das
     duas luzes é roxa, e o caminho fica igual ao da roda.)"""
     origem = session_fita.Cor(200, 1000, 1000)
     destino = session_fita.Cor(10, 1000, 1000)

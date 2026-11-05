@@ -2,12 +2,8 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""A troca de capa não pode destruir a atual antes da nova existir.
-
-Auditoria 26/08, M8: a ordem antiga — apagar toda forma existente e então
-copiar — deixava a capa ausente ou truncada num disco cheio ou numa queda, e
-uma truncada passa no ``is_file()`` do SGDB, que então nunca mais re-busca.
-"""
+"""A troca de capa não pode destruir a atual antes da nova existir: apagar e então copiar deixava a capa ausente ou
+truncada num disco cheio, e uma truncada passa no ``is_file()`` do SGDB, que nunca mais re-busca."""
 
 import time
 from pathlib import Path
@@ -384,7 +380,7 @@ def test_convert_cover_ilegivel_devolve_none(tmp_path):
 
 
 def test_formato_que_o_pillow_nao_le_mas_o_qt_le_vira_capa(tmp_path, monkeypatch):
-    """B02: o `Gdk.Texture` da `main` vira o `QImageReader`; sem resize, a TIFF do Qt é a própria saída."""
+    """Um formato que o Pillow não lê mas o Qt lê (`QImageReader`) vira capa; sem resize, a TIFF do Qt é a própria saída."""
     from cartridges.utils import save_cover as modulo  # noqa: PLC0415
 
     origem = tmp_path / "so_o_qt.xyz"  # PNG por dentro; a extensão não é do Pillow, e ele "não o lê"

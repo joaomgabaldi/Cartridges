@@ -5,8 +5,8 @@
 """As conquistas na tela da sessão: o cartão (`conquistasDoJogo.sessao` e `ConquistasDaSessao.qml`), o vigia ligado à
 sessão e a leitura final do fim da sessão.
 
-Eram os testes de `real_window` de `test_conquistas_ui.py` e `test_conquistas_sessao.py`. Nenhum vigia, fita, papel
-de parede ou ícone de verdade: o `comecar`/`parar` do vigia, a varredura e o `icones.carregar` são falsos.
+Nenhum vigia, fita, papel de parede ou ícone de verdade:
+o `comecar`/`parar` do vigia, a varredura e o `icones.carregar` são falsos.
 """
 
 import logging
@@ -109,7 +109,7 @@ def _varredura(monkeypatch, varrer):
 def test_a_sessao_liga_e_desliga_o_vigia(modelo, chamadas, make_game):
     jogo = make_game(name="Hollow Knight")
     modelo.show_session_blocker(jogo)
-    # Depois das fitas e antes do controle, como na `main`.
+    # Depois das fitas e antes do controle.
     assert chamadas == [("fitas", jogo), ("vigia", jogo), "suspender"]
     chamadas.clear()
     modelo.hide_session_blocker()
@@ -164,7 +164,7 @@ def test_varredura_que_estoura_no_fim_da_sessao_nao_derruba_o_resto(modelo, cham
 
 
 def test_encerrar_para_o_vigia_fecha_o_aviso_e_nao_le_no_fim(modelo, chamadas, make_game, monkeypatch):
-    """Review Focus 5 e R1: no `saindo` (as janelas ainda na tela) só se grava e se para o vigia, que tira o aviso da
+    """No `saindo` (as janelas ainda na tela) só se grava e se para o vigia, que tira o aviso da
     tela; a parede e as fitas, que podem demorar, vêm no `aboutToQuit`, nessa ordem. A leitura final não roda."""
     from cartridges import conquista_aviso  # noqa: PLC0415
 
@@ -179,7 +179,7 @@ def test_encerrar_para_o_vigia_fecha_o_aviso_e_nao_le_no_fim(modelo, chamadas, m
     chamadas.clear()
 
     modelo.encerrar()  # o `saindo` (QEvent.Quit)
-    # O segundo `fechar` é o do `encerrar`, para o aviso fora de sessão (I1 da revisão final do plano 6); repetido,
+    # O segundo `fechar` é o do `encerrar`, para o aviso fora de sessão; repetido,
     # não faz nada.
     assert chamadas == ["vigia.parar", "aviso.fechar", "aviso.fechar"]
 
@@ -404,13 +404,13 @@ def _rodar(app, item, dy, esperar=True):
 
 
 def test_roda_do_mouse_rola_para_os_lados_por_mola(app_qt, sem_vigia):
-    """SES-20: a roda do mouse anda a fileira por mola (o `spring_scroll` da `main`), e não por salto: 120 px por entalhe."""
+    """A roda do mouse anda a fileira por mola, e não por salto: 120 px por entalhe."""
     app = _app(_catalogo_de(157), desbloqueadas=())
     app.janela.show()
     _comecar(app)
     lista = _lista(app)
     mola = _achar(lista, "molaDaSessao")
-    assert mola.property("ativa") is False  # M7: no harness `Tema.animacoes` é falso e a mola fica desligada
+    assert mola.property("ativa") is False  # No harness `Tema.animacoes` é falso e a mola fica desligada
     mola.setProperty("ativa", True)
     assert _esperar(lambda: lista.property("contentWidth") > lista.property("width"))
     _rodar(app, lista, -120, esperar=False)
@@ -429,7 +429,7 @@ def test_roda_do_mouse_rola_para_os_lados_por_mola(app_qt, sem_vigia):
 
 
 def test_sem_animacoes_a_roda_do_mouse_rola_direto_sem_a_mola(app_qt, sem_vigia):
-    """M7: com `Tema.animacoes` falso (o harness) a mola fica fora e a roda do mouse rola a fileira de uma vez."""
+    """Com `Tema.animacoes` falso (o harness) a mola fica fora e a roda do mouse rola a fileira de uma vez."""
     app = _app(_catalogo_de(157), desbloqueadas=())
     app.janela.show()
     _comecar(app)
@@ -444,7 +444,7 @@ def test_sem_animacoes_a_roda_do_mouse_rola_direto_sem_a_mola(app_qt, sem_vigia)
 
 
 def test_com_157_conquistas_e_logo_alto_o_botao_continua_na_janela(app_qt, sem_vigia, monkeypatch, tmp_path):
-    """Review Focus 4: o logo no teto de altura e o cartão cheio não empurram o botão para fora da janela."""
+    """O logo no teto de altura e o cartão cheio não empurram o botão para fora da janela."""
     Image.new("RGBA", (300, 400), (255, 0, 0, 255)).save(tmp_path / "logo.png")  # mais alto que largo
     monkeypatch.setattr(modulo_da_sessao.game_logo, "cached_logo_path", lambda _jogo: tmp_path / "logo.png")
     app = _app(_catalogo_de(157), desbloqueadas=())
@@ -535,7 +535,7 @@ def test_oculta_e_um_quadrado_igual_aos_outros(app_qt, sem_vigia):
 
 
 def test_modulo_gtk_do_cartao_saiu():
-    """D63: o `CartaoDaSessao` GTK foi substituído pelo `ConquistasDaSessao.qml`."""
+    """O `ConquistasDaSessao.qml` substituiu o cartão da versão anterior (GTK)."""
     import importlib.util  # noqa: PLC0415
 
     assert importlib.util.find_spec("cartridges.conquistas_sessao") is None
@@ -555,12 +555,12 @@ def test_cores_do_cartao_da_sessao_nao_seguem_o_tema(app_qt, sem_vigia):
     ladrilho = _achar(_icones(app)[0], "ladrilhoDaConquista")
 
     assert _expr(barra, "Tema.escuro") is False
-    # `currentColor` a 15%: branco a 15% (B1), e não a cor do tema de agora.
+    # `currentColor` a 15%: branco a 15%, e não a cor do tema de agora.
     assert _expr(barra, "background.color.toString()") == "#26ffffff" != _expr(barra, "Tema.botaoSobre.toString()")
     tema = _expr(rolagem, "Tema.textoSecundario.toString()")
     assert _expr(rolagem, "contentItem.color.toString()") == "#33ffffff" != tema  # a cor da tela da sessão (BarraDeRolagem `cor`), com o alfa de repouso (20%)
     assert _expr(ladrilho, "Qt.rgba(color.r, color.g, color.b, 1).toString()") == "#ffffff"
-    # I1: o fundo do ladrilho é o texto a 0,6 x 0,12 = 7,2%; S2: a interrogação da oculta é branca a 100%.
+    # O fundo do ladrilho é o texto a 0,6 x 0,12 = 7,2%; a interrogação da oculta é branca a 100%.
     assert _expr(ladrilho, "color.a") == pytest.approx(0.072, abs=0.003)
     oculto = next(i for i in _icones(app) if i.property("oculta") is True)
     assert _expr(oculto, "corDaInterrogacao.toString()") == "#ffffff"
@@ -568,11 +568,11 @@ def test_cores_do_cartao_da_sessao_nao_seguem_o_tema(app_qt, sem_vigia):
     app.fechar()
 
 
-# -- Auditoria GTK x Qt, pacote D --------------------------------------------------------------------
+# -- medidas da tela da sessão --------------------------------------------------------------------
 
 
 def test_cartao_da_sessao_tem_as_medidas_da_main(app_qt, sem_vigia):
-    """SES-17/18/19/21/22: textos de 12 px, barra de 8, estrela da Adwaita no ladrilho e dica do app com 500 ms."""
+    """Textos de 12 px, barra de 8, estrela da Adwaita no ladrilho e dica do app com 500 ms."""
     app = _app()
     _comecar(app)
     cartao = _cartao(app)

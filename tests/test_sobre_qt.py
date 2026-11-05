@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""O "Sobre o Cartridges" (D84): as funções puras, o `Sobre` e o `DialogoSobre.qml` no `Aplicativo.qml` inteiro.
+"""O "Sobre o Cartridges": as funções puras, o `Sobre` e o `DialogoSobre.qml` no `Aplicativo.qml` inteiro.
 
 Nada de verdade: os logs são arquivos do `tmp_path`, a área de transferência e o navegador são falsos, e o
 `FileDialog` do "Salvar como…" nunca abre (o teste chama o `salvar(url)` direto).
@@ -23,7 +23,7 @@ from tests.apoio_janela_atualizacao import Janela, achar, avaliar, esperar
 
 METAINFO = Path(__file__).resolve().parent.parent / "data" / "io.github.joaomgabaldi.Cartridges.metainfo.xml.in"
 GPL = "https://www.gnu.org/licenses/gpl-3.0.html"
-# A ordem da `main` (três grupos): Novidades; Solução de problemas; Créditos e Aviso legal. Sem "Detalhes" (o gabarito não o mostra).
+# Três grupos: Novidades; Solução de problemas; Créditos e Aviso legal. Sem "Detalhes" (o gabarito não o mostra).
 LINHAS = ("linhaNovidades", "linhaProblemas", "linhaCreditos", "linhaLegal")
 
 
@@ -110,7 +110,7 @@ def test_log_ilegivel_nao_derruba_o_sobre(tmp_path):
 def test_novidades_da_versao_atual_da_metainfo():
     itens = novidades_da_versao(METAINFO, "2026.10.26")
     assert [i["tipo"] for i in itens] == ["li", "li", "li"]
-    assert itens[2]["texto"] == "Foi realizada uma correção de segurança."  # B06: o item do `b074a2f` da `main`
+    assert itens[2]["texto"] == "Foi realizada uma correção de segurança."
     assert itens[0]["texto"] == "Agora é possível arrastar atalhos de jogos para a janela do aplicativo para importá-los."
     assert itens[1]["texto"].startswith("Um jogo adicionado manualmente passa a ser reconhecido")
 
@@ -134,7 +134,7 @@ def test_novidades_da_2_0_0_aparecem_no_sobre(app_qt):  # noqa: ARG001
     assert len(sobre.novidades) >= 1
     # O texto exato é o da 2.0.0, lida pela versão (não pelo topo, que muda a cada subida).
     primeiro = novidades_da_versao(METAINFO, "2.0.0")[0]["texto"]
-    assert primeiro == "O Cartridges agora se chama Kyron e tem um ícone novo."  # R12: sem "integrada ao Windows 11"
+    assert primeiro == "O Cartridges agora se chama Kyron e tem um ícone novo."
 
 
 def test_modelo_le_as_novidades_da_versao_ao_abrir(app_qt, monkeypatch):  # noqa: ARG001
@@ -149,7 +149,7 @@ def test_modelo_le_as_novidades_da_versao_ao_abrir(app_qt, monkeypatch):  # noqa
 
 
 def test_textos_do_sobre_sao_os_da_main():
-    """Conferidos contra `git show main:cartridges/main.py` (ABOUT_*, on_about_action, ABOUT_DIALOG_STRINGS)."""
+    """Os textos são os da versão anterior (GTK)."""
     assert modulo_sobre.TITULOS == {
         "principal": "Sobre",
         "novidades": "Novidades",
@@ -269,7 +269,7 @@ def test_copiar_texto_vai_para_a_area_de_transferencia(app_qt, area, tmp_path, m
 
 
 def test_copiar_a_versao_copia_o_numero_e_avisa(app_qt, area, monkeypatch):  # noqa: ARG001
-    """DA-23 e DA-26: o botão da versão copia o número; copiar avisa (em pt-BR, ao contrário do inglês da `main`)."""
+    """O botão da versão copia o número; copiar avisa (em pt-BR)."""
     monkeypatch.setattr(shared, "VERSION", "2026.10.26")
     fila = FilaDeAvisos()
     sobre = Sobre(fila)
@@ -300,7 +300,7 @@ def test_pagina_principal_mostra_nome_versao_e_linhas(janela):
     assert [janela.achar(n).property("titulo") for n in LINHAS] == [
         "Novidades", "Solução de problemas", "Créditos", "Aviso legal",
     ]  # fmt: skip
-    # DA-21: sem título na principal; "Kyron" só aparece ao rolar (opacidade 0).
+    # Sem título na principal; "Kyron" só aparece ao rolar (opacidade 0).
     assert janela.achar("tituloDaPaginaDoSobre").property("opacity") == 0
 
 
@@ -349,7 +349,7 @@ def test_licenca_com_um_unico_link_e_so_ele_abre(janela, _sem_navegador):
     _clique(janela, "linhaLegal")
     assert esperar(lambda: janela.sobre.pagina == "legal")
     licenca = janela.achar("licencaDoApp")
-    # DA-28: copyright e licença num único rótulo.
+    # Copyright e licença num único rótulo.
     assert licenca.property("text") == "© 2022-2024 kramo<br>© 2026 joaomgabaldi<br><br>" + modulo_sobre.ABOUT_LICENSE
     assert avaliar(licenca, "textFormat === Text.StyledText") is True
     avaliar(licenca, 'linkActivated("' + GPL + '")')  # o sinal do Text liga ao `abrirLicenca`
@@ -357,7 +357,7 @@ def test_licenca_com_um_unico_link_e_so_ele_abre(janela, _sem_navegador):
 
 
 def test_link_da_licenca_recebe_foco_pelo_teclado_e_enter_abre(janela, _sem_navegador):
-    """Review final (Task 3, m1): o link entra na ordem do Tab, tem borda de foco e o Enter abre só a GPL."""
+    """O link entra na ordem do Tab, tem borda de foco e o Enter abre só a GPL."""
     _abrir(janela)
     _clique(janela, "linhaLegal")
     assert esperar(lambda: janela.sobre.pagina == "legal")
@@ -371,13 +371,13 @@ def test_link_da_licenca_recebe_foco_pelo_teclado_e_enter_abre(janela, _sem_nave
     assert esperar(lambda: janela.achar("focoDaLicenca").property("visible") is True)  # o anel entra em 200 ms
     QTest.keyClick(janela.janela, Qt.Key.Key_Return)
     assert _sem_navegador == [GPL]
-    # ↑/↓ (o controle) sem outro controle na página: rolam a página (aqui ela cabe) e o foco não é perdido (DA-08).
+    # ↑/↓ (o controle) sem outro controle na página: rolam a página (aqui ela cabe) e o foco não é perdido.
     QTest.keyClick(janela.janela, Qt.Key.Key_Down)
     assert licenca.property("activeFocus") is True
 
 
 def test_paginas_longas_rolam_pelo_teclado(janela):
-    """Review final (Task 3, m3): setas e PageUp/PageDown rolam as páginas fora da principal; Tab e Esc seguem."""
+    """Setas e PageUp/PageDown rolam as páginas fora da principal; Tab e Esc seguem."""
     janela.janela.setHeight(260)
     _abrir(janela)
     _clique(janela, "linhaCreditos")
@@ -405,7 +405,7 @@ def test_problemas_mostra_o_log_em_texto_puro_e_os_botoes(janela, area):
     _clique(janela, "linhaProblemas")
     assert esperar(lambda: janela.sobre.pagina == "problemas")
     assert janela.achar("textoDeSuporte").property("text") == modulo_sobre.TEXTO_DE_SUPORTE
-    # DA-25: o log fica numa página própria, com a barra de baixo.
+    # O log fica numa página própria, com a barra de baixo.
     assert janela.achar("barraDeAcoesDoSobre").property("visible") is False
     _clique(janela, "linhaDepuracao")
     assert esperar(lambda: janela.sobre.pagina == "depuracao")
@@ -487,7 +487,7 @@ def test_sem_sobre_no_contexto_nao_ha_item_nem_dialogo(app_qt):  # noqa: ARG001
 
 
 def test_anel_de_foco_so_aparece_com_o_teclado_ao_trocar_de_pagina(janela):
-    """DA-06: entrar numa página pelo mouse não mostra o anel no botão de voltar; pelo teclado, sim."""
+    """Entrar numa página pelo mouse não mostra o anel no botão de voltar; pelo teclado, sim."""
     _abrir(janela)
     janela.achar("linhaCreditosBotao").forceActiveFocus(Qt.FocusReason.MouseFocusReason)
     _clique(janela, "linhaCreditos")
@@ -506,7 +506,7 @@ def test_anel_de_foco_so_aparece_com_o_teclado_ao_trocar_de_pagina(janela):
 
 
 def test_clique_real_no_botao_da_versao_copia_o_numero_e_avisa(janela, area):
-    """I7 (DA-23): o gesto de verdade, o clique do mouse no botão da versão."""
+    """O gesto de verdade, o clique do mouse no botão da versão."""
     _abrir(janela)
     _clique_real(janela, "botaoDaVersao")
     assert area.texto == "2026.10.26"
@@ -514,7 +514,7 @@ def test_clique_real_no_botao_da_versao_copia_o_numero_e_avisa(janela, area):
 
 
 def test_alt_mais_letra_abre_as_linhas_e_aciona_os_botoes(janela, area):
-    """I5 e I7 (DA-30): os mnemônicos da `main` (N, S, C, A; I no log; C e S na barra do log), pelo teclado."""
+    """Os mnemônicos (N, S, C, A; I no log; C e S na barra do log), pelo teclado."""
     alt = Qt.KeyboardModifier.AltModifier
     for tecla, pagina in ((Qt.Key.Key_N, "novidades"), (Qt.Key.Key_S, "problemas"), (Qt.Key.Key_C, "creditos"), (Qt.Key.Key_A, "legal")):
         _abrir(janela)
@@ -525,14 +525,14 @@ def test_alt_mais_letra_abre_as_linhas_e_aciona_os_botoes(janela, area):
     _abrir(janela)
     QTest.keyClick(janela.janela, Qt.Key.Key_S, alt)
     assert esperar(lambda: janela.sobre.pagina == "problemas")
-    QTest.keyClick(janela.janela, Qt.Key.Key_I, alt)  # "Informações de depuração": a primeira letra, como na `main`
+    QTest.keyClick(janela.janela, Qt.Key.Key_I, alt)  # "Informações de depuração": a primeira letra
     assert esperar(lambda: janela.sobre.pagina == "depuracao")
     QTest.keyClick(janela.janela, Qt.Key.Key_C, alt)  # "Copiar texto"
     assert area.texto == "linha do log & <b>x</b>\n"
 
 
 def test_alt_seguro_sublinha_o_mnemonico(janela):
-    """I5 (DA-30): enquanto o Alt está seguro, a primeira letra dos rótulos aparece sublinhada."""
+    """Enquanto o Alt está seguro, a primeira letra dos rótulos aparece sublinhada."""
     _abrir(janela)
     rotulo = achar(janela.achar("dialogoSobre"), "linhaNovidadesRotulo")
     assert rotulo.property("text") == "Novidades"
@@ -549,7 +549,7 @@ def test_alt_seguro_sublinha_o_mnemonico(janela):
 
 
 def test_setas_andam_pelas_linhas_da_principal(janela):
-    """I7 (DA-08): ↓ e ↑ (o direcional do controle) levam o foco de linha em linha, sem rolar nem dar a volta."""
+    """↓ e ↑ (o direcional do controle) levam o foco de linha em linha, sem rolar nem dar a volta."""
     _abrir(janela)
     linhas = [janela.achar(n + "Botao") for n in LINHAS]
     versao = _no_sobre(janela, "botaoDaVersao")
@@ -563,7 +563,7 @@ def test_setas_andam_pelas_linhas_da_principal(janela):
 
 
 def test_seta_para_baixo_chega_a_linha_do_log_e_ao_link_da_licenca(janela):
-    """I2 (DA-08): nas subpáginas, ↓ do "Voltar" alcança o que a página tem (a linha do log, o link da licença)."""
+    """Nas subpáginas, ↓ do "Voltar" alcança o que a página tem (a linha do log, o link da licença)."""
     _abrir(janela)
     _clique(janela, "linhaProblemas")
     assert esperar(lambda: janela.achar("botaoVoltarDoSobre").property("activeFocus") is True)
@@ -582,7 +582,7 @@ def test_seta_para_baixo_chega_a_linha_do_log_e_ao_link_da_licenca(janela):
 
 
 def test_o_cartao_nao_encolhe_nas_subpaginas_e_a_capsula_tem_30_px(janela):
-    """V4: a altura do cartão é a da principal em toda página; a cápsula da versão é `padding 3` sobre `min-height 24`."""
+    """A altura do cartão é a da principal em toda página; a cápsula da versão é `padding 3` sobre `min-height 24`."""
     _abrir(janela)
     cartao = achar(janela.achar("dialogoSobre"), "cartaoDoDialogo")
     assert esperar(lambda: cartao.property("height") > 300)

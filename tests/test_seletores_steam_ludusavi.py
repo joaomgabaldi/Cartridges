@@ -98,7 +98,7 @@ def test_steam_sem_resultado_e_item_que_nao_e_jogo(edicao, steam):
 
 
 def test_falha_de_busca_troca_o_titulo(edicao, steam):
-    """Par Qt do b23 da auditoria 0923: a busca que cai mostra o erro, não 'nenhum encontrado'."""
+    """A busca que cai mostra o erro, não 'nenhum encontrado'."""
     edicao.adicionar()
     seletor = edicao.seletorDaSteam
 

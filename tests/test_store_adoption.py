@@ -4,15 +4,10 @@
 
 """Adoption: keeping a game's data when the id it is filed under changes.
 
-A game id is a hash of how the game is identified, so any change to what goes
-into that identity renames every affected game — and a renamed game is, to the
-rest of the app, a new game plus a missing one. ``remove_games`` then deletes
-the missing one, taking playtime, cover, logo and update tracking with it,
-permanently: coming back requires the shortcut's mtime to rise, and nothing
-touched the file.
-
-That is the failure these tests exist to prevent. Every case here is either a
-bug that already happened or the guard that stopped it.
+A game id is a hash of how the game is identified, so a change to that identity renames every affected game, and a
+renamed game is, to the rest of the app, a new game plus a missing one. ``remove_games`` then deletes the missing one
+with its playtime, cover, logo and update tracking, permanently (it only comes back if the shortcut's mtime rises).
+These tests prevent that.
 """
 
 import json
@@ -55,12 +50,12 @@ LNK = "D:\\Atalhos\\Halo.lnk"
 
 
 # ---------------------------------------------------------------------------
-# 1.1 Adoption — matching
+# Adoption — matching
 # ---------------------------------------------------------------------------
 
 
 def test_adopts_by_anchor(store, make_game, seed):
-    """T1.2 The record is re-filed, not duplicated, and keeps its playtime."""
+    """The record is re-filed, not duplicated, and keeps its playtime."""
     legacy = seed(make_game(game_id=OLD_ID, playtime=77, shortcut_path=LNK))
     scanned = make_game(game_id=NEW_ID, shortcut_path=LNK)
 
@@ -75,7 +70,7 @@ def test_adopts_by_anchor(store, make_game, seed):
 
 
 def test_does_not_adopt_by_anchor_without_the_opt_in(store, make_game, seed):
-    """T1.3 Loading the library from disk must never merge two records.
+    """Loading the library from disk must never merge two records.
 
     Two records naming one shortcut is a state the disk can hold — a stale
     record beside its replacement — and ``load_games_from_disk`` passes no
@@ -93,7 +88,7 @@ def test_does_not_adopt_by_anchor_without_the_opt_in(store, make_game, seed):
 
 
 def test_does_not_adopt_itself(store, make_game, seed):
-    """T1.4 Finding the game under its own id is not a migration."""
+    """Finding the game under its own id is not a migration."""
     game = seed(make_game(game_id=OLD_ID, shortcut_path=LNK))
 
     assert store.adopt_legacy_game(game) is None
@@ -101,7 +96,7 @@ def test_does_not_adopt_itself(store, make_game, seed):
 
 
 def test_does_not_adopt_across_sources(store, make_game, seed):
-    """T1.5 Same path, different source, different game."""
+    """Same path, different source, different game."""
     seed(make_game(game_id="steam_1111111111111111", source="steam", shortcut_path=LNK))
     scanned = make_game(game_id=NEW_ID, source="shortcuts", shortcut_path=LNK)
 
@@ -110,7 +105,7 @@ def test_does_not_adopt_across_sources(store, make_game, seed):
 
 
 def test_refuses_a_stale_index_entry(store, make_game, seed):
-    """T1.6 An anchor naming a record the store has dropped must not migrate.
+    """An anchor naming a record the store has dropped must not migrate.
 
     Its ``game_id`` is by then the id of the *live* record that replaced it, so
     migrating would move a living game's save file, cover and logo onto this
@@ -130,7 +125,7 @@ def test_refuses_a_stale_index_entry(store, make_game, seed):
 
 
 def test_stale_index_entry_migrates_no_files(store, make_game, seed, write_record):
-    """T1.6 (effects) A refused adoption must not have touched the disk."""
+    """A refused adoption must not have touched the disk."""
     stale = seed(make_game(game_id=OLD_ID, shortcut_path=LNK))
     write_record(OLD_ID)
     store.games_by_id.pop(OLD_ID)
@@ -145,14 +140,14 @@ def test_stale_index_entry_migrates_no_files(store, make_game, seed, write_recor
 
 
 # ---------------------------------------------------------------------------
-# 1.2 Adoption — effects
+# Adoption — effects
 # ---------------------------------------------------------------------------
 
 
 def test_migrates_record_cover_and_logo(
     store, make_game, seed, write_record, write_asset
 ):
-    """T1.8 All three sets of files move together."""
+    """All three sets of files move together."""
     seed(make_game(game_id=OLD_ID, shortcut_path=LNK))
     write_record(OLD_ID)
     write_asset("covers", f"{OLD_ID}.tiff", b"cover")
@@ -176,7 +171,7 @@ def test_migrates_record_cover_and_logo(
 def test_migrates_every_cover_format(
     store, make_game, seed, write_asset, suffix
 ):
-    """T1.8 Animated covers are stored verbatim, so they have their own names."""
+    """Animated covers are stored verbatim, so they have their own names."""
     seed(make_game(game_id=OLD_ID, shortcut_path=LNK))
     write_asset("covers", f"{OLD_ID}{suffix}", b"c")
 
@@ -203,7 +198,7 @@ def test_migracao_leva_as_copias(store, make_game, seed):
 def test_restamps_the_game_id_inside_the_record(
     store, make_game, seed, write_record
 ):
-    """T1.9 Moving a file does not change what is written inside it.
+    """Moving a file does not change what is written inside it.
 
     A tombstone has no managers connected, so its ``save()`` emits a signal
     nobody listens for. Without this restamp the record kept the old id inside
@@ -221,7 +216,7 @@ def test_restamps_the_game_id_inside_the_record(
 
 
 def test_rewrites_the_logo_sidecar_filename(store, make_game, seed):
-    """T1.10 The sidecar names its image; the rename has to reach inside it."""
+    """The sidecar names its image; the rename has to reach inside it."""
     seed(make_game(game_id=OLD_ID, shortcut_path=LNK))
     (shared.logos_dir / f"{OLD_ID}.json").write_text(
         json.dumps(
@@ -239,7 +234,7 @@ def test_rewrites_the_logo_sidecar_filename(store, make_game, seed):
 
 
 def test_locked_logo_survives_the_migration(store, make_game, seed):
-    """T1.11 A hand-picked logo is the one thing that must never be re-fetched."""
+    """A hand-picked logo is the one thing that must never be re-fetched."""
     seed(make_game(game_id=OLD_ID, shortcut_path=LNK))
     (shared.logos_dir / f"{OLD_ID}.json").write_text(
         json.dumps(
@@ -258,7 +253,7 @@ def test_locked_logo_survives_the_migration(store, make_game, seed):
 
 
 def test_hand_picked_wallpaper_survives_the_migration(store, make_game, seed, write_asset):
-    """T1.12 The session wallpaper is filed by id too, sidecar and image."""
+    """The session wallpaper is filed by id too, sidecar and image."""
     seed(make_game(game_id=OLD_ID, shortcut_path=LNK))
     write_asset("wallpapers", f"{OLD_ID}.png", b"arte")
     (shared.wallpapers_dir / f"{OLD_ID}.json").write_text(
@@ -278,7 +273,7 @@ def test_hand_picked_wallpaper_survives_the_migration(store, make_game, seed, wr
 
 
 def test_missing_files_do_not_break_the_migration(store, make_game, seed):
-    """T1.12 A game with no cover and no logo adopts fine."""
+    """A game with no cover and no logo adopts fine."""
     legacy = seed(make_game(game_id=OLD_ID, playtime=5, shortcut_path=LNK))
 
     adopted = store.adopt_legacy_game(make_game(game_id=NEW_ID, shortcut_path=LNK))
@@ -290,7 +285,7 @@ def test_missing_files_do_not_break_the_migration(store, make_game, seed):
 def test_a_file_that_will_not_move_only_logs(
     store, make_game, seed, write_record, write_asset, monkeypatch, caplog
 ):
-    """T1.12 Aborting the migration would cost the whole record; it must not."""
+    """Aborting the migration would cost the whole record; it must not."""
     seed(make_game(game_id=OLD_ID, shortcut_path=LNK))
     write_record(OLD_ID)
     write_asset("covers", f"{OLD_ID}.tiff", b"cover")
@@ -312,7 +307,7 @@ def test_a_file_that_will_not_move_only_logs(
 
 
 def test_rekeys_the_id_indexes(store, make_game, seed):
-    """T1.13 No old id may survive in either id mapping."""
+    """No old id may survive in either id mapping."""
     legacy = seed(make_game(game_id=OLD_ID, shortcut_path=LNK))
 
     store.adopt_legacy_game(make_game(game_id=NEW_ID, shortcut_path=LNK))
@@ -327,7 +322,7 @@ def test_rekeys_the_id_indexes(store, make_game, seed):
 def test_cover_widget_rekey_goes_through_a_signal(
     store, make_game, seed
 ):
-    """T1.14 ``game_covers`` is read-modify-written from the main thread.
+    """``game_covers`` is read-modify-written from the main thread.
 
     Doing it inline from an import worker interleaved with the grid and left it
     holding a cover the game no longer points at: a store só emite
@@ -347,7 +342,7 @@ def test_cover_widget_rekey_goes_through_a_signal(
 def test_adopted_record_takes_the_scanned_command_and_path(
     store, make_game, seed
 ):
-    """T1.15 Whatever this scan resolved is more current than what is on disk."""
+    """Whatever this scan resolved is more current than what is on disk."""
     legacy = seed(
         make_game(
             game_id=OLD_ID,
@@ -374,7 +369,7 @@ def test_adopted_record_takes_the_scanned_command_and_path(
 def test_an_adopted_classic_game_launches_the_new_target(store, make_game, seed):
     """A retargeted shortcut must not keep pointing at the executable it replaced.
 
-    Worth pinning separately from T1.15 because the duplicate branch would
+    Worth pinning separately because the duplicate branch would
     refuse this: ``_refresh_derived_executable`` only ever replaces a command
     that looks generated, and a classic one does not. Adoption rewriting the
     command unconditionally is what saves it — otherwise the record survives the
@@ -406,7 +401,7 @@ def test_an_adopted_classic_game_launches_the_new_target(store, make_game, seed)
 def test_file_migration_does_not_hold_the_store_lock(
     store, make_game, seed, monkeypatch
 ):
-    """T1.16 The main thread lays out the library under this lock.
+    """The main thread lays out the library under this lock.
 
     Asserted by reading the lock from another thread while the migration runs,
     rather than by timing anything: an RLock is reentrant, so only a second
@@ -434,12 +429,12 @@ def test_file_migration_does_not_hold_the_store_lock(
 
 
 # ---------------------------------------------------------------------------
-# 1.3 Tombstone adoption — the case that has to keep working
+# Tombstone adoption — the case that has to keep working
 # ---------------------------------------------------------------------------
 
 
 def test_tombstone_follows_the_id_and_stays_removed(store, make_game):
-    """T1.17 A game the user deleted must not come back through a rename."""
+    """A game the user deleted must not come back through a rename."""
     tomb = make_game(game_id=OLD_ID, removed=True, shortcut_path=LNK, shortcut_mtime=500)
     store.add_game(tomb, {})
     store.new_game_ids = set()
@@ -454,7 +449,7 @@ def test_tombstone_follows_the_id_and_stays_removed(store, make_game):
 
 
 def test_adopted_tombstone_is_not_in_the_library(store, make_game):
-    """T1.18 It stays in the store as a tombstone, never as a game."""
+    """It stays in the store as a tombstone, never as a game."""
     tomb = make_game(game_id=OLD_ID, removed=True, shortcut_path=LNK, shortcut_mtime=1)
     store.add_game(tomb, {})
     store.new_game_ids = set()
@@ -470,7 +465,7 @@ def test_adopted_tombstone_is_not_in_the_library(store, make_game):
 
 
 def test_adopted_tombstone_with_a_newer_shortcut_is_a_reinstall(store, make_game):
-    """T1.19 A rewritten shortcut is the signal that the game came back."""
+    """A rewritten shortcut is the signal that the game came back."""
     tomb = make_game(game_id=OLD_ID, removed=True, shortcut_path=LNK, shortcut_mtime=100)
     store.add_game(tomb, {})
     store.new_game_ids = set()
@@ -527,7 +522,7 @@ def test_a_recreated_shortcut_at_a_tombstones_path_comes_back(store, make_game):
 
 
 def test_tombstone_adoption_leaves_the_resurrection_gate_alone(store, make_game):
-    """T1.20 ``shortcut_mtime`` is what decides a reinstall; adoption must not move it."""
+    """``shortcut_mtime`` is what decides a reinstall; adoption must not move it."""
     tomb = make_game(game_id=OLD_ID, removed=True, shortcut_path=LNK, shortcut_mtime=100)
     store.add_game(tomb, {})
 
