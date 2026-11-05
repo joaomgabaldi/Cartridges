@@ -243,3 +243,9 @@ def test_exe_comum_nao_e_de_loja(tmp_path):
     assert busca.eh_de_loja(exe) is False
     assert busca.eh_de_loja(f'"{exe}" -url https://exemplo.com') is False
     assert busca.eh_de_loja("http://exemplo.com/jogo") is False  # URI que não é de loja
+
+
+def test_desinstalador_seis_pastas_acima(tmp_path):
+    _arq(tmp_path / "Jogo" / "unins000.exe")
+    exe = _exe(tmp_path / "Jogo" / "a" / "b" / "c" / "d" / "e" / "f")
+    assert busca.raiz_do_jogo(exe, []) == tmp_path / "Jogo"

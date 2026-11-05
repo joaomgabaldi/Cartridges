@@ -879,11 +879,12 @@ class ModeloDaEdicao(QObject):
     def _mostrar_do_ini(self, geracao: int, idioma: str, nome: str) -> None:
         if not self._aberto or geracao != self._geracao:
             return
-        # Com padrão do Kyron definido, é ele que o jogo vai receber: o campo fica no padrão, não no que o .ini traz.
-        sem_padrao_de_idioma = not shared.schema.get_string("idioma-do-jogador")
-        sem_padrao_de_nome = not shared.schema.get_string("nome-do-jogador")
-        idioma = idioma if sem_padrao_de_idioma and idioma in idiomas.IDIOMAS and not self._form.idioma_proprio else ""
-        nome = nome if sem_padrao_de_nome and ini.nome_valido(nome) and not self._form.nome_proprio else ""
+        # O campo mostra o que o jogo vai ter: o padrão do Kyron, quando ele vale para este jogo, senão o que o .ini já traz.
+        nome_do_padrao, idioma_do_padrao = aplicacao.valores_para(self._jogo) if self._jogo else (None, None)
+        idioma = idioma_do_padrao or (idioma if idioma in idiomas.IDIOMAS else "")
+        nome = nome_do_padrao or (nome if ini.nome_valido(nome) else "")
+        idioma = "" if self._form.idioma_proprio else idioma
+        nome = "" if self._form.nome_proprio else nome
         self._do_ini = (idioma, nome)
         if idioma:
             self._form.idioma_proprio = idioma

@@ -40,8 +40,8 @@ _CHANGER = "language.changer.ini"
 _GSE_USER = "configs.user.ini"
 _DO_APPID = frozenset({"steam_emu.ini", "codex.ini", "ali213.ini"})
 _UNINS = re.compile(r"unins\d*\.exe", re.IGNORECASE)
-# Quanto subir do exe atrás do desinstalador (Jogo\Projeto\Binaries\Win64\x.exe são 4 níveis).
-_SUBIDAS_ATE_O_UNINS = 5
+# Quanto subir do exe atrás do desinstalador: o mesmo tanto que a busca desce da raiz.
+_SUBIDAS_ATE_O_UNINS = _PROFUNDIDADE
 _LAUNCHERS = frozenset(
     {
         "steam.exe", "epicgameslauncher.exe", "upc.exe", "ubisoftconnect.exe", "eadesktop.exe", "origin.exe",

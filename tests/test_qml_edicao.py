@@ -1879,7 +1879,7 @@ def test_idioma_e_nome_proprios_so_com_ini_e_aplicam_ao_salvar(app, monkeypatch)
 
 
 def test_campos_proprios_mostram_o_que_o_ini_traz(app, monkeypatch, tmp_path):
-    from cartridges.emuladores import aplicacao  # noqa: PLC0415
+    from cartridges.emuladores import aplicacao, idiomas  # noqa: PLC0415
 
     monkeypatch.setattr(aplicacao, "aplicar_no_jogo", lambda j: aplicacao.APLICADO)
     ini = tmp_path / "steam_emu.ini"
@@ -1897,10 +1897,15 @@ def test_campos_proprios_mostram_o_que_o_ini_traz(app, monkeypatch, tmp_path):
     app.edicao.aplicar()  # mexeu só no nome: só ele vira próprio
     assert jogo.nome_proprio == "Outro" and jogo.idioma_proprio == ""
     jogo.nome_proprio = ""
-    shared.schema.set_string("idioma-do-jogador", "english")  # com padrão do Kyron, o idioma fica no padrão
+    jogo.idiomas_steam = ["english", "brazilian"]
+    shared.schema.set_string("idioma-do-jogador", "english")  # com padrão do Kyron, o campo mostra o idioma do padrão
     app.edicao.abrir("shortcuts_z1")
     assert _esperar(lambda: app.edicao.nomeProprio == "joaomgabaldi")
-    assert app.edicao.idiomaProprioIndice == 0
+    assert app.edicao.idiomaProprioIndice == 1 + list(idiomas.IDIOMAS).index("english")
+    app.edicao.aplicar()  # devolvido sem mexer: continua seguindo o padrão
+    assert jogo.idioma_proprio == ""
+    app.edicao.abrir("shortcuts_z1")
+    assert _esperar(lambda: app.edicao.nomeProprio == "joaomgabaldi")
     assert app.achar("campoDoNomeProprio").property("_dicaVisivel") is False  # a regra só aparece editando
     app.edicao.nomeProprio = "João"
     assert app.achar("campoDoNomeProprio").property("_dicaVisivel") is True  # ou com erro
