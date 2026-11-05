@@ -4,8 +4,14 @@
 
 """A distribuição das opções pelas dez seções das Preferências (tabela do desenho de 05/11/2026)."""
 
+from PySide6.QtCore import Qt
+from PySide6.QtTest import QTest
+
+from cartridges import shared
 from cartridges.saves import backup_de_saves
-from tests.apoio_qml_preferencias import _abrir, _avaliar, app  # noqa: F401
+from tests.apoio_qml_biblioteca import _achar, _esperar
+from tests.apoio_qml_detalhes import _foco_dentro_de
+from tests.apoio_qml_preferencias import _abrir, _avaliar, _clique, app  # noqa: F401
 
 # seção -> títulos das linhas buscáveis, na ordem da tela (ordem do código dentro de cada grupo)
 DISTRIBUICAO = {
@@ -63,3 +69,132 @@ def test_cada_opcao_esta_em_exatamente_uma_secao(app, monkeypatch):  # noqa: F81
         vistas.update((secao, t) for t in titulos)
     # o par (seção, título) é único: "Chave da API" existe em Metadados e em Conquistas
     assert len(vistas) == sum(len(ts) for ts in DISTRIBUICAO.values())
+
+
+def _dialogo(app):
+    return app.achar("dialogoDePreferencias")
+
+
+def _visivel(app, nome):
+    return app.achar(nome).property("visible") is True
+
+
+def test_lista_mostra_as_10_secoes_na_ordem(app):  # noqa: F811
+    _abrir(app)
+    secoes = _avaliar(_dialogo(app), "secoes")
+    assert [s["id"] for s in secoes] == list(DISTRIBUICAO)
+    assert [s["icone"] for s in secoes] == [
+        "preferences-system", "input-gaming", "video-joined-displays", "display-brightness", "folder-download",
+        "image-x-generic", "trofeu", "avatar-default", "drive-harddisk", "software-update-available",
+    ]
+    assert all(s["subtitulo"] for s in secoes)
+    assert _achar(app.janela, "abas") is None and _achar(app.janela, "botaoDeBuscaDasPreferencias") is None
+    # O campo de busca fica sempre à vista, logo abaixo do título da lista.
+    assert _visivel(app, "campoDeBuscaDasPreferencias")
+
+
+def test_clicar_num_item_troca_a_secao_e_o_cabecalho(app):  # noqa: F811
+    _abrir(app)
+    _clique(app, "secao-iluminacao")
+    assert _esperar(lambda: app.achar("tituloDaSecao").property("text") == "Iluminação")
+    assert app.achar("subtituloDaSecao").property("text") == "Iluminação inteligente da Tuya"
+    assert _visivel(app, "paginaDaIluminacao") and not _visivel(app, "paginaGeral")
+
+
+def test_foco_no_item_ja_troca_a_secao(app):  # noqa: F811
+    _abrir(app)
+    app.achar("secao-geral").forceActiveFocus(Qt.FocusReason.TabFocusReason)
+    QTest.keyClick(app.janela, Qt.Key.Key_Down)
+    assert _dialogo(app).property("secao") == "controle"
+    assert _foco_dentro_de(app, "secao-controle")
+    QTest.keyClick(app.janela, Qt.Key.Key_Up)
+    QTest.keyClick(app.janela, Qt.Key.Key_Up)  # na ponta, fica
+    assert _dialogo(app).property("secao") == "geral"
+    assert _foco_dentro_de(app, "secao-geral")
+
+
+def test_enter_no_item_escolhe_a_secao(app):  # noqa: F811
+    _abrir(app)
+    app.achar("secao-importacao").forceActiveFocus(Qt.FocusReason.TabFocusReason)
+    QTest.keyClick(app.janela, Qt.Key.Key_Return)
+    assert _esperar(lambda: _visivel(app, "paginaDeImportacao"))
+
+
+def test_direcional_do_controle_anda_pela_lista_e_sai_para_as_linhas(app):  # noqa: F811
+    _abrir(app, "geral")
+    app.achar("secao-geral").forceActiveFocus(Qt.FocusReason.TabFocusReason)
+    assert _esperar(lambda: _foco_dentro_de(app, "secao-geral"))
+    app.controle.mover.emit(0, 1)
+    assert _dialogo(app).property("secao") == "controle"
+    assert _foco_dentro_de(app, "secao-controle")
+    app.controle.mover.emit(0, -1)
+    assert _dialogo(app).property("secao") == "geral"
+    app.controle.mover.emit(1, 0)
+    assert _foco_dentro_de(app, "paginaGeral")
+    assert _dialogo(app).property("secao") == "geral"
+
+
+def test_contador_bate_com_as_linhas_e_acompanha_saves(app, monkeypatch):  # noqa: F811
+    monkeypatch.setattr(backup_de_saves, "disponivel", lambda: False)
+    _abrir(app)
+    assert app.achar("contadorDaSecao-importacao").property("text") == "3"
+    assert app.achar("contadorDaSecao-geral").property("text") == "7"
+    assert app.achar("contadorDaSecao-backup").property("text") == "2"
+    # Sem reabrir: os saves aparecem e o contador do Backup sobe.
+    monkeypatch.setattr(backup_de_saves, "disponivel", lambda: True)
+    app.preferencias._backup.reler()  # noqa: SLF001
+    app.preferencias._reler()  # noqa: SLF001
+    assert _esperar(lambda: app.achar("contadorDaSecao-backup").property("text") == "4")
+    monkeypatch.setattr(backup_de_saves, "disponivel", lambda: False)
+    app.preferencias._backup.reler()  # noqa: SLF001
+    app.preferencias._reler()  # noqa: SLF001
+    assert _esperar(lambda: app.achar("contadorDaSecao-backup").property("text") == "2")
+
+
+def test_cartao_largo_tem_a_lista_de_210_e_os_contadores(app):  # noqa: F811
+    _abrir(app)
+    assert app.achar("cartaoDasPreferencias").property("width") == 860
+    assert app.achar("listaDeSecoes").property("width") == 210
+    assert _visivel(app, "contadorDaSecao-geral")
+
+
+def test_cartao_estreito_encolhe_a_lista_e_esconde_os_contadores(app):  # noqa: F811
+    app.janela.setWidth(600)
+    _abrir(app)
+    assert app.achar("listaDeSecoes").property("width") == 160
+    assert not _visivel(app, "contadorDaSecao-geral")
+
+
+def test_busca_abre_a_secao_do_resultado_mesmo_com_o_grupo_apagado(app):  # noqa: F811
+    shared.schema.set_boolean("playtime-tracking", False)  # sem contar horas, o grupo dos monitores fica apagado
+    _abrir(app)
+    _dialogo(app).setProperty("filtro", "monitor")
+    assert _esperar(lambda: _visivel(app, "resultadosDaBuscaDasPreferencias"))
+    resultados = _avaliar(_dialogo(app), "resultados.map(r => [r.titulo, r.local, r.secao])")
+    alvo = next(i for i, r in enumerate(resultados) if r[1] == "Monitores → Ao iniciar um jogo")
+    _clique(app, f"resultadoDaBusca-{alvo}Botao")
+    assert _esperar(lambda: _dialogo(app).property("secao") == "monitores")
+    assert _esperar(lambda: _visivel(app, "paginaDosMonitores"))
+    assert app.achar("campoDeBuscaDasPreferencias").property("text") == ""
+    # Com o grupo apagado a página não tem linha para focar: o foco fica no diálogo, não no campo que sumiu da vista.
+    assert _esperar(lambda: _foco_dentro_de(app, "dialogoDePreferencias"))
+    assert app.achar("campoDeBuscaDasPreferencias").property("activeFocus") is not True
+
+
+def test_primeiro_tab_do_x_vai_a_primeira_linha_da_secao(app):  # noqa: F811
+    _abrir(app, "importacao")
+    assert _foco_dentro_de(app, "fecharDoCabecalho")
+    QTest.keyClick(app.janela, Qt.Key.Key_Tab)
+    assert _foco_dentro_de(app, "paginaDeImportacao")
+
+
+def test_shift_tab_das_linhas_chega_a_lista_e_a_busca(app):  # noqa: F811
+    _abrir(app, "importacao")
+    QTest.keyClick(app.janela, Qt.Key.Key_Tab)
+    assert _foco_dentro_de(app, "paginaDeImportacao")
+    QTest.keyClick(app.janela, Qt.Key.Key_Backtab)  # o X
+    assert _foco_dentro_de(app, "fecharDoCabecalho")
+    QTest.keyClick(app.janela, Qt.Key.Key_Backtab)  # a lista: só a seção atual é parada de Tab
+    assert _foco_dentro_de(app, "secao-importacao")
+    QTest.keyClick(app.janela, Qt.Key.Key_Backtab)
+    assert _foco_dentro_de(app, "campoDeBuscaDasPreferencias")

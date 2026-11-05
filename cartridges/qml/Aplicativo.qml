@@ -712,7 +712,9 @@ Principal {
         var foco = janela.activeFocusItem
         var escopo = foco ? escopoDoFoco(foco) : null
         var listaAberta = !!foco && foco.popup !== undefined && foco.popup.visible === true
-        if (escopo && !listaAberta) {
+        // `setasProprias`: o item anda por conta própria (a lista de seções das Preferências tem uma parada só no Tab,
+        // então a vizinhança espacial pularia os itens).
+        if (escopo && !listaAberta && !(foco && foco.setasProprias === true)) {
             var vizinho = vizinhoNaDirecao(foco, escopo, dx, dy)
             if (vizinho) {
                 vizinho.forceActiveFocus(Qt.TabFocusReason)

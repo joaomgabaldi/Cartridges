@@ -9,6 +9,8 @@ Item {
 
     property string titulo
     property bool comFechar: true
+    // Sem o título centrado: a página põe o seu próprio em `inicio`.
+    property bool comTitulo: true
     property bool sombra: false
     property alias objetoDoTitulo: textoDoTitulo.objectName
     property alias opacidadeDoTitulo: textoDoTitulo.opacity
@@ -30,6 +32,7 @@ Item {
     Text {
         id: textoDoTitulo
         objectName: "tituloDoCabecalho"
+        visible: cabecalho.comTitulo
         anchors { centerIn: parent; verticalCenterOffset: -1.5 }
         width: Math.min(implicitWidth, Math.max(0, parent.width - 2 * Math.max(areaDoInicio.width + 12, areaDoFim.width + (botaoFechar.visible ? 41 : 6) + 6)))
         elide: Text.ElideRight

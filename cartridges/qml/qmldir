@@ -96,6 +96,7 @@ RolagemDaRoda 1.0 RolagemDaRoda.qml
 singleton CapasPausadas 1.0 CapasPausadas.qml
 BotaoOsd 1.0 BotaoOsd.qml
 CampoDeBusca 1.0 CampoDeBusca.qml
+ListaDeSecoes 1.0 ListaDeSecoes.qml
 AmostraDeCor 1.0 AmostraDeCor.qml
 SeletorBase 1.0 SeletorBase.qml
 PaginaDoSeletor 1.0 PaginaDoSeletor.qml

@@ -253,7 +253,7 @@ def test_textos_de_exibicao(app):
 def test_aba_conquistas_abre_a_sua_pagina(app):
     _abrir(app, "conquistas")
     dialogo = app.achar("dialogoDePreferencias")
-    assert "Conquistas" in dialogo.property("rotulosDasAbas").toVariant()
+    assert "Conquistas" in dialogo.property("rotulosDasSecoes").toVariant()
     assert app.achar("paginaDasConquistas").property("visible") is True
     assert app.achar("paginaGeral").property("visible") is False
 

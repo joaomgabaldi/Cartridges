@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""As Preferências como diálogo: moldura, cabeçalho, barra das abas, paleta de cores, o progresso fora do cartão e os diálogos internos."""
+"""As Preferências como diálogo: moldura, lista de seções, cabeçalho, paleta de cores, o progresso fora do cartão e os diálogos internos."""
 
 import re
 
@@ -55,78 +55,75 @@ def _dialogo(app):
     return app.achar("dialogoDePreferencias")
 
 
-def _cabecalho(app):
-    """O cabeçalho do diálogo (o pai do título, dentro do cartão das Preferências e não dos diálogos internos)."""
-    titulo = _achar(app.achar("cartaoDasPreferencias"), "tituloDoCabecalho")
-    return titulo, titulo.parentItem()
-
-
-def test_o_dialogo_e_uma_moldura_de_640_com_raio_15_e_altura_maxima(app):
+def test_o_dialogo_e_uma_moldura_de_860_com_raio_15_e_altura_maxima(app):
     _abrir(app)
     dialogo = _dialogo(app)
-    assert _avaliar(dialogo, "cartao.width") == 640
+    assert _avaliar(dialogo, "cartao.width") == 860
     assert _avaliar(dialogo, "cartao.radius") == 15
     # `content-height` sem teto: a janela limita, com a margem vertical da moldura.
     assert _avaliar(dialogo, "cartao.height") == _avaliar(dialogo, "height") - 2 * _avaliar(dialogo, "margemV")
 
 
-def test_cartoes_das_paginas_tem_532_em_640(app):
-    """Cartões de x=54 a x=586 no diálogo de 640."""
+def test_cartoes_das_paginas_tem_532_em_860(app):
+    """Cartões de 532 no painel da direita (860 menos a lista de 210); a margem de cima é 24."""
     _abrir(app, "geral")
     grupo = app.achar("grupoAoIniciarUmJogoGeral")
     assert grupo.property("width") == 532
-    # A margem de cima da página é 24: o título do primeiro grupo começa a 24 do cabeçalho.
     rolagem = app.achar("rolagemDasPreferencias")
+    assert rolagem.property("width") == 860 - 210
     pagina = app.achar("paginaGeral")
     assert pagina.mapToItem(rolagem.property("contentItem"), QPointF(0, 0)).y() == 24
 
 
-def test_cabecalho_de_47_com_o_titulo_e_a_lupa_e_sem_linha_no_topo(app):
-    _abrir(app)
-    titulo, cabecalho = _cabecalho(app)
-    assert titulo.property("text") == "Preferências"
-    assert cabecalho.property("height") == 47  # uma faixa só
+def test_cabecalho_da_secao_de_64_com_icone_titulo_subtitulo_e_o_x(app):
+    _abrir(app, "iluminacao")
+    cabecalho = app.achar("cabecalhoDaSecao")
+    assert cabecalho.property("height") == 64
     assert cabecalho.property("sombra") is False  # sem linha com a rolagem no topo
-    lupa = app.achar("botaoDeBuscaDasPreferencias")
-    assert lupa.property("icone") == "system-search"
+    assert app.achar("tituloDaSecao").property("text") == "Iluminação"
+    assert app.achar("subtituloDaSecao").property("text") == "Iluminação inteligente da Tuya"
+    # O X fica à direita do cabeçalho, e a lista só traz "Preferências", sem subtítulo.
+    x = _achar(cabecalho, "fecharDoCabecalho")  # o X do cabeçalho da seção, não o de outro diálogo
+    assert x.mapToItem(cabecalho, QPointF(x.property("width"), 0)).x() == pytest.approx(cabecalho.property("width") - 6)
+    assert not _visivel_titulo_do_cabecalho(app)
     # Rolada, a linha aparece.
     rolagem = app.achar("rolagemDasPreferencias")
     rolagem.setProperty("contentY", 80)
     assert _esperar(lambda: cabecalho.property("sombra") is True)
 
 
-def test_barra_das_abas_no_pe_com_icone_sobre_o_rotulo(app):
+def _visivel_titulo_do_cabecalho(app):
+    """O título centrado do `CabecalhoDoDialogo` não existe nas Preferências (o da seção é o `tituloDaSecao`)."""
+    return _achar(app.achar("cartaoDasPreferencias"), "tituloDoCabecalho").property("visible") is True
+
+
+def test_lista_a_esquerda_com_titulo_busca_e_itens_de_36(app):
     _abrir(app)
-    barra = app.achar("abas")
-    assert barra.property("height") == 47
+    lista = app.achar("listaDeSecoes")
     cartao = app.achar("cartaoDasPreferencias")
-    # No pé do cartão.
-    assert barra.mapToItem(cartao, QPointF(0, 0)).y() + barra.property("height") == pytest.approx(cartao.property("height"))
-    icones = []
-    abas = ("geral", "controle", "monitores", "iluminacao", "importacao", "metadados", "conquistas", "contas", "backup", "aplicativo")
-    for aba in abas:
-        botao = app.achar(f"aba-{aba}")
-        # Dez abas dividem a largura com 3 de vão: (640 - 9 x 3) / 10.
-        assert (botao.property("width"), botao.property("height")) == (pytest.approx(61.3), 40)
-        icones.append(_avaliar(botao, "modelData.icone"))  # os ícones simbólicos
-    assert icones[:3] == ["user-home", "input-gaming", "video-joined-displays"]
-    primeira, ultima = app.achar("aba-geral"), app.achar("aba-aplicativo")
-    x0 = primeira.mapToItem(cartao, QPointF(0, 0)).x()
-    x1 = ultima.mapToItem(cartao, QPointF(ultima.property("width"), 0)).x()
-    assert x0 == pytest.approx(0) and x1 == pytest.approx(640)
+    assert lista.mapToItem(cartao, QPointF(0, 0)).x() == 0
+    assert lista.property("height") == pytest.approx(cartao.property("height"))
+    campo = app.achar("campoDeBuscaDasPreferencias")
+    primeiro = app.achar("secao-geral")
+    assert campo.mapToItem(lista, QPointF(0, 0)).y() < primeiro.mapToItem(lista, QPointF(0, 0)).y()
+    for id_ in ("geral", "controle", "monitores", "iluminacao", "importacao", "metadados", "conquistas", "contas", "backup", "aplicativo"):
+        assert app.achar(f"secao-{id_}").property("height") == 36
+    # O item escolhido tem o fundo ligado e a barra de destaque; os outros não.
+    assert _avaliar(app.achar("secao-geral"), "atual") is True
+    assert _avaliar(app.achar("secao-controle"), "atual") is False
 
 
-def test_a_linha_da_barra_so_aparece_com_mais_conteudo_por_rolar(app):
+def test_a_linha_do_cabecalho_so_aparece_com_mais_conteudo_por_rolar(app):
     _abrir(app, "importacao")  # a página curta cabe: sem linha
-    barra = app.achar("abas")
-    linha = barra.childItems()[0]
-    assert linha.property("visible") is False
-    _abrir_geral = app.achar("aba-geral")
-    _clique(app, "aba-geral")
-    assert _esperar(lambda: app.achar("dialogoDePreferencias").property("aba") == "geral")
-    assert _esperar(lambda: linha.property("visible") is True)  # a página Geral é longa
-    app.achar("rolagemDasPreferencias").setProperty("contentY", 100000)
-    assert _esperar(lambda: linha.property("visible") is False)
+    cabecalho = app.achar("cabecalhoDaSecao")
+    assert cabecalho.property("sombra") is False
+    _clique(app, "secao-geral")
+    assert _esperar(lambda: app.achar("dialogoDePreferencias").property("secao") == "geral")
+    rolagem = app.achar("rolagemDasPreferencias")
+    rolagem.setProperty("contentY", 100)  # a página Geral é longa
+    assert _esperar(lambda: cabecalho.property("sombra") is True)
+    rolagem.setProperty("contentY", 0)
+    assert _esperar(lambda: cabecalho.property("sombra") is False)
 
 
 def test_clicar_fora_do_cartao_nao_fecha(app):
@@ -151,11 +148,11 @@ def test_o_aviso_das_preferencias_fica_no_cartao_delas(app):
     assert ancora is not None
 
 
-def test_abre_com_o_foco_no_x_e_a_aba_da_pagina_a_vista(app):
-    # O primeiro Tab vai à primeira linha da página; a aba à vista é a pedida, mas não leva o foco.
+def test_abre_com_o_foco_no_x_e_a_secao_da_pagina_a_vista(app):
+    # O primeiro Tab vai à primeira linha da página; a seção à vista é a pedida, mas não leva o foco.
     _abrir(app, "metadados")
     assert _esperar(lambda: app.janela.activeFocusItem() is app.achar("dialogoDePreferencias").property("botaoFechar"))
-    assert app.achar("dialogoDePreferencias").property("aba") == "metadados"
+    assert app.achar("dialogoDePreferencias").property("secao") == "metadados"
 
 
 def test_os_diretorios_de_arquivo_nao_tem_titulo_proprio():

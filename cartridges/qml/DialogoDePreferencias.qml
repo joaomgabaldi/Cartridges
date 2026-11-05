@@ -3,56 +3,56 @@ import QtQuick.Controls.Basic
 import QtQuick.Layouts
 import QtQuick.Window
 
-// As Preferências: cabeçalho com lupa, título e X, uma página por aba e a barra das abas no pé. Só desenha: o estado é do
-// `preferencias` (cartridges/modelos/preferencias.py).
+// As Preferências: a lista das seções à esquerda (com a busca) e, à direita, o cabeçalho da seção com o X e a página dela. Só
+// desenha: o estado é do `preferencias` (cartridges/modelos/preferencias.py).
 MolduraDoDialogo {
     id: dialogo
     objectName: "dialogoDePreferencias"
 
-    readonly property var abas: [
-        { id: "geral", titulo: "Geral", icone: "user-home" },
-        { id: "controle", titulo: "Controle", icone: "input-gaming" },
-        { id: "monitores", titulo: "Monitores", icone: "video-joined-displays" },
-        { id: "iluminacao", titulo: "Iluminação", icone: "applications-engineering" },
-        { id: "importacao", titulo: "Importação", icone: "document-save" },
-        { id: "metadados", titulo: "Metadados e capas", icone: "image-x-generic" },
-        { id: "conquistas", titulo: "Conquistas", icone: "starred" },
-        { id: "contas", titulo: "Contas", icone: "user-home" },
-        { id: "backup", titulo: "Backup", icone: "document-save" },
-        { id: "aplicativo", titulo: "Aplicativo", icone: "applications-engineering" }
+    readonly property var secoes: [
+        { id: "geral", titulo: "Geral", subtitulo: "Comportamento do aplicativo ao jogar", icone: "preferences-system" },
+        { id: "controle", titulo: "Controle", subtitulo: "Navegação com controle e Big Picture", icone: "input-gaming" },
+        { id: "monitores", titulo: "Monitores", subtitulo: "Segundo monitor e papel de parede", icone: "video-joined-displays" },
+        { id: "iluminacao", titulo: "Iluminação", subtitulo: "Iluminação inteligente da Tuya", icone: "display-brightness" },
+        { id: "importacao", titulo: "Importação", subtitulo: "Como os jogos entram na biblioteca", icone: "folder-download" },
+        { id: "metadados", titulo: "Metadados e capas", subtitulo: "Informações e imagens dos jogos", icone: "image-x-generic" },
+        { id: "conquistas", titulo: "Conquistas", subtitulo: "Exibição e aviso durante o jogo", icone: "trofeu" },
+        { id: "contas", titulo: "Contas", subtitulo: "Lojas conectadas ao Kyron", icone: "avatar-default" },
+        { id: "backup", titulo: "Backup", subtitulo: "Cópia da biblioteca e dos saves", icone: "drive-harddisk" },
+        { id: "aplicativo", titulo: "Aplicativo", subtitulo: "Atualizações e redefinição", icone: "software-update-available" }
     ]
-    readonly property var rotulosDasAbas: abas.map(a => a.titulo)
-    property string aba: "geral"
-    readonly property int indiceDaAba: Math.max(0, abas.findIndex(a => a.id === aba))
-    property bool buscaAtiva: false
-    property alias filtro: campoDeBusca.text
+    readonly property var rotulosDasSecoes: secoes.map(a => a.titulo)
+    property string secao: "geral"
+    readonly property int indiceDaSecao: Math.max(0, secoes.findIndex(a => a.id === secao))
+    // Durante a busca a direita mostra os resultados, e o cabeçalho deixa de falar da seção.
+    readonly property var secaoAtual: secoes[indiceDaSecao]
+    property alias filtro: lista.texto
     readonly property bool buscando: filtro !== ""
     property var resultados: []
     property bool avisoAberto: false
+    // Muda a cada alteração das preferências: refaz a conta dos contadores da lista.
+    property int _versaoDosContadores: 0
     readonly property Item botaoFechar: cabecalho.botaoFechar
 
     aberto: preferencias.aberto
-    largura: 640
+    largura: 860
     altura: 2000  // sem teto próprio: a janela limita
     nomeAcessivel: "Preferências"
     onFecharPedido: preferencias.fechar()
 
     onFiltroChanged: {
         rolagem.contentY = 0
-        if (filtro !== "") buscaAtiva = true
         procurar()
     }
     onAbertoChanged: if (aberto) {
-        aba = abas.some(a => a.id === preferencias.pagina) ? preferencias.pagina : "geral"
+        secao = secoes.some(a => a.id === preferencias.pagina) ? preferencias.pagina : "geral"
         rolagem.contentY = 0
         filtro = ""
-        buscaAtiva = false
-        // O foco começa no X: o primeiro Tab vai à primeira linha habilitada da página, e não pelas abas.
+        // O foco começa no X: o primeiro Tab vai à primeira linha habilitada da página, e não pela lista.
         focoInicial = cabecalho.botaoFechar
     } else {
         confirmacaoDosMetadados.aberto = false
         filtro = ""
-        buscaAtiva = false
     }
 
     function mostrar(item) {
@@ -61,11 +61,6 @@ MolduraDoDialogo {
         if (topo < rolagem.contentY) rolagem.contentY = Math.max(0, topo - 8)
         else if (base > rolagem.contentY + rolagem.height) rolagem.contentY = base - rolagem.height + 8
     }
-    function irParaAba(indice) {
-        if (indice < 0 || indice >= abas.length) return
-        aba = abas[indice].id
-        repetidorDeAbas.itemAt(indice).forceActiveFocus(Qt.TabFocusReason)
-    }
     function contem(pai, item) {
         for (var p = item; p; p = p.parent)
             if (p === pai) return true
@@ -73,13 +68,19 @@ MolduraDoDialogo {
     }
 
     function entrarNaBusca() {
-        buscaAtiva = true
-        campoDeBusca.forceActiveFocus(Qt.ShortcutFocusReason)
+        lista.campo.forceActiveFocus(Qt.ShortcutFocusReason)
     }
+    // Esc na busca: apaga o texto e o foco volta ao item da seção atual.
     function sairDaBusca() {
         filtro = ""
-        buscaAtiva = false
-        botaoDaLupa.forceActiveFocus(Qt.TabFocusReason)
+        lista.focarSecao(secao)
+    }
+    function entrarNasLinhas() {
+        focarLinha(paginas.children[indiceDaSecao])
+    }
+    function contagem(id: string): int {
+        _versaoDosContadores  // só para o contador reavaliar quando algo mudar
+        return linhasBuscaveis(id).length
     }
 
     // As linhas buscáveis e visíveis de uma seção, na ordem da tela (uma por entrada de `itens` dos grupos).
@@ -96,7 +97,7 @@ MolduraDoDialogo {
                 } else andar(c)
             }
         }
-        var k = abas.findIndex(a => a.id === id)
+        var k = secoes.findIndex(a => a.id === id)
         if (k >= 0) andar(paginas.children[k])
         return achadas
     }
@@ -104,8 +105,8 @@ MolduraDoDialogo {
     function procurar() {
         var achados = []
         if (filtro === "") { resultados = achados; return }
-        for (var k = 0; k < abas.length; ++k) {
-            var pagina = abas[k]
+        for (var k = 0; k < secoes.length; ++k) {
+            var pagina = secoes[k]
             var linhas = linhasBuscaveis(pagina.id)
             for (var j = 0; j < linhas.length; ++j) {
                 var linha = linhas[j]
@@ -115,7 +116,7 @@ MolduraDoDialogo {
                 var dono = grupo ? grupo.parent : null
                 var tituloDoGrupo = dono ? (dono.titulo !== undefined ? dono.titulo : (dono.contas ? dono.contas.titulo : "")) : ""
                 achados.push({
-                    linha: linha, titulo: linha.titulo, aba: pagina.id,
+                    linha: linha, titulo: linha.titulo, secao: pagina.id,
                     local: tituloDoGrupo ? pagina.titulo + " → " + tituloDoGrupo : pagina.titulo
                 })
             }
@@ -136,15 +137,18 @@ MolduraDoDialogo {
         else linha.forceActiveFocus(Qt.TabFocusReason)
     }
     function abrirResultado(resultado) {
-        aba = resultado.aba
+        secao = resultado.secao
         filtro = ""
-        buscaAtiva = false
         Qt.callLater(() => focarLinha(resultado.linha))
     }
 
     Connections {
         target: preferencias
-        function onAlterado() { if (dialogo.filtro !== "") Qt.callLater(dialogo.procurar) }
+        function onAlterado() {
+            // Adiado: as linhas só mudam de `aparece` depois que o estado novo chega.
+            Qt.callLater(() => { dialogo._versaoDosContadores++ })
+            if (dialogo.filtro !== "") Qt.callLater(dialogo.procurar)
+        }
     }
 
     Connections {
@@ -162,8 +166,6 @@ MolduraDoDialogo {
         onActivated: dialogo.entrarNaBusca()
     }
 
-    Binding { target: botaoDaLupa; property: "checked"; value: dialogo.buscaAtiva }
-
     Item {
         id: raiz
         objectName: "cartaoDasPreferencias"
@@ -176,176 +178,149 @@ MolduraDoDialogo {
             if (event.text === "" || event.text.charCodeAt(0) < 32 || event.text.charCodeAt(0) === 127) return
             if (event.modifiers & (Qt.ControlModifier | Qt.AltModifier | Qt.MetaModifier)) return
             dialogo.entrarNaBusca()
-            campoDeBusca.insert(campoDeBusca.length, event.text)
+            lista.campo.insert(lista.campo.length, event.text)
             event.accepted = true
         }
 
-        ColumnLayout {
+        RowLayout {
             anchors.fill: parent
             spacing: 0
 
-            CabecalhoDoDialogo {
-                id: cabecalho
-                titulo: "Preferências"
-                sombra: rolagem.contentY > 0
-                opacidadeDoTitulo: dialogo.buscaAtiva ? 0 : 1
-                onFechar: preferencias.fechar()
-                inicio: [
-                    Botao {
-                        id: botaoDaLupa
-                        objectName: "botaoDeBuscaDasPreferencias"
-                        estilo: "plano"
-                        icone: "system-search"
-                        dica: "Buscar nas Preferências"
-                        checkable: true
-                        onClicked: if (dialogo.buscaAtiva) dialogo.sairDaBusca(); else dialogo.entrarNaBusca()
-                    }
-                ]
-
-                CampoDeBusca {
-                    id: campoDeBusca
-                    objectName: "campoDeBuscaDasPreferencias"
-                    anchors { centerIn: parent; verticalCenterOffset: -0.5 }
-                    width: Math.max(0, Math.min(400, parent.width - 2 * 52))
-                    visible: opacity > 0
-                    opacity: dialogo.buscaAtiva ? 1 : 0
-                    enabled: dialogo.buscaAtiva
-                    placeholderText: "Buscar nas Preferências"
-                    Accessible.name: "Buscar nas Preferências"
-                    Behavior on opacity { enabled: Tema.animacoes; NumberAnimation { duration: Tema.duracaoCurta } }
-                    Keys.onEscapePressed: dialogo.sairDaBusca()
-                }
+            ListaDeSecoes {
+                id: lista
+                Layout.fillHeight: true
+                Layout.preferredWidth: compacta ? 160 : 210
+                secoes: dialogo.secoes
+                secao: dialogo.secao
+                compacta: raiz.width < 620
+                contagem: dialogo.contagem
+                raio: dialogo.raio
+                onBuscaEncerrada: dialogo.sairDaBusca()
+                onEscolhida: id => dialogo.secao = id
+                onEntrarNasLinhas: dialogo.entrarNasLinhas()
             }
 
-            Flickable {
-                id: rolagem
-                objectName: "rolagemDasPreferencias"
+            ColumnLayout {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                contentWidth: width
-                contentHeight: !dialogo.buscando ? paginas.implicitHeight + 48
-                    : dialogo.resultados.length > 0 ? resultadosDaBusca.implicitHeight + 48 : height
-                boundsBehavior: Flickable.StopAtBounds
-                RolagemPorMola { objectName: "molaDasPreferencias"; alvo: rolagem; ativa: Tema.animacoes }
-                RolagemDaRoda { alvo: rolagem; ativa: !Tema.animacoes }
-                clip: true
-                ScrollBar.vertical: BarraDeRolagem {}
+                spacing: 0
 
-                readonly property real larguraDoConteudo: Math.min(width, 556) - 24
-
-                Column {
-                    id: paginas
-                    x: (rolagem.width - width) / 2
-                    y: 24
-                    width: rolagem.larguraDoConteudo
-                    visible: !dialogo.buscando
-
-                    PaginaGeral { visible: dialogo.aba === "geral" }
-                    PaginaDoControle { visible: dialogo.aba === "controle" }
-                    PaginaDosMonitores { visible: dialogo.aba === "monitores" }
-                    PaginaDaIluminacao { visible: dialogo.aba === "iluminacao" }
-                    PaginaDeImportacao { visible: dialogo.aba === "importacao" }
-                    PaginaDosMetadados { visible: dialogo.aba === "metadados" }
-                    PaginaDasConquistas { visible: dialogo.aba === "conquistas" }
-                    PaginaDasContas { visible: dialogo.aba === "contas" }
-                    PaginaDoBackup { visible: dialogo.aba === "backup" }
-                    PaginaDoAplicativo { visible: dialogo.aba === "aplicativo" }
-                }
-
-                GrupoDeLinhas {
-                    id: resultadosDaBusca
-                    objectName: "resultadosDaBuscaDasPreferencias"
-                    x: (rolagem.width - width) / 2
-                    y: 24
-                    width: rolagem.larguraDoConteudo
-                    visible: dialogo.buscando && dialogo.resultados.length > 0
-
-                    Repeater {
-                        model: dialogo.buscando ? dialogo.resultados : []
-                        LinhaDeAcao {
-                            required property var modelData
-                            required property int index
-                            objectName: "resultadoDaBusca-" + index
-                            titulo: modelData.titulo
-                            subtitulo: modelData.local
-                            onAcionada: dialogo.abrirResultado(modelData)
-                        }
-                    }
-                }
-
-                EstadoVazio {
-                    id: semResultado
-                    objectName: "estadoSemResultadoDasPreferencias"
-                    width: rolagem.width
-                    height: Math.max(rolagem.height, implicitHeight)
-                    visible: dialogo.buscando && dialogo.resultados.length === 0
-                    icone: "edit-find"
-                    titulo: "Nenhum resultado encontrado"
-                    descricao: "Tente uma busca diferente."
-                }
-            }
-
-            Item {
-                id: barraDeAbas
-                objectName: "abas"
-                Layout.fillWidth: true
-                implicitHeight: 47
-                visible: !dialogo.buscando
-
-                Rectangle {
-                    width: parent.width
-                    height: 1
-                    color: Tema.sombraDaBarra
-                    visible: rolagem.contentY + rolagem.height < rolagem.contentHeight - 1
-                }
-                Row {
-                    anchors { horizontalCenter: parent.horizontalCenter; top: parent.top; topMargin: 4 }
-                    spacing: 3
-                    Repeater {
-                        id: repetidorDeAbas
-                        model: dialogo.abas
-                        Button {
-                            id: botao
-                            required property var modelData
-                            required property int index
-                            readonly property bool atual: dialogo.aba === modelData.id
-                            objectName: "aba-" + modelData.id
-                            text: modelData.titulo
-                            width: Math.min(100, (barraDeAbas.width - (dialogo.abas.length - 1) * 3) / dialogo.abas.length)
-                            height: 40
-                            padding: 0
-                            hoverEnabled: true
-                            focusPolicy: Qt.StrongFocus
-                            Accessible.role: Accessible.PageTab
-                            Accessible.name: text
-                            Keys.onReturnPressed: click()
-                            Keys.onEnterPressed: click()
-                            Keys.onLeftPressed: dialogo.irParaAba(index - 1)
-                            Keys.onRightPressed: dialogo.irParaAba(index + 1)
-                            onClicked: dialogo.aba = modelData.id
-                            contentItem: Item {
+                CabecalhoDoDialogo {
+                    id: cabecalho
+                    objectName: "cabecalhoDaSecao"
+                    implicitHeight: 64
+                    comTitulo: false
+                    sombra: rolagem.contentY > 0
+                    onFechar: preferencias.fechar()
+                    inicio: [
+                        Row {
+                            leftPadding: 14
+                            spacing: 12
+                            Rectangle {
+                                width: 36
+                                height: 36
+                                radius: 9
+                                color: Tema.planoLigado
                                 Icone {
-                                    anchors { horizontalCenter: parent.horizontalCenter; top: parent.top; topMargin: 4 }
-                                    nome: botao.modelData.icone
+                                    anchors.centerIn: parent
+                                    tamanho: 20
+                                    nome: dialogo.buscando ? "edit-find" : dialogo.secaoAtual.icone
                                 }
+                            }
+                            Column {
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: Math.max(0, cabecalho.width - 14 - 36 - 12 - 60)
                                 Text {
-                                    anchors { horizontalCenter: parent.horizontalCenter; bottom: parent.bottom; bottomMargin: 4 }
+                                    objectName: "tituloDaSecao"
                                     width: parent.width
-                                    horizontalAlignment: Text.AlignHCenter
                                     elide: Text.ElideRight
-                                    text: botao.text
+                                    text: dialogo.buscando ? "Resultados da busca" : dialogo.secaoAtual.titulo
                                     textFormat: Text.PlainText
                                     color: Tema.texto
-                                    font { family: Tema.fonte; pixelSize: Tema.legenda; weight: Tema.pesoForte }
+                                    font { family: Tema.fonte; pixelSize: Tema.corpo + 2; weight: Tema.pesoForte }
+                                    Accessible.role: Accessible.Heading
+                                    Accessible.name: text
+                                }
+                                Text {
+                                    objectName: "subtituloDaSecao"
+                                    width: parent.width
+                                    elide: Text.ElideRight
+                                    visible: text !== ""
+                                    text: dialogo.buscando ? "" : dialogo.secaoAtual.subtitulo
+                                    textFormat: Text.PlainText
+                                    color: Tema.textoSecundario
+                                    font { family: Tema.fonte; pixelSize: Tema.legenda + 1 }
                                 }
                             }
-                            background: Rectangle {
-                                radius: 9
-                                color: botao.down ? Tema.planoPressionado : botao.atual ? Tema.planoLigado : botao.hovered ? Tema.planoSobre : "transparent"
-                                Behavior on color { ColorAnimation { duration: Tema.duracaoCurta } }
-                                AnelDeFoco { ativo: botao.visualFocus; raio: 9; afastamento: -2 }
+                        }
+                    ]
+                }
+
+                Flickable {
+                    id: rolagem
+                    objectName: "rolagemDasPreferencias"
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    contentWidth: width
+                    contentHeight: !dialogo.buscando ? paginas.implicitHeight + 48
+                        : dialogo.resultados.length > 0 ? resultadosDaBusca.implicitHeight + 48 : height
+                    boundsBehavior: Flickable.StopAtBounds
+                    RolagemPorMola { objectName: "molaDasPreferencias"; alvo: rolagem; ativa: Tema.animacoes }
+                    RolagemDaRoda { alvo: rolagem; ativa: !Tema.animacoes }
+                    clip: true
+                    ScrollBar.vertical: BarraDeRolagem {}
+
+                    readonly property real larguraDoConteudo: Math.min(width, 556) - 24
+
+                    Column {
+                        id: paginas
+                        x: (rolagem.width - width) / 2
+                        y: 24
+                        width: rolagem.larguraDoConteudo
+                        visible: !dialogo.buscando
+
+                        PaginaGeral { visible: dialogo.secao === "geral" }
+                        PaginaDoControle { visible: dialogo.secao === "controle" }
+                        PaginaDosMonitores { visible: dialogo.secao === "monitores" }
+                        PaginaDaIluminacao { visible: dialogo.secao === "iluminacao" }
+                        PaginaDeImportacao { visible: dialogo.secao === "importacao" }
+                        PaginaDosMetadados { visible: dialogo.secao === "metadados" }
+                        PaginaDasConquistas { visible: dialogo.secao === "conquistas" }
+                        PaginaDasContas { visible: dialogo.secao === "contas" }
+                        PaginaDoBackup { visible: dialogo.secao === "backup" }
+                        PaginaDoAplicativo { visible: dialogo.secao === "aplicativo" }
+                    }
+
+                    GrupoDeLinhas {
+                        id: resultadosDaBusca
+                        objectName: "resultadosDaBuscaDasPreferencias"
+                        x: (rolagem.width - width) / 2
+                        y: 24
+                        width: rolagem.larguraDoConteudo
+                        visible: dialogo.buscando && dialogo.resultados.length > 0
+
+                        Repeater {
+                            model: dialogo.buscando ? dialogo.resultados : []
+                            LinhaDeAcao {
+                                required property var modelData
+                                required property int index
+                                objectName: "resultadoDaBusca-" + index
+                                titulo: modelData.titulo
+                                subtitulo: modelData.local
+                                onAcionada: dialogo.abrirResultado(modelData)
                             }
                         }
+                    }
+
+                    EstadoVazio {
+                        id: semResultado
+                        objectName: "estadoSemResultadoDasPreferencias"
+                        width: rolagem.width
+                        height: Math.max(rolagem.height, implicitHeight)
+                        visible: dialogo.buscando && dialogo.resultados.length === 0
+                        icone: "edit-find"
+                        titulo: "Nenhum resultado encontrado"
+                        descricao: "Tente uma busca diferente."
                     }
                 }
             }

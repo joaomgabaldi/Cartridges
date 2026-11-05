@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""A tela das Preferências: o modal com abas, as páginas Geral, Importação e SteamGridDB (QML offscreen)."""
+"""A tela das Preferências: o modal com a lista de seções, as páginas Geral, Importação e SteamGridDB (QML offscreen)."""
 
 from pathlib import Path
 
@@ -33,7 +33,7 @@ from tests.apoio_qml_preferencias import (  # noqa: F401  (as fixtures vêm junt
     (Qt.Key.Key_Return, Qt.KeyboardModifier.NoModifier),
     (Qt.Key.Key_Enter, Qt.KeyboardModifier.KeypadModifier),
 ])
-def test_enter_aciona_interruptor_aba_e_fechar(app, tecla, modificador):
+def test_enter_aciona_interruptor_secao_e_fechar(app, tecla, modificador):
     _abrir(app)
     # O interruptor alterna com o Enter, como com o Espaço.
     chave = app.achar("interruptor-auto-importChave")
@@ -41,8 +41,8 @@ def test_enter_aciona_interruptor_aba_e_fechar(app, tecla, modificador):
     chave.forceActiveFocus(Qt.FocusReason.TabFocusReason)
     QTest.keyClick(app.janela, tecla, modificador)
     assert _esperar(lambda: chave.property("checked") is (not antes))
-    # A aba abre a sua página.
-    app.achar("aba-importacao").forceActiveFocus(Qt.FocusReason.TabFocusReason)
+    # O item da lista abre a sua página.
+    app.achar("secao-importacao").forceActiveFocus(Qt.FocusReason.TabFocusReason)
     QTest.keyClick(app.janela, tecla, modificador)
     assert _esperar(lambda: app.achar("paginaDeImportacao").property("visible") is True)
     # O X fecha.
@@ -51,17 +51,17 @@ def test_enter_aciona_interruptor_aba_e_fechar(app, tecla, modificador):
     assert _esperar(lambda: not app.preferencias.aberto)
 
 
-def test_setas_trocam_de_aba_e_levam_o_foco(app):
+def test_setas_trocam_de_secao_e_levam_o_foco(app):
     _abrir(app)
-    app.achar("aba-geral").forceActiveFocus(Qt.FocusReason.TabFocusReason)
-    QTest.keyClick(app.janela, Qt.Key.Key_Right)
-    assert app.achar("dialogoDePreferencias").property("aba") == "controle"
-    assert _foco_dentro_de(app, "aba-controle")
-    QTest.keyClick(app.janela, Qt.Key.Key_Left)
-    assert app.achar("dialogoDePreferencias").property("aba") == "geral"
-    assert _foco_dentro_de(app, "aba-geral")
-    QTest.keyClick(app.janela, Qt.Key.Key_Left)  # na ponta, nada acontece
-    assert app.achar("dialogoDePreferencias").property("aba") == "geral"
+    app.achar("secao-geral").forceActiveFocus(Qt.FocusReason.TabFocusReason)
+    QTest.keyClick(app.janela, Qt.Key.Key_Down)
+    assert app.achar("dialogoDePreferencias").property("secao") == "controle"
+    assert _foco_dentro_de(app, "secao-controle")
+    QTest.keyClick(app.janela, Qt.Key.Key_Up)
+    assert app.achar("dialogoDePreferencias").property("secao") == "geral"
+    assert _foco_dentro_de(app, "secao-geral")
+    QTest.keyClick(app.janela, Qt.Key.Key_Up)  # na ponta, nada acontece
+    assert app.achar("dialogoDePreferencias").property("secao") == "geral"
 
 
 def test_caixa_de_numero_tem_uma_parada_de_tab_e_segue_as_setas(app):
@@ -95,21 +95,21 @@ def test_item_do_menu_apagado_durante_a_importacao(app):
     assert app.achar("itemPreferencias").property("enabled") is True
 
 
-def test_abas_na_ordem_da_main(app):
+def test_secoes_na_ordem_da_lista(app):
     _abrir(app)
-    rotulos = app.achar("dialogoDePreferencias").property("rotulosDasAbas").toVariant()
-    # As abas aparecem nesta ordem.
+    rotulos = app.achar("dialogoDePreferencias").property("rotulosDasSecoes").toVariant()
+    # As seções aparecem nesta ordem.
     assert rotulos == [
         "Geral", "Controle", "Monitores", "Iluminação", "Importação", "Metadados e capas", "Conquistas", "Contas",
         "Backup", "Aplicativo",
     ]
 
 
-def test_abre_na_pagina_pedida_e_a_aba_troca_de_pagina(app):
+def test_abre_na_pagina_pedida_e_o_item_troca_de_pagina(app):
     _abrir(app, "metadados")
     assert app.achar("paginaDosMetadados").property("visible") is True
     assert app.achar("paginaGeral").property("visible") is False
-    _clique(app, "aba-importacao")
+    _clique(app, "secao-importacao")
     assert _esperar(lambda: app.achar("paginaDeImportacao").property("visible") is True)
     assert app.achar("paginaDosMetadados").property("visible") is False
 
@@ -571,11 +571,11 @@ def test_foco_levado_para_outro_controle_nao_e_roubado_ao_terminar(app, store, m
     refresh.running, refresh.done, refresh.total = True, 0, 1
     refresh.progress.emit()
     assert _esperar(lambda: _foco_dentro_de(app, "linhaDosMetadadosParar"))
-    app.achar("aba-metadados").forceActiveFocus(Qt.FocusReason.TabFocusReason)
+    app.achar("secao-metadados").forceActiveFocus(Qt.FocusReason.TabFocusReason)
     refresh.running = False
     refresh.progress.emit()
     _esperar()
-    assert _foco_dentro_de(app, "aba-metadados")
+    assert _foco_dentro_de(app, "secao-metadados")
 
 
 # region Personalização
@@ -1130,7 +1130,7 @@ def test_buscar_brilho_lista_as_linhas_das_duas_paginas_com_pagina_e_grupo(app):
     assert ("Brilho (%)", "Iluminação → Cores") in resultados
     assert ("Brilho máximo por dispositivo", "Iluminação → Dispositivos") in resultados
     assert not any(t == "Usar o SteamGridDB" for t, _ in resultados)
-    assert not _visivel(app, "abas")  # a barra de abas some
+    assert _visivel(app, "listaDeSecoes")  # a lista continua à esquerda; só a página dá lugar aos resultados
     assert not _visivel(app, "paginaGeral")
 
 
@@ -1192,45 +1192,40 @@ def test_clicar_num_resultado_leva_a_pagina_e_poe_o_foco_na_linha(app):
     _clicar_resultado(app, titulos.index("Usar controle Xbox"))
     assert _esperar(lambda: app.achar("campoDeBuscaDasPreferencias").property("text") == "")
     dialogo = app.achar("dialogoDePreferencias")
-    assert dialogo.property("buscaAtiva") is False
-    assert dialogo.property("aba") == "controle"
-    assert _visivel(app, "paginaDoControle") and _visivel(app, "abas")
+    assert dialogo.property("secao") == "controle"
+    assert _visivel(app, "paginaDoControle") and _visivel(app, "listaDeSecoes")
     assert _esperar(lambda: _foco_dentro_de(app, "interruptor-gamepad"))
     assert shared.schema.get_boolean("gamepad") is antes
 
 
-def test_clicar_num_resultado_de_outra_pagina_troca_de_aba(app):
+def test_clicar_num_resultado_de_outra_pagina_troca_de_secao(app):
     _abrir(app, "geral")
     _buscar(app, "buscar atualiza")
     assert _esperar(lambda: _resultados(app) != [])
     _clicar_resultado(app, 0)
-    assert _esperar(lambda: app.achar("dialogoDePreferencias").property("aba") == "aplicativo")
+    assert _esperar(lambda: app.achar("dialogoDePreferencias").property("secao") == "aplicativo")
     assert _esperar(lambda: _foco_dentro_de(app, "linhaBuscarAtualizacoes"))
 
 
-def test_lupa_liga_o_campo_no_lugar_do_titulo(app):
+def test_o_campo_de_busca_fica_sempre_a_vista_e_sem_lupa(app):
     _abrir(app)
-    dialogo = app.achar("dialogoDePreferencias")
     campo = app.achar("campoDeBuscaDasPreferencias")
-    assert dialogo.property("buscaAtiva") is False
-    assert not _visivel(app, "campoDeBuscaDasPreferencias")
-    _clique(app, "botaoDeBuscaDasPreferencias")
-    assert _esperar(lambda: dialogo.property("buscaAtiva") is True and campo.property("activeFocus") is True)
-    assert _visivel(app, "abas")  # sem texto, as páginas e as abas continuam à vista
-    _clique(app, "botaoDeBuscaDasPreferencias")
-    assert _esperar(lambda: dialogo.property("buscaAtiva") is False)
-    assert not _visivel(app, "campoDeBuscaDasPreferencias")
+    assert _visivel(app, "campoDeBuscaDasPreferencias")
+    assert _achar(app.janela, "botaoDeBuscaDasPreferencias") is None
+    assert campo.property("activeFocus") is not True
+    campo.forceActiveFocus(Qt.FocusReason.TabFocusReason)
+    assert _esperar(lambda: campo.property("activeFocus") is True)
+    assert _visivel(app, "listaDeSecoes") and _visivel(app, "paginaGeral")  # sem texto, a página continua à vista
 
 
 def test_digitar_em_qualquer_ponto_abre_a_busca(app):
     """A tecla que nenhum controle trata vai ao campo."""
     _abrir(app)
-    app.achar("aba-geral").forceActiveFocus(Qt.FocusReason.TabFocusReason)
+    app.achar("secao-geral").forceActiveFocus(Qt.FocusReason.TabFocusReason)
     for tecla in (Qt.Key.Key_B, Qt.Key.Key_R, Qt.Key.Key_I):
         QTest.keyClick(app.janela, tecla)
     campo = app.achar("campoDeBuscaDasPreferencias")
     assert _esperar(lambda: campo.property("text") == "bri")
-    assert app.achar("dialogoDePreferencias").property("buscaAtiva") is True
     assert campo.property("activeFocus") is True
 
 
@@ -1238,15 +1233,16 @@ def test_esc_sai_da_busca_mesmo_com_texto_e_o_segundo_fecha(app):
     _abrir(app)
     campo = app.achar("campoDeBuscaDasPreferencias")
     dialogo = app.achar("dialogoDePreferencias")
-    app.achar("aba-geral").forceActiveFocus(Qt.FocusReason.TabFocusReason)
+    app.achar("secao-geral").forceActiveFocus(Qt.FocusReason.TabFocusReason)
     for tecla in (Qt.Key.Key_B, Qt.Key.Key_R, Qt.Key.Key_I):
         QTest.keyClick(app.janela, tecla)
     assert _esperar(lambda: campo.property("text") == "bri")
     QTest.keyClick(app.janela, Qt.Key.Key_Escape)
-    # Com o texto, um Esc só limpa e devolve o título.
-    assert _esperar(lambda: campo.property("text") == "" and dialogo.property("buscaAtiva") is False)
+    # Com o texto, um Esc só limpa e devolve o foco ao item da seção atual.
+    assert _esperar(lambda: campo.property("text") == "")
     assert app.preferencias.aberto
-    assert _visivel(app, "abas")
+    assert _foco_dentro_de(app, "secao-geral")
+    assert _visivel(app, "paginaGeral")
     QTest.keyClick(app.janela, Qt.Key.Key_Escape)
     assert _esperar(lambda: not app.preferencias.aberto)
 
@@ -1258,17 +1254,16 @@ def test_limpar_volta_a_aba_de_antes(app):
     _buscar(app, "")
     assert _esperar(lambda: not _visivel(app, "resultadosDaBuscaDasPreferencias"))
     assert _visivel(app, "paginaDeImportacao")
-    assert app.achar("dialogoDePreferencias").property("aba") == "importacao"
+    assert app.achar("dialogoDePreferencias").property("secao") == "importacao"
 
 
 def test_ctrl_f_leva_ao_campo(app):
     _abrir(app)
     campo = app.achar("campoDeBuscaDasPreferencias")
-    app.achar("aba-geral").forceActiveFocus(Qt.FocusReason.TabFocusReason)
+    app.achar("secao-geral").forceActiveFocus(Qt.FocusReason.TabFocusReason)
     assert campo.property("activeFocus") is not True
     QTest.keyClick(app.janela, Qt.Key.Key_F, Qt.KeyboardModifier.ControlModifier)
     assert _esperar(lambda: campo.property("activeFocus") is True)
-    assert app.achar("dialogoDePreferencias").property("buscaAtiva") is True
 
 
 def test_filtro_nao_esvazia_os_assistentes_abertos_por_cima(app, fitas_espiadas, monkeypatch):
@@ -1297,16 +1292,15 @@ def test_buscar_epic_lista_a_conta(app):
     assert resultados[0][1].startswith("Contas")
 
 
-def test_fechar_com_texto_e_reabrir_volta_com_campo_vazio_e_abas(app):
+def test_fechar_com_texto_e_reabrir_volta_com_campo_vazio_e_a_pagina(app):
     _abrir(app)
     _buscar(app, "brilho")
-    assert not _visivel(app, "abas")
+    assert not _visivel(app, "paginaGeral")
     app.preferencias.fechar()
     assert _esperar(lambda: not _visivel(app, "dialogoDePreferencias"))
     _abrir(app)
     assert app.achar("campoDeBuscaDasPreferencias").property("text") == ""
-    assert app.achar("dialogoDePreferencias").property("buscaAtiva") is False
-    assert _visivel(app, "abas")
+    assert _visivel(app, "paginaGeral")
 
 
 def test_sem_avisos_do_qml_ao_abrir_e_fechar(app_qt):
@@ -1414,7 +1408,7 @@ def test_a_roda_nas_preferencias_anda_o_passo_do_gtk(app):
 
 
 def test_o_primeiro_tab_vai_a_primeira_linha_habilitada_da_pagina(app):
-    """O Tab inicial cai em "Contar horas de jogo", não numa aba."""
+    """O Tab inicial cai em "Contar horas de jogo", não na lista de seções."""
     _abrir(app, "geral")
     assert _foco_dentro_de(app, "fecharDoCabecalho")
     QTest.keyClick(app.janela, Qt.Key.Key_Tab)
