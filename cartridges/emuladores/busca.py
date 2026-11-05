@@ -49,14 +49,21 @@ def _raiz_valida(raiz: Path) -> Optional[Path]:
     return None if raiz.parent == raiz else raiz
 
 
+def _tem_engine(pasta: Path) -> bool:
+    try:
+        return any(e.is_dir() and e.name.casefold() == "engine" for e in os.scandir(pasta))
+    except OSError:
+        return False
+
+
 def raiz_do_jogo(executavel: str, executaveis_dos_outros: Iterable[str]) -> Optional[Path]:
     pasta = game_folder(executavel or "")
     if not pasta:
         return None
     bases = arquivos.bases_da_pasta(Path(pasta))
     raiz = bases[-1]
-    # Unreal: Jogo\Projeto\Binaries\Win64\x.exe — a raiz é a pasta acima do projeto
-    if any(b.name.casefold() == "binaries" for b in bases[:-1]):
+    # Unreal: Raiz\Projeto\Binaries\Win64\x.exe — só sobe mais um nível se a pasta acima tem `Engine`
+    if any(b.name.casefold() == "binaries" for b in bases[:-1]) and _tem_engine(raiz.parent):
         raiz = raiz.parent
     if _raiz_valida(raiz) is None:
         return None
@@ -91,9 +98,11 @@ def _prefixo_do_changer(caminho: Path) -> Optional[str]:
             dados = f.read(ini.LIMITE)
     except OSError:
         return None
+    if dados.startswith(b"\xef\xbb\xbf"):
+        dados = dados[3:]
     for linha in dados.decode("latin-1").splitlines():
         linha = linha.strip()
-        if linha.startswith(";") or "=" not in linha:
+        if linha.startswith((";", "#", "//")) or "=" not in linha:
             continue
         chave, _, valor = linha.partition("=")
         if chave.strip().casefold() == "languagefiletemplate":
@@ -137,7 +146,9 @@ def procurar(raiz: Path) -> list[Path]:
         for nome in nomes_de_arquivo:
             if nome.casefold() == _CHANGER and (prefixo := _prefixo_do_changer(pasta / nome)):
                 achados.update(
-                    pasta / n for n in nomes_de_arquivo if n.casefold().startswith(prefixo.casefold()) and n.casefold() != _CHANGER
+                    pasta / n for n in nomes_de_arquivo if n.casefold().startswith(prefixo.casefold())
+                    and n.casefold().endswith(".ini")
+                    and n.casefold() != _CHANGER
                 )
     return sorted(achados)
 

@@ -21,8 +21,23 @@ def _arq(caminho: Path, texto="") -> Path:
     return caminho
 
 
-def test_raiz_unreal_sobe_alem_de_binaries(tmp_path):
-    exe = _exe(tmp_path / "Jogo" / "Proj" / "Binaries" / "Win64")
+def test_raiz_unreal_com_engine_sobe_alem_de_binaries(tmp_path):
+    (tmp_path / "Root" / "ENGINE").mkdir(parents=True)
+    exe = _exe(tmp_path / "Root" / "Proj" / "Binaries" / "Win64")
+    assert busca.raiz_do_jogo(exe, []) == tmp_path / "Root"
+
+
+def test_raiz_unreal_sem_engine_fica_no_projeto(tmp_path):
+    exe = _exe(tmp_path / "Root" / "Proj" / "Binaries" / "Win64")
+    assert busca.raiz_do_jogo(exe, []) == tmp_path / "Root" / "Proj"
+
+
+def test_raiz_binaries_direto_fica_no_jogo(tmp_path):
+    assert busca.raiz_do_jogo(_exe(tmp_path / "Jogo" / "Binaries"), []) == tmp_path / "Jogo"
+
+
+def test_raiz_binaries_win64_sem_engine_fica_no_jogo(tmp_path):
+    exe = _exe(tmp_path / "Jogo" / "Binaries" / "Win64")
     assert busca.raiz_do_jogo(exe, []) == tmp_path / "Jogo"
 
 
@@ -127,6 +142,16 @@ def test_language_changer_rejeita_valor_com_caminho(tmp_path, valor):
     _arq(raiz / "language.changer.ini", f"LanguageFileTemplate={valor}\n")
     _arq(raiz / "qualquer.ini")
     assert busca.procurar(raiz) == []
+
+
+def test_modelos_so_ini_e_bom_no_changer(tmp_path):
+    raiz = tmp_path / "Jogo"
+    raiz.mkdir()
+    (raiz / "language.changer.ini").write_bytes(b"\xef\xbb\xbf# c\r\nLanguageFileTemplate=steam\r\n")
+    modelo = _arq(raiz / "steam_pt.ini")
+    _arq(raiz / "steam_api64.dll")
+    _arq(raiz / "steam_notas.txt")
+    assert busca.procurar(raiz) == [modelo]
 
 
 def test_formato_de_comum(tmp_path):
