@@ -132,7 +132,6 @@ class BigPicture(QObject):
         # A capa fica aberta esperando a conferência rápida dos .ini; e o relançamento que dela vem.
         self._esperando_inis = False
         self._inis_conferidos = False
-        self._esperando_ativacao = False
         modelo.rowsInserted.connect(self._agendar)
         modelo.rowsRemoved.connect(self._agendar)
         modelo.modelReset.connect(self._agendar)
@@ -404,11 +403,6 @@ class BigPicture(QObject):
         self.alterado.emit()
         self.aberturaPedida.emit(0.0, 1.0)
 
-    def _janela_normal(self) -> None:
-        # Só sai da tela cheia: a maximização volta na saída do Big Picture.
-        if self._janela is not None:
-            self._janela.showNormal()
-
     def _voltar_a_tela_cheia(self) -> None:
         if self._janela is not None:
             # Minimizada pelo "Jogar", a janela precisa ser restaurada antes: pedir a tela cheia a uma janela minimizada a devolvia em modo janela.
@@ -421,14 +415,14 @@ class BigPicture(QObject):
         if not self._indo:
             return
         self._indo = False
-        self._janela_normal()
         jogo = shared.store.get(self._jogo_aberto) if shared.store is not None else None
         conferidos, self._inis_conferidos = self._inis_conferidos, False
         try:
             # Confirmado o comando de um jogo restaurado, abre pelo mesmo caminho; referência fraca: o callback fica na ponte, que sobrevive a este objeto.
             eu, jogo_id = weakref.ref(self), self._jogo_aberto
             aberto = jogo is not None and jogo.launch(
-                ao_confirmar=lambda: (b := eu()) and b._continuar_abertura(jogo_id), inis_conferidos=conferidos
+                ao_confirmar=lambda: (b := eu()) and b._continuar_abertura(jogo_id), inis_conferidos=conferidos,
+                em_tela_cheia=True,
             )
         except Exception:
             self._desistir_da_abertura()
@@ -483,23 +477,7 @@ class BigPicture(QObject):
         self._reabrir()
 
     def _voltar_sem_sessao(self) -> None:
-        # Com "minimizar ao abrir" o `launch` acabou de minimizar a janela e `isActive` só muda no ciclo seguinte: põe a tela cheia quando ela voltar a ficar ativa.
         self._reabrir()
-        if not shared.schema.get_boolean("minimize-after-launch"):
-            self._voltar_a_tela_cheia()
-        elif self._janela is not None and not self._esperando_ativacao:
-            self._esperando_ativacao = True
-            self._janela.activeChanged.connect(self._ao_ativar)
-
-    @Slot()
-    def _ao_ativar(self) -> None:
-        janela = self._janela
-        if janela is None or not janela.isActive():
-            return
-        janela.activeChanged.disconnect(self._ao_ativar)
-        self._esperando_ativacao = False
-        if self._visivel:
-            self._voltar_a_tela_cheia()
 
     def _hwnd(self) -> int:
         return int(self._janela.winId()) if self._janela is not None else 0

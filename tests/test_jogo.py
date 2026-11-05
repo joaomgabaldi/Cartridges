@@ -369,6 +369,27 @@ def test_launch_sem_rastreio_so_sai_da_frente_com_a_preferencia(com_sessao, sche
     assert len(saidas) == (1 if minimizar else 0)
 
 
+def test_launch_em_tela_cheia_nao_sai_da_frente(com_sessao):
+    jogo = _jogo(track_process=True, process_executable="halo.exe")
+    saidas = _contar(jogo.sair_da_frente)
+
+    assert jogo.launch(em_tela_cheia=True) is True
+
+    assert "mover" not in com_sessao.passos and "processo.start" in com_sessao.passos
+    assert saidas == []
+
+
+def test_launch_em_tela_cheia_ignora_minimizar_ao_abrir(com_sessao, schema):
+    schema.set_boolean("playtime-tracking", False)
+    schema.set_boolean("minimize-after-launch", True)
+    jogo = _jogo(track_process=True, process_executable="halo.exe")
+    saidas = _contar(jogo.sair_da_frente)
+
+    assert jogo.launch(em_tela_cheia=True) is True
+
+    assert saidas == []
+
+
 def test_segundo_launch_encerra_o_primeiro(com_sessao):
     """A sessão anterior é encerrada, com registro, antes de outra começar."""
     from cartridges import jogo as modulo  # noqa: PLC0415

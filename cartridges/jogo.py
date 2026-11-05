@@ -381,10 +381,13 @@ class Jogo(QObject):
 
         threading.Thread(target=conferir, name="conferencia-dos-inis", daemon=True).start()
 
-    def launch(self, ao_confirmar: Optional[Callable[[], Any]] = None, inis_conferidos: bool = False) -> bool:
+    def launch(self, ao_confirmar: Optional[Callable[[], Any]] = None, inis_conferidos: bool = False, em_tela_cheia: bool = False
+    ) -> bool:
         """``ao_confirmar``: como relançar depois da confirmação do comando ou da conferência dos .ini; sem ele, este mesmo ``launch``.
 
         ``inis_conferidos``: relançamento de uma conferência que passou por uma animação (Big Picture) e já não vê a marca.
+
+        ``em_tela_cheia``: lançado do Big Picture; a janela não muda de monitor nem sai da frente.
         """
         # Dentro da função: o `backup_de_saves` importa o `Jogo`.
         from cartridges.emuladores import aplicacao, busca  # noqa: PLC0415
@@ -425,7 +428,7 @@ class Jogo(QObject):
         )
         sessao = shared.sessao
         # Sair da frente antes de o jogo existir: a janela muda de monitor com o jogo ainda por lançar. Só com sessão, que devolve a janela ao lugar de origem.
-        moved = tracking and sessao is not None and sessao.move_to_session_monitor()
+        moved = tracking and sessao is not None and not em_tela_cheia and sessao.move_to_session_monitor()
 
         run_executable(self.executable, self.run_as_admin)
         if sessao is not None:
@@ -439,13 +442,13 @@ class Jogo(QObject):
 
         if sessao is not None and tracking and followable:
             ProcessSession(self).start()
-            if not moved:
+            if not moved and not em_tela_cheia:
                 self.sair_da_frente.emit()
         elif sessao is not None and tracking:
             SessionWindow(self).present()
-            if not moved:
+            if not moved and not em_tela_cheia:
                 self.sair_da_frente.emit()
-        elif shared.schema.get_boolean("minimize-after-launch"):
+        elif not em_tela_cheia and shared.schema.get_boolean("minimize-after-launch"):
             self.sair_da_frente.emit()
 
         self._avisar(_("{} iniciado"))

@@ -851,8 +851,9 @@ class _Launch:
         self.chamadas = 0
         self.ao_confirmar = None
 
-    def __call__(self, ao_confirmar=None, inis_conferidos=False):
+    def __call__(self, ao_confirmar=None, inis_conferidos=False, em_tela_cheia=False):
         self.chamadas += 1
+        self.em_tela_cheia = em_tela_cheia
         self.inis_conferidos = inis_conferidos
         self.ao_confirmar = ao_confirmar
         if self.efeito is not None:
@@ -893,7 +894,16 @@ def test_abrir_jogo_pede_a_abertura_e_so_lanca_no_fim_dela(abrivel):
     assert a.jogos["b"].launch.chamadas == 0 and a.janela.chamadas == ["tela cheia"]
     a.bp.aberturaTerminou()
     assert a.jogos["b"].launch.chamadas == 1
-    assert a.janela.chamadas[:2] == ["tela cheia", "normal"]  # saiu da tela cheia antes de lançar
+    assert a.janela.chamadas == ["tela cheia"]
+
+
+def test_abertura_nao_sai_da_tela_cheia(abrivel):
+    a = abrivel
+    a.bp.atualizar("b")
+    a.bp.abrirJogo()
+    a.bp.aberturaTerminou()
+    assert a.janela.chamadas.count("normal") == 0
+    assert a.jogos["b"].launch.em_tela_cheia is True
 
 
 def test_dois_a_seguidos_abrem_o_jogo_uma_vez(abrivel):
@@ -920,7 +930,7 @@ def test_launch_recusado_volta_ao_normal(abrivel):
     a.jogos["b"].launch.devolve = False
     _ida(a)
     assert not a.bp.ocupada and a.aberturas == [(0.0, 1.0), (1.0, 0.0)]
-    assert a.janela.chamadas == ["tela cheia", "normal", "tela cheia"]
+    assert a.janela.chamadas == ["tela cheia", "tela cheia"]
     assert a.bp.indice == 1
 
 
@@ -1000,7 +1010,7 @@ def test_launch_que_levanta_volta_ao_normal_e_propaga(abrivel):
     with pytest.raises(RuntimeError):
         a.bp.aberturaTerminou()
     assert not a.bp.ocupada and a.aberturas[-1] == (1.0, 0.0)
-    assert a.janela.chamadas == ["tela cheia", "normal", "tela cheia"]
+    assert a.janela.chamadas == ["tela cheia", "tela cheia"]
 
 
 def test_jogo_que_sumiu_da_loja_volta_ao_normal(abrivel, monkeypatch):
@@ -1015,7 +1025,7 @@ def test_sem_sessao_volta_sozinho(abrivel, schema):
     a = abrivel
     schema.set_boolean("minimize-after-launch", False)
     _ida(a)
-    assert not a.bp.ocupada and a.janela.chamadas.count("tela cheia") == 2
+    assert not a.bp.ocupada and a.janela.chamadas.count("tela cheia") == 1
     assert a.aberturas == [(0.0, 1.0), (1.0, 0.0)] and a.focos == [1]
 
 
@@ -1023,50 +1033,15 @@ def test_sem_sessao_sem_minimizar_poe_tela_cheia_na_hora(abrivel, schema):
     a = abrivel
     schema.set_boolean("minimize-after-launch", False)
     _ida(a)
-    assert a.janela.chamadas == ["tela cheia", "normal", "tela cheia"]
+    assert a.janela.chamadas == ["tela cheia"]
 
 
-def test_sem_sessao_minimizando_espera_a_janela_ativar(abrivel, schema):
-    # `isActive` ainda diz True (o evento de ativação não foi processado): não vale.
-    a = abrivel
-    schema.set_boolean("minimize-after-launch", True)
-    _ida(a)
-    assert not a.bp.ocupada and a.aberturas[-1] == (1.0, 0.0)
-    assert a.janela.chamadas == ["tela cheia", "normal"]
 
 
-def test_sem_sessao_tela_cheia_volta_quando_a_janela_fica_ativa(abrivel, schema):
-    a = abrivel
-    schema.set_boolean("minimize-after-launch", True)
-    _ida(a)
-    a.janela.ativar(False)
-    assert a.janela.chamadas.count("tela cheia") == 1
-    a.janela.ativar(True)
-    assert a.janela.chamadas.count("tela cheia") == 2
-    a.janela.ativar(False)
-    a.janela.ativar(True)
-    assert a.janela.chamadas.count("tela cheia") == 2  # desconectou
 
 
-def test_pagina_fora_da_tela_nao_ganha_tela_cheia_ao_ativar(abrivel, schema):
-    a = abrivel
-    schema.set_boolean("minimize-after-launch", True)
-    _ida(a)
-    a.bp.sair()
-    a.bp.filaTerminou()
-    a.janela.ativar(False)
-    a.janela.ativar(True)
-    assert a.janela.chamadas.count("tela cheia") == 1
 
 
-def test_duas_aberturas_sem_ativacao_dao_uma_tela_cheia(abrivel, schema):
-    a = abrivel
-    schema.set_boolean("minimize-after-launch", True)
-    _ida(a)
-    _ida(a)  # a janela segue minimizada: a segunda abertura não liga outra espera
-    a.janela.ativar(False)
-    a.janela.ativar(True)
-    assert a.janela.chamadas.count("tela cheia") == 2  # a entrada e a única volta
 
 
 def test_maximizada_so_volta_maximizada_na_saida_do_big_picture(app_qt, tiques, monkeypatch):
@@ -1081,9 +1056,8 @@ def test_maximizada_so_volta_maximizada_na_saida_do_big_picture(app_qt, tiques, 
     bp.aberturaTerminou()
     bp.sair()
     bp.filaTerminou()
-    # Ao abrir o jogo só se chama `unfullscreen()`: a ida do jogo é "normal"; a maximização volta na saída.
-    assert janela.chamadas.count("maximizada") == 1
-    assert janela.chamadas.index("normal") < janela.chamadas.index("maximizada")
+    # Abrir o jogo não mexe na janela; a maximização volta só na saída.
+    assert janela.chamadas.count("maximizada") == 1 and "normal" not in janela.chamadas
 
 
 def test_voltou_do_jogo_sem_estar_ocupada_nao_faz_nada(abrivel):
@@ -1157,7 +1131,7 @@ def test_abrir_com_sessao_espera_o_fim(com_sessao):
     _ida(a)
     assert a.sessao.emAndamento and a.bp.ocupada
     assert a.aberturas == [(0.0, 1.0)] and a.focos == []
-    assert a.janela.chamadas == ["tela cheia", "normal"], "a tela cheia só volta com o fim da sessão"
+    assert a.janela.chamadas == ["tela cheia"]
 
 
 def test_fim_da_sessao_reabre_com_o_jogo_no_centro(com_sessao):
@@ -1166,7 +1140,7 @@ def test_fim_da_sessao_reabre_com_o_jogo_no_centro(com_sessao):
     a.sessao.terminar()
     assert not a.sessao.emAndamento and not a.bp.ocupada
     assert a.aberturas == [(0.0, 1.0), (1.0, 0.0)] and a.focos == [1]
-    assert a.janela.chamadas == ["tela cheia", "normal", "tela cheia"]
+    assert a.janela.chamadas == ["tela cheia", "tela cheia"]
     assert (a.bp.indice, a.bp.nome) == (0, "C")  # o jogado agora vem à frente e fica no centro
 
 

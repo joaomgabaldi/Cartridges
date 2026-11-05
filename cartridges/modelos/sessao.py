@@ -155,7 +155,8 @@ class ModeloDaSessao(QObject):
         # O relógio só faz sentido onde se vê: com a janela levada a outro monitor. A pergunta é se a mudança aconteceu, não se
         # a opção está ligada (com o monitor escolhido desligado ela está ligada e a janela minimizou).
         self._relogio_visivel = window_geometry.session_geometry() is not None
-        if self._relogio_visivel:
+        # No Big Picture a janela fica onde está, mas o relógio segue contando (`sessao.relogio`).
+        if self._relogio_visivel or (self._big_picture is not None and self._big_picture.visivel):
             self._tique.start()
         self.alterado.emit()
         if shared.schema.get_boolean("session-wallpaper"):

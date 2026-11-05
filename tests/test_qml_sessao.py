@@ -166,6 +166,15 @@ def test_relogio_acompanha_o_tique(app_qt, monkeypatch):
 
     assert relogio.property("text") == "0:02:05"
     app.fechar()
+def test_relogio_corre_na_sessao_do_big_picture(app_qt):
+    app = _app()
+    app.sessao._big_picture = type("BigPicture", (), {"visivel": True})()  # noqa: SLF001
+    _comecar(app)
+    assert app.sessao._tique.isActive()  # noqa: SLF001
+    assert app.sessao.relogioVisivel is False
+    app.fechar()
+
+
 def test_anotacao_da_sessao_vai_ao_jogo_da_sessao(app_qt):
     app = _app()
     _abrir_pelo_cartao(app, 1)  # os detalhes de Beta ficam por baixo
