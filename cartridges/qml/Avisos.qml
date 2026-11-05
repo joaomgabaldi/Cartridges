@@ -10,7 +10,7 @@ Item {
     property QtObject atualizador
     property Item lugarDoAviso: null
     signal retornoPerdido()
-    readonly property bool dialogoAberto: confirmacao.aberto || dialogoDeErros.aberto || confirmacaoDoApp.aberto || dialogoDaAtualizacao.aberto
+    readonly property bool dialogoAberto: confirmacao.aberto || preparo.aberto || dialogoDeErros.aberto || confirmacaoDoApp.aberto || dialogoDaAtualizacao.aberto
 
     property int ordem: 10
     function subir(dialogo) { dialogo.z = ++ordem }
@@ -24,6 +24,15 @@ Item {
             confirmacao.aberto = true
             Qt.callLater(confirmacao.focarInicial)
         }
+        function onPreparoPedido(titulo, corpo) {
+            preparo.titulo = titulo
+            preparo.corpo = corpo
+            camada.subir(preparo)
+            preparo.aberto = true
+            Qt.callLater(preparo.focarInicial)
+        }
+        // Fechar pelo `aberto`, e não pelo `responder`: a busca acabou e ninguém respondeu.
+        function onPreparoTerminou() { preparo.aberto = false }
     }
 
     Connections {
@@ -125,6 +134,16 @@ Item {
         respostaDeEscape: "dispensar"
         respostaInicial: "dispensar"
         onRespondido: resposta => resposta === "iniciar" ? camada.ponte.confirmar() : camada.ponte.cancelar()
+    }
+
+    DialogoDeAlerta {
+        id: preparo
+        objectName: "dialogoDoPreparo"
+        respostas: [{ id: "cancelar", rotulo: "Cancelar", objeto: "botaoCancelarPreparo" },
+                    { id: "jogar", rotulo: "Jogar mesmo assim", objeto: "botaoJogarMesmoAssim" }]
+        respostaDeEscape: "cancelar"
+        respostaInicial: "cancelar"
+        onRespondido: resposta => resposta === "jogar" ? camada.ponte.jogarMesmoAssim() : camada.ponte.cancelarPreparo()
     }
 
     DialogoDeAviso {

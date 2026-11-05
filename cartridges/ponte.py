@@ -25,11 +25,16 @@ class Ponte(QObject):
 
     confirmacaoPedida = Signal(str, str)
     sairDaFrente = Signal()
+    # O diálogo "Preparando" da conferência dos .ini: aberto com (título, corpo), fechado quando a busca acaba.
+    preparoPedido = Signal(str, str)
+    preparoTerminou = Signal()
 
     def __init__(self, fila: FilaDeAvisos | None = None) -> None:
         super().__init__()
         self.fila = fila if fila is not None else FilaDeAvisos(self)
         self._pendente: Callable[[], Any] | None = None
+        # (jogo, jogar agora, cancelar) da conferência mostrada no diálogo.
+        self._preparo: tuple["weakref.ref[Jogo]", Callable[[], Any], Callable[[], Any]] | None = None
         self._ligados: "weakref.WeakSet[Jogo]" = weakref.WeakSet()
 
     def ligar(self, jogo: Jogo) -> None:
@@ -57,6 +62,22 @@ class Ponte(QObject):
         jogo.aviso.connect(aviso)
         jogo.sair_da_frente.connect(self.sairDaFrente)
         jogo.confirmar_comando.connect(confirmar)
+
+        def preparar(jogar: Callable[[], Any], cancelar: Callable[[], Any]) -> None:
+            if (p := ponte()) is not None and (j := ref_jogo()) is not None:
+                p._preparo = (ref_jogo, jogar, cancelar)  # noqa: SLF001
+                p.preparoPedido.emit(
+                    f"Preparando {j.name}",
+                    "Procurando os arquivos de configuração do jogo para aplicar o idioma e o nome do jogador.",
+                )
+
+        def preparado() -> None:
+            if (p := ponte()) is not None and p._preparo is not None and p._preparo[0] is ref_jogo:  # noqa: SLF001
+                p._preparo = None  # noqa: SLF001
+                p.preparoTerminou.emit()
+
+        jogo.procurando_inis.connect(preparar)
+        jogo.inis_procurados.connect(preparado)
 
     def ligar_store(self, store: Any) -> None:
         """`jogo_excluido` sai de threads do importador: a conexão enfileirada leva à principal."""
@@ -100,3 +121,16 @@ class Ponte(QObject):
     @Slot()
     def cancelar(self) -> None:
         self._pendente = None
+
+    @Slot()
+    def jogarMesmoAssim(self) -> None:  # noqa: N802
+        """Lança sem esperar a busca, que segue e grava para a próxima vez."""
+        preparo, self._preparo = self._preparo, None
+        if preparo is not None:
+            preparo[1]()
+
+    @Slot()
+    def cancelarPreparo(self) -> None:  # noqa: N802
+        preparo, self._preparo = self._preparo, None
+        if preparo is not None:
+            preparo[2]()

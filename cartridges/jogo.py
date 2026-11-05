@@ -20,6 +20,8 @@
 """O jogo da biblioteca; emite também nas threads do importador (conectar com `na_thread_principal` ou conexão enfileirada)."""
 
 import logging
+import threading
+import weakref
 from pathlib import Path
 from time import time
 from typing import Any, Callable, Optional
@@ -31,6 +33,7 @@ from cartridges.process_session import ProcessSession
 from cartridges.session_window import SessionWindow
 from cartridges.utils.process_monitor import install_dir_from_command
 from cartridges.utils.run_executable import aumid_from_command, run_executable
+from cartridges.utils.thread_principal import na_thread_principal
 
 # Formatos de capa animada, mantidos na forma original. O APNG guardado vira .apng: a extensão diz ao app que a capa é animada.
 # A ordem é a precedência de ``Jogo.get_cover_path``.
@@ -115,8 +118,14 @@ class Jogo(QObject):
     # Leva a função que, chamada depois do "Iniciar" da pessoa, desmarca o comando e lança o jogo.
     confirmar_comando = Signal(object)
     sair_da_frente = Signal()
+    # A conferência dos .ini não achou os arquivos e vai procurá-los: (jogar agora, cancelar). `inis_procurados` diz que acabou.
+    procurando_inis = Signal(object, object)
+    inis_procurados = Signal()
 
     loading: int = 0
+    # Uma conferência dos .ini em andamento; e o uso único que deixa o relançamento dela passar sem conferir de novo.
+    _conferindo: bool = False
+    _inis_conferidos: bool = False
     filtered: bool = False
 
     # Com default, ao contrário dos de identidade: um arquivo antigo sem este campo levantava AttributeError no FileManager e o jogo deixava de ser gravado.
@@ -302,11 +311,54 @@ class Jogo(QObject):
 
         self.confirmar_comando.emit(confirmar)
 
+    def _conferir_inis(self, ao_confirmar: Optional[Callable[[], Any]]) -> None:
+        """Aplica o idioma e o nome numa thread (toca o disco) e relança na principal; nunca impede o jogo de abrir."""
+        from cartridges.emuladores import aplicacao, busca  # noqa: PLC0415
+
+        self._conferindo = True
+        ref = weakref.ref(self)  # quem guarda as respostas (a ponte) não prende o jogo
+        decidido = False
+
+        def jogar() -> None:
+            nonlocal decidido
+            if decidido or (j := ref()) is None:
+                return
+            decidido = True
+            j._inis_conferidos = True
+            (ao_confirmar or j.launch)()
+
+        def cancelar() -> None:
+            nonlocal decidido
+            decidido = True
+
+        def fim() -> None:
+            if (j := ref()) is not None:
+                j._conferindo = False
+                j.inis_procurados.emit()
+            jogar()
+
+        def conferir() -> None:
+            try:
+                if not aplicacao.aplicar_no_jogo(self) and busca.raiz_do_jogo(self.executable, []) is not None:
+                    na_thread_principal(self.procurando_inis.emit, jogar, cancelar)
+                    aplicacao.atualizar_inis(self, aplicacao.executaveis_dos_outros(self))
+                    aplicacao.aplicar_no_jogo(self)
+                    # Excluído durante a busca: gravar o ressuscitaria.
+                    if shared.store is not None and shared.store.get(self.game_id) is self:
+                        self.save()
+            except Exception:  # noqa: BLE001
+                logging.exception("Falha ao conferir os .ini de %s", self.name)
+            na_thread_principal(fim)
+
+        threading.Thread(target=conferir, name="conferencia-dos-inis", daemon=True).start()
+
     def launch(self, ao_confirmar: Optional[Callable[[], Any]] = None) -> bool:
         """``ao_confirmar``: como relançar depois da confirmação do comando de um jogo restaurado; sem ele, este mesmo ``launch``."""
         # Dentro da função: o `backup_de_saves` importa o `Jogo`.
+        from cartridges.emuladores import aplicacao  # noqa: PLC0415
         from cartridges.saves import backup_de_saves  # noqa: PLC0415
 
+        conferidos, self._inis_conferidos = self._inis_conferidos, False
         # Antes do comando a conferir: o jogo não abre no meio da restauração dos saves dele.
         if backup_de_saves.restaurando(self):
             self._avisar(_("Aguarde o fim da restauração dos saves de {}."))
@@ -314,6 +366,12 @@ class Jogo(QObject):
         if self.comando_a_conferir:
             self._conferir_comando(ao_confirmar or self.launch)
             return False
+        if not conferidos:
+            if self._conferindo:  # clique repetido durante a conferência
+                return False
+            if aplicacao.valores_para(self) != (None, None):
+                self._conferir_inis(ao_confirmar)
+                return False
 
         self.last_played = int(time())
         self.save()
