@@ -24,14 +24,12 @@ MolduraDoDialogo {
     readonly property var rotulosDasSecoes: secoes.map(a => a.titulo)
     property string secao: "geral"
     readonly property int indiceDaSecao: Math.max(0, secoes.findIndex(a => a.id === secao))
-    // Durante a busca a direita mostra os resultados, e o cabeçalho deixa de falar da seção.
     readonly property var secaoAtual: secoes[indiceDaSecao]
     property alias filtro: lista.texto
+    // Durante a busca a direita mostra os resultados, e o cabeçalho deixa de falar da seção.
     readonly property bool buscando: filtro !== ""
     property var resultados: []
     property bool avisoAberto: false
-    // Muda a cada alteração das preferências: refaz a conta dos contadores da lista.
-    property int _versaoDosContadores: 0
     readonly property Item botaoFechar: cabecalho.botaoFechar
 
     aberto: preferencias.aberto
@@ -83,7 +81,6 @@ MolduraDoDialogo {
         focarLinha(paginas.children[indiceDaSecao])
     }
     function contagem(id: string): int {
-        _versaoDosContadores  // só para o contador reavaliar quando algo mudar
         return linhasBuscaveis(id).length
     }
 
@@ -150,7 +147,6 @@ MolduraDoDialogo {
         target: preferencias
         function onAlterado() {
             // Adiado: as linhas só mudam de `aparece` depois que o estado novo chega.
-            Qt.callLater(() => { dialogo._versaoDosContadores++ })
             if (dialogo.filtro !== "") Qt.callLater(dialogo.procurar)
         }
     }

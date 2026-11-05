@@ -75,7 +75,10 @@ CHAVES_DA_TELA = (
 )
 # Chaves inteiras: (mínimo, máximo), como no gschema. As demais de CHAVES_GRAVAVEIS são booleanas.
 _INTEIROS = {"process-tracking-grace": (0, 120), "conquistas-aviso-som-volume": (10, 100)}
-PAGINAS = ("geral", "controle", "monitores", "iluminacao", "importacao", "metadados", "conquistas", "contas", "backup", "aplicativo")
+PAGINAS = (
+    "geral", "controle", "monitores", "iluminacao", "importacao",
+    "metadados", "conquistas", "contas", "backup", "aplicativo",
+)
 # Os estilos do alerta na ordem da lista da tela (os rótulos ficam no QML).
 ESTILOS_NA_TELA = ("piscar", "respirar", "rapido", "longo")
 SEM_3D = "Requer uma placa de vídeo com aceleração 3D."

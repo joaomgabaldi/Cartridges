@@ -108,8 +108,10 @@ def test_foco_no_item_ja_troca_a_secao(app):  # noqa: F811
     assert _dialogo(app).property("secao") == "controle"
     assert _foco_dentro_de(app, "secao-controle")
     QTest.keyClick(app.janela, Qt.Key.Key_Up)
-    QTest.keyClick(app.janela, Qt.Key.Key_Up)  # na ponta, fica
+    QTest.keyClick(app.janela, Qt.Key.Key_Up)  # na ponta, vai à busca e a seção fica
     assert _dialogo(app).property("secao") == "geral"
+    assert _foco_dentro_de(app, "campoDeBuscaDasPreferencias")
+    QTest.keyClick(app.janela, Qt.Key.Key_Down)  # e a seta para baixo volta ao item da seção atual
     assert _foco_dentro_de(app, "secao-geral")
 
 
@@ -309,4 +311,13 @@ def test_resultado_no_fim_da_pagina_termina_com_a_linha_a_vista(app):  # noqa: F
         return y >= -0.5 and y + foco.height() <= rolagem.property("height") + 0.5
 
     assert _esperar(a_vista)
+    assert rolagem.property("contentY") > 0
+
+
+def test_abrir_numa_secao_abaixo_da_dobra_traz_o_item_a_vista(app):  # noqa: F811
+    app.janela.setHeight(420)
+    _abrir(app, "aplicativo")
+    rolagem = app.achar("rolagemDaLista")
+    assert rolagem.property("contentHeight") > rolagem.property("height")
+    assert _esperar(lambda: _na_vista(app, "secao-aplicativo"))
     assert rolagem.property("contentY") > 0

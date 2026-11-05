@@ -25,6 +25,18 @@ Rectangle {
         var k = secoes.findIndex(s => s.id === id)
         if (k >= 0) repetidor.itemAt(k).forceActiveFocus(Qt.TabFocusReason)
     }
+    // A lista rola só se não couber: o item nunca fica fora da vista.
+    function mostrarItem(item) {
+        var topo = item.mapToItem(rolagemDaLista.contentItem, 0, 0).y, base = topo + item.height
+        if (topo < rolagemDaLista.contentY) rolagemDaLista.contentY = topo
+        else if (base > rolagemDaLista.contentY + rolagemDaLista.height)
+            rolagemDaLista.contentY = Math.max(0, base - rolagemDaLista.height)
+    }
+    // Ao abrir numa seção abaixo da dobra (janela muito baixa), traz o item atual à vista.
+    function mostrarAtual() {
+        var k = secoes.findIndex(s => s.id === secao)
+        if (k >= 0) mostrarItem(repetidor.itemAt(k))
+    }
     function irPara(indice) {
         if (indice >= 0 && indice < secoes.length) repetidor.itemAt(indice).forceActiveFocus(Qt.TabFocusReason)
     }
@@ -63,6 +75,7 @@ Rectangle {
             Layout.rightMargin: 12
             placeholderText: "Buscar nas Preferências"
             Accessible.name: "Buscar nas Preferências"
+            Keys.onDownPressed: lista.focarSecao(lista.secao)
             // Sem texto o Esc segue para a moldura e fecha o diálogo.
             Keys.onEscapePressed: event => {
                 event.accepted = text !== ""
@@ -80,6 +93,8 @@ Rectangle {
             boundsBehavior: Flickable.StopAtBounds
             clip: true
             ScrollBar.vertical: BarraDeRolagem {}
+            // O cartão só ganha a altura final depois de aberto: reajusta a vista quando ela muda.
+            onHeightChanged: lista.mostrarAtual()
 
             Column {
                 id: itens
@@ -110,11 +125,7 @@ Rectangle {
                         // A seção acompanha o foco: o teclado e o controle já mostram a seção ao chegar no item.
                         onActiveFocusChanged: if (activeFocus) {
                             lista.escolhida(modelData.id)
-                            // A lista rola só se não couber: o item focado nunca fica fora da vista.
-                            var topo = y, base = y + height
-                            if (topo < rolagemDaLista.contentY) rolagemDaLista.contentY = topo
-                            else if (base > rolagemDaLista.contentY + rolagemDaLista.height)
-                                rolagemDaLista.contentY = Math.max(0, base - rolagemDaLista.height)
+                            lista.mostrarItem(item)
                         }
                         // Clique/Enter encerram a busca (senão a direita seguiria nos resultados). Não no foco: o Tab
                         // do campo aos resultados passa por este item e não pode apagar o texto.
@@ -122,7 +133,7 @@ Rectangle {
                         Keys.onReturnPressed: click()
                         Keys.onEnterPressed: click()
                         Keys.onDownPressed: lista.irPara(index + 1)
-                        Keys.onUpPressed: lista.irPara(index - 1)
+                        Keys.onUpPressed: index === 0 ? campoDeBusca.forceActiveFocus(Qt.TabFocusReason) : lista.irPara(index - 1)
                         Keys.onRightPressed: lista.entrarNasLinhas()
 
                         contentItem: RowLayout {
@@ -144,7 +155,7 @@ Rectangle {
                                 objectName: "contadorDaSecao-" + item.modelData.id
                                 Layout.rightMargin: 12
                                 visible: !lista.compacta
-                                text: String(lista.contagem(item.modelData.id))
+                                text: lista.compacta ? "" : String(lista.contagem(item.modelData.id))
                                 textFormat: Text.PlainText
                                 color: Tema.textoSecundario
                                 font { family: Tema.fonte; pixelSize: Tema.legenda }
