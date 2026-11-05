@@ -4,7 +4,7 @@
 
 """A distribuição das opções pelas dez seções das Preferências (tabela do desenho de 05/11/2026)."""
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QPointF, Qt
 from PySide6.QtTest import QTest
 
 from cartridges import shared
@@ -198,3 +198,28 @@ def test_shift_tab_das_linhas_chega_a_lista_e_a_busca(app):  # noqa: F811
     assert _foco_dentro_de(app, "secao-importacao")
     QTest.keyClick(app.janela, Qt.Key.Key_Backtab)
     assert _foco_dentro_de(app, "campoDeBuscaDasPreferencias")
+
+
+def _na_vista(app, nome):
+    """O item da lista está inteiro dentro da área visível da rolagem da lista."""
+    rolagem, item = app.achar("rolagemDaLista"), app.achar(nome)
+    y = item.mapToItem(rolagem.property("contentItem"), QPointF(0, 0)).y()
+    topo = rolagem.property("contentY")
+    return y >= topo - 0.5 and y + item.height() <= topo + rolagem.property("height") + 0.5
+
+
+def test_lista_rola_para_acompanhar_o_foco_em_janela_baixa(app):  # noqa: F811
+    app.janela.setHeight(420)
+    _abrir(app)
+    rolagem = app.achar("rolagemDaLista")
+    assert rolagem.property("contentHeight") > rolagem.property("height")  # a lista não cabe
+    app.achar("secao-geral").forceActiveFocus(Qt.FocusReason.TabFocusReason)
+    for _ in range(9):
+        QTest.keyClick(app.janela, Qt.Key.Key_Down)
+    assert _dialogo(app).property("secao") == "aplicativo"
+    assert rolagem.property("contentY") > 0
+    assert _na_vista(app, "secao-aplicativo")
+    for _ in range(9):
+        QTest.keyClick(app.janela, Qt.Key.Key_Up)
+    assert _dialogo(app).property("secao") == "geral"
+    assert _na_vista(app, "secao-geral")

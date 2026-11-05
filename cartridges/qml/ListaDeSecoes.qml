@@ -72,6 +72,7 @@ Rectangle {
 
         Flickable {
             id: rolagemDaLista
+            objectName: "rolagemDaLista"
             Layout.fillWidth: true
             Layout.fillHeight: true
             contentWidth: width
@@ -107,7 +108,14 @@ Rectangle {
                         Accessible.role: Accessible.PageTab
                         Accessible.name: text
                         // A seção acompanha o foco: o teclado e o controle já mostram a seção ao chegar no item.
-                        onActiveFocusChanged: if (activeFocus) lista.escolhida(modelData.id)
+                        onActiveFocusChanged: if (activeFocus) {
+                            lista.escolhida(modelData.id)
+                            // A lista rola só se não couber: o item focado nunca fica fora da vista.
+                            var topo = y, base = y + height
+                            if (topo < rolagemDaLista.contentY) rolagemDaLista.contentY = topo
+                            else if (base > rolagemDaLista.contentY + rolagemDaLista.height)
+                                rolagemDaLista.contentY = Math.max(0, base - rolagemDaLista.height)
+                        }
                         onClicked: lista.escolhida(modelData.id)
                         Keys.onReturnPressed: click()
                         Keys.onEnterPressed: click()
