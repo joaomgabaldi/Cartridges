@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""O histórico de sessões na tela: o tempo de jogo clicável, o diálogo e o gráfico (QML offscreen, D54)."""
+"""O histórico de sessões na tela: o tempo de jogo clicável, o diálogo e o gráfico (QML offscreen)."""
 
 import pytest
 from PIL import Image
@@ -258,7 +258,7 @@ def test_logo_largo_manda_a_largura_da_caixa(app_qt, monkeypatch, tmp_path):
     _abrir(app)
     logo = app.achar("logoDoHistorico")
     assert _esperar(lambda: logo.property("visible") is True)
-    largura = min(992, _achar(app.achar("dialogoDoHistorico"), "cartaoDoDialogo").width() - 48)  # a caixa é a do `Adw.Dialog`
+    largura = min(992, _achar(app.achar("dialogoDoHistorico"), "cartaoDoDialogo").width() - 48)  # a caixa do diálogo
     assert logo.width() == largura and abs(logo.height() - largura / 10) <= 1
     app.fechar()
 
@@ -432,7 +432,7 @@ def test_foco_depois_do_ultimo_mostrar_mais_vai_ao_botao_de_fechar(app_qt):
     app.fechar()
 
 
-# -- Auditoria GTK x Qt, pacote D (histórico) ------------------------------------------------------
+# -- moldura, foco e medidas do histórico ------------------------------------------------------
 
 
 def _dentro(app):
@@ -441,7 +441,7 @@ def _dentro(app):
 
 @pytest.mark.parametrize("altura", [700, 600])
 def test_com_1100_de_largura_o_grafico_fica_a_vista_sem_rolar_a_caixa(app_qt, altura):
-    """SES-23: a tabela encolhe (`max_content_height` é só um teto) e o eixo do gráfico não fica abaixo da dobra."""
+    """A tabela encolhe (a altura máxima é só um teto) e o eixo do gráfico não fica abaixo da dobra."""
     app = _app()
     _sessoes(30)
     app.janela.setWidth(1100)
@@ -450,11 +450,11 @@ def test_com_1100_de_largura_o_grafico_fica_a_vista_sem_rolar_a_caixa(app_qt, al
     cartao, rolagem = _achar(_dentro(app), "cartaoDoDialogo"), _achar(_dentro(app), "rolagemDoHistorico")
     tabela, grafico = app.achar("tabelaDeSessoes"), app.achar("graficoDoHistorico")
     if altura < 700:
-        assert _esperar(lambda: tabela.height() < 440)  # antes: sempre 440 e a caixa rolava
+        assert _esperar(lambda: tabela.height() < 440)  # não fica fixa em 440
     assert rolagem.property("contentHeight") <= rolagem.height() + 0.5  # a caixa não rola
     base_do_grafico = _caixa(grafico)[1] + grafico.height()
     assert base_do_grafico <= _caixa(cartao)[1] + cartao.height()
-    assert cartao.height() <= altura - 2 * 20  # as margens do `Adw.Dialog` abaixo de 720 de altura
+    assert cartao.height() <= altura - 2 * 20  # as margens do diálogo abaixo de 720 de altura
     assert grafico.height() >= 240  # o piso do gráfico
     assert tabela.property("contentHeight") > tabela.height()  # e a tabela rola por dentro
     app.fechar()
@@ -473,22 +473,22 @@ def test_janela_muito_baixa_rola_a_caixa_so_quando_nem_o_piso_cabe(app_qt):
 
 
 def test_caixa_e_um_adw_dialog_com_cabecalho_de_47(app_qt):
-    """SES-24/25/26/27/28: raio 15 com sombra e contorno, fundo escurecido do tema, animação e faixa de 47 com o X redondo."""
+    """Raio 15 com sombra e contorno, fundo escurecido do tema, animação e faixa de 47 com o X redondo."""
     app = _app()
     _sessoes(2)
     dialogo = _abrir(app)
     cartao = _achar(dialogo, "cartaoDoDialogo")
     assert cartao.property("radius") == 15 and cartao.width() <= 1040
-    assert _expr(dialogo, "progresso") is not None  # a mola do `AdwFloatingSheet` (o teste roda sem animar)
+    assert _expr(dialogo, "progresso") is not None  # a mola do diálogo flutuante (o teste roda sem animar)
     assert _expr(dialogo, "Tema.esmaecido.toString()") != "#80000000"
     fechar = _achar(dialogo, "fecharDoCabecalho")
     assert (fechar.width(), fechar.parentItem().height()) == (34, 47)
-    assert _achar(dialogo, "tituloDoCabecalho").property("text") == ""  # `show_title=False`
+    assert _achar(dialogo, "tituloDoCabecalho").property("text") == ""  # sem título
     app.fechar()
 
 
 def test_clicar_fora_nao_fecha_o_dialogo_flutuante_mas_fecha_a_folha_de_baixo(app_qt):
-    """SES-39: janela estreita vira bottom sheet, que fecha ao tocar no fundo; larga, o fundo é seguro como na `main`."""
+    """Janela estreita vira bottom sheet, que fecha ao tocar no fundo; larga, o fundo é seguro."""
     app = _app()
     _sessoes(2)
     _abrir(app)
@@ -509,7 +509,7 @@ def test_clicar_fora_nao_fecha_o_dialogo_flutuante_mas_fecha_a_folha_de_baixo(ap
 
 
 def test_periodo_e_uma_trilha_so_com_as_medidas_do_toggle_group(app_qt):
-    """SES-30: trilha de 34 a 10% (raio 9, padding 3); opções de 28 sem espaço entre si; a marcada em branco no claro."""
+    """Trilha de 34 a 10% (raio 9, padding 3); opções de 28 sem espaço entre si; a marcada em branco no claro."""
     app = _app()
     _sessoes(3)
     _abrir(app)
@@ -527,7 +527,7 @@ def test_periodo_e_uma_trilha_so_com_as_medidas_do_toggle_group(app_qt):
 
 
 def test_periodo_responde_a_enter_pelo_teclado(app_qt):
-    """SES-08: Enter aciona o botão focado, também nos do período."""
+    """Enter aciona o botão focado, também nos do período."""
     app = _app()
     _sessoes(3)
     _abrir(app)
@@ -540,7 +540,7 @@ def test_periodo_responde_a_enter_pelo_teclado(app_qt):
 
 
 def test_linhas_da_tabela_sao_as_da_main(app_qt):
-    """SES-29/32/33/34: linha de 54 (50 + respiro) com título de 12 e subtítulo de 10, lixeira plana e "Mostrar mais" plano."""
+    """Linha de 54 (50 + respiro) com título de 12 e subtítulo de 10, lixeira plana e "Mostrar mais" plano."""
     app = _app()
     _sessoes(120)
     _abrir(app)
@@ -556,7 +556,7 @@ def test_linhas_da_tabela_sao_as_da_main(app_qt):
 
 
 def test_tab_e_setas_andam_pelas_linhas_antes_da_lixeira(app_qt):
-    """SES-35: cada linha recebe o foco do teclado (anel), antes da lixeira; ↑ e ↓ andam entre as linhas."""
+    """Cada linha recebe o foco do teclado (anel), antes da lixeira; ↑ e ↓ andam entre as linhas."""
     app = _app()
     _sessoes(4)
     _abrir(app)
@@ -582,7 +582,7 @@ def test_tab_e_setas_andam_pelas_linhas_antes_da_lixeira(app_qt):
 
 
 def test_home_end_e_paginas_andam_entre_as_linhas(app_qt):
-    """M15: como o `GtkListBox`, Home vai à primeira linha, End à última e PageUp/PageDown saltam."""
+    """Home vai à primeira linha, End à última e PageUp/PageDown saltam."""
     app = _app()
     _sessoes(4)
     _abrir(app)
@@ -608,7 +608,7 @@ def test_home_end_e_paginas_andam_entre_as_linhas(app_qt):
 
 
 def test_x_do_historico_fica_atras_da_confirmacao(app_qt):
-    """M1: com a confirmação de exclusão aberta, o Tab não chega ao X do histórico que ficou atrás dela."""
+    """Com a confirmação de exclusão aberta, o Tab não chega ao X do histórico que ficou atrás dela."""
     app = _app()
     _sessoes(2)
     dialogo = _abrir(app)
@@ -623,7 +623,7 @@ def test_x_do_historico_fica_atras_da_confirmacao(app_qt):
 
 
 def test_vazio_a_margem_de_baixo_e_da_caixa_inteira(app_qt):
-    """SES-36: sem sessão o cartão não termina colado no resumo: sobram os 24 de baixo."""
+    """Sem sessão o cartão não termina colado no resumo: sobram os 24 de baixo."""
     app = _app()
     dialogo = _abrir(app)
     cartao, resumo = _achar(dialogo, "cartaoDoDialogo"), app.achar("resumoDoHistorico")
@@ -633,7 +633,6 @@ def test_vazio_a_margem_de_baixo_e_da_caixa_inteira(app_qt):
 
 
 def test_resumo_e_total_em_12_px(app_qt):
-    """SES-31."""
     app = _app()
     _sessoes(2)
     _abrir(app)
@@ -643,7 +642,7 @@ def test_resumo_e_total_em_12_px(app_qt):
 
 
 def test_dica_do_grafico_tem_o_atraso_de_500_ms(app_qt):
-    """SES-21/22: a dica do app (fundo escuro da Adwaita) com o atraso fixo do GTK, também no gráfico (era 0)."""
+    """A dica do app (fundo escuro) com atraso fixo, também no gráfico."""
     app = _app()
     _sessoes(2)
     _abrir(app)
@@ -653,7 +652,7 @@ def test_dica_do_grafico_tem_o_atraso_de_500_ms(app_qt):
     app.fechar()
 
 
-# -- Rodada de correções 1 (I1): a saída do histórico leva o conteúdo ---------------------------------
+# -- a saída do histórico leva o conteúdo ---------------------------------
 
 _SAIDA = r"""
 import builtins, sys, time
@@ -717,7 +716,7 @@ print("OK")
 
 
 def test_saida_do_historico_mantem_o_conteudo_durante_a_animacao(tmp_path):
-    """I1: abrir e fechar pelo Esc e pelo X, com a animação ligada: a altura e o conteúdo do cartão não mudam até sumir."""
+    """Abrir e fechar pelo Esc e pelo X, com a animação ligada: a altura e o conteúdo do cartão não mudam até sumir."""
     import os  # noqa: PLC0415
     import subprocess  # noqa: PLC0415
     import sys  # noqa: PLC0415

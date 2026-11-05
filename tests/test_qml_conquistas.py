@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""O cartão de conquistas da página do jogo e a lista completa na tela (QML offscreen, D58, D62)."""
+"""O cartão de conquistas da página do jogo e a lista completa na tela (QML offscreen)."""
 
 import json
 import os
@@ -182,7 +182,7 @@ def test_esc_fecha_e_o_foco_volta_ao_cartao(app_qt):
 
 
 def test_cartao_que_some_com_a_lista_aberta_nao_fecha_a_lista(app_qt):
-    """D13: a lista é o retrato de quando abriu; o jogo que perde o cartão não a fecha nem a esvazia (a página, sim)."""
+    """A lista é o retrato de quando abriu; o jogo que perde o cartão não a fecha nem a esvazia (a página, sim)."""
     app = _app()
     _abrir_pelo_cartao(app, 0)
     cartao = app.achar("cartaoDeConquistas")
@@ -209,7 +209,7 @@ def test_cartao_que_some_com_a_lista_aberta_nao_fecha_a_lista(app_qt):
 
 
 def test_lista_aberta_nao_muda_com_conquista_nova_nem_com_a_preferencia(app_qt):
-    """D14: conquista nova e a troca de "mostrar ocultas" só valem na próxima abertura."""
+    """Conquista nova e a troca de "mostrar ocultas" só valem na próxima abertura."""
     app = _app()
     _pagina, dialogo = _abrir_lista(app)
     titulos = lambda: sorted(t.property("text") for t in _todos(dialogo, "tituloDaConquista"))  # noqa: E731
@@ -389,7 +389,7 @@ def test_icone_cortado_em_quadrado(app_qt, pedidos, tmp_path):
     app.fechar()
 
 
-# O recorte arredondado é um `MultiEffect` (D60), que o backend `software` da plataforma offscreen não desenha: a
+# O recorte arredondado é um `MultiEffect`, que o backend `software` da plataforma offscreen não desenha: a
 # conferência dos pixels roda num processo à parte, na plataforma `windows` com Direct3D, e a janela nunca é mostrada
 # (o `grabWindow` de uma janela escondida desenha fora da tela).
 _RECORTE = r"""
@@ -485,11 +485,11 @@ def test_sem_avisos_do_qml_ao_abrir_e_fechar(app_qt):
     assert [a for a in avisos if "PaginaDasConquistas" in a or "DialogoDeConquistas" in a] == []
 
 
-# -- Auditoria GTK x Qt, pacote E --------------------------------------------------------------------
+# -- moldura e foco da lista --------------------------------------------------------------------
 
 
 def test_dialogo_tem_as_medidas_da_main(app_qt):
-    """D1/D3/D6 a D10: moldura de 520 por 640, raio 15, cabeçalho de 47, conteúdo 24 abaixo, fileiras de 55 de passo."""
+    """Moldura de 520 por 640, raio 15, cabeçalho de 47, conteúdo 24 abaixo, fileiras de 55 de passo."""
     app = _app()
     _pagina, dialogo = _abrir_lista(app)
     cartao = _achar(dialogo, "cartaoDoDialogo")
@@ -528,7 +528,7 @@ def test_dialogo_tem_as_medidas_da_main(app_qt):
 
 
 def test_aberto_com_o_mouse_o_foco_vai_ao_fechar_sem_anel(app_qt):
-    """D5: o X recebe o foco ao abrir, mas o anel só aparece se o teclado já estava em uso."""
+    """O X recebe o foco ao abrir, mas o anel só aparece se o teclado já estava em uso."""
     app = _app()
     _abrir_pelo_cartao(app, 0)
     cartao = app.achar("cartaoDeConquistas")
@@ -554,7 +554,7 @@ def test_aberto_com_o_mouse_o_foco_vai_ao_fechar_sem_anel(app_qt):
 
 
 def test_fileiras_recebem_foco_e_as_setas_andam_entre_elas(app_qt):
-    """D12: Tab alcança as fileiras, Cima e Baixo andam entre elas sem sair da lista, com o anel de foco."""
+    """Tab alcança as fileiras, Cima e Baixo andam entre elas sem sair da lista, com o anel de foco."""
     app = _app()
     _pagina, dialogo = _abrir_lista(app)
     alvos = sorted(_todos(dialogo, "alvoDaFileiraDeConquista"), key=lambda a: a.mapToScene(QPointF(0, 0)).y())
@@ -589,7 +589,7 @@ def test_fileiras_recebem_foco_e_as_setas_andam_entre_elas(app_qt):
 
 
 def test_foco_numa_fileira_de_baixo_rola_a_lista(app_qt):
-    """D12: a fileira focada fica à vista na rolagem do diálogo."""
+    """A fileira focada fica à vista na rolagem do diálogo."""
     infos = tuple(ConquistaInfo(f"K{i}", f"Meta {i}", "Faça.", "", "", False, 50.0) for i in range(30))
     app = _app(Catalogo(infos, 0, True), tuple((f"K{i}", 100 + i) for i in range(5)))
     _pagina, dialogo = _abrir_lista(app)
@@ -604,7 +604,7 @@ def test_foco_numa_fileira_de_baixo_rola_a_lista(app_qt):
 
 
 def test_abre_e_fecha_pela_moldura_com_o_esmaecimento_da_main(app_qt):
-    """D2/D11/D15: o fundo é o `Tema.esmaecido` (e não o #80000000 dos dois temas) e a janela estreita vira folha de baixo."""
+    """O fundo é o `Tema.esmaecido` (e não o #80000000 dos dois temas) e a janela estreita vira folha de baixo."""
     app = _app()
     _pagina, dialogo = _abrir_lista(app)
     esmaecimento = _achar(dialogo, "esmaecimentoDaMoldura")
@@ -620,7 +620,7 @@ def test_abre_e_fecha_pela_moldura_com_o_esmaecimento_da_main(app_qt):
 
 
 def test_cartao_da_pagina_segue_a_main(app_qt):
-    """P2 a P5: contagem 14, porcentagem e `+N` 12, sem espaço entre elas; ícones sem ladrilho; foco a -1; hover a 200 ms."""
+    """Contagem 14, porcentagem e `+N` 12, sem espaço entre elas; ícones sem ladrilho; foco a -1; hover a 200 ms."""
     app = _app()
     _abrir_pelo_cartao(app, 0)
     contagem = app.achar("contagemDeConquistas")
@@ -628,8 +628,8 @@ def test_cartao_da_pagina_segue_a_main(app_qt):
     assert _expr(contagem, "font.pixelSize") == 14 and _expr(contagem, "font.weight") == 700  # title-4
     assert _expr(porcentagem, "font.pixelSize") == 12
     assert _expr(app.achar("restoDeConquistas"), "font.pixelSize") == 12
-    assert porcentagem.x() == contagem.x() + contagem.width()  # a `Box` da `main` não tem espaçamento
-    # P5: até o ícone chegar (ou se falhar) fica só o espaço de 32 px, sem ladrilho.
+    assert porcentagem.x() == contagem.x() + contagem.width()  # sem espaçamento entre elas
+    # Até o ícone chegar (ou se falhar) fica só o espaço de 32 px, sem ladrilho.
     icones_ = _visiveis(app.achar("iconesDeConquistas"), "iconeDaConquista")
     assert len(icones_) == 2
     for icone in icones_:
@@ -638,7 +638,7 @@ def test_cartao_da_pagina_segue_a_main(app_qt):
         assert _achar(icone, "ladrilhoDaConquista").property("visible") is False
     cartao = app.achar("cartaoDeConquistas")
     assert _expr(_achar(cartao, "anelDeFoco"), "afastamento") == -1
-    # P4: ao apertar (o hover não existe no offscreen) soma 8% do texto, com a transição de 200 ms (não de uma vez).
+    # Ao apertar (o hover não existe no offscreen) soma 8% do texto, com a transição de 200 ms (não de uma vez).
     camada = _achar(cartao, "camadaDoCartaoDeConquistas")
     assert camada.property("opacity") == 0
     ponto = cartao.mapToScene(cartao.boundingRect().center()).toPoint()
@@ -658,7 +658,7 @@ def test_cartao_da_pagina_segue_a_main(app_qt):
 
 
 def test_icone_da_conquista_usa_o_fundo_de_7_2_por_cento(app_qt):
-    """I1: `alpha(currentColor, .12)` sobre `color: alpha(currentColor, .6)`: o fundo é 0,6 x 0,12 do texto (o claro leva o 0,8)."""
+    """`alpha(currentColor, .12)` sobre `color: alpha(currentColor, .6)`: o fundo é 0,6 x 0,12 do texto (o claro leva o 0,8)."""
     app = _app()
     _pagina, dialogo = _abrir_lista(app)
     icone = _icone_da_primeira(dialogo)

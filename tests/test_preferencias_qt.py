@@ -1,4 +1,4 @@
-"""O modelo das Preferências (D66): travas, regras dos textos, abrir/fechar e a busca."""
+"""O modelo das Preferências: travas, regras dos textos, abrir/fechar e a busca."""
 
 import types
 
@@ -59,13 +59,13 @@ def test_chave_do_sgdb_vazia_desliga_o_sgdb(p):
 
 
 def test_chave_do_sgdb_e_gravada_como_veio(p):
-    # P43: a `main` não apara a chave do SteamGridDB (só a do wallhaven e a da Steam).
+    # A chave do SteamGridDB não é aparada (só a do wallhaven e a da Steam).
     p.definirTexto("sgdb-key", "  abc ")
     assert shared.schema.get_string("sgdb-key") == "  abc "
 
 
 def test_chave_do_sgdb_so_com_espacos_vale_como_preenchida(p):
-    # Como na `main`: `bool("   ")` é verdadeiro, então o SteamGridDB não desliga.
+    # `bool("   ")` é verdadeiro, então o SteamGridDB não desliga.
     p.definirTexto("sgdb-key", "abc")
     p.definir("sgdb", True)
     p.definirTexto("sgdb-key", "   ")
@@ -195,7 +195,7 @@ def test_definir_texto_so_aceita_as_chaves_de_texto(p, caplog):
     assert len(avisos) == 2
 
 
-# region Atualizar metadados e capas (Task 3)
+# region Atualizar metadados e capas
 
 
 class _FilaFalsa:
@@ -327,7 +327,7 @@ def test_recusa_por_nada_a_buscar_avisa(app_qt, store, make_game, monkeypatch):
 
 
 def test_resposta_vale_para_a_lista_da_hora_da_pergunta(app_qt, store, make_game, monkeypatch):
-    """P52: a `main` guarda os jogos da pergunta; um jogo que entra depois não entra na busca."""
+    """Guarda os jogos da pergunta; um jogo que entra depois não entra na busca."""
     from cartridges import metadata_refresh  # noqa: PLC0415
 
     faltando = make_game(game_id="b", has_hltb_times=False)
@@ -374,7 +374,7 @@ def test_buscar_metadados_comeca_pelos_jogos_certos(app_qt, store, make_game, mo
 
 
 def test_baixando_capas_usa_o_tempo_padrao_do_aviso(app_qt, store, make_game):
-    # P51: o aviso comum sai sozinho; só o fim do lote o dispensa antes.
+    # O aviso comum sai sozinho; só o fim do lote o dispensa antes.
     _capas(store, make_game)
     fila = _FilaFalsa()
     _modelo_de_atualizacoes(fila).atualizarCapas()
@@ -442,7 +442,7 @@ def test_fechar_as_preferencias_nao_cancela_os_metadados(app_qt, monkeypatch):
 # endregion
 
 
-# region Personalização: monitores, papel de parede (Task 4)
+# region Personalização: monitores, papel de parede
 
 
 def _abrir(stored=""):
@@ -529,7 +529,7 @@ def test_placa_no_centro_do_monitor(app_qt, monkeypatch):  # noqa: ARG001
 
 
 def test_placa_e_janela_comum_que_recebe_foco_e_aparece_na_barra_de_tarefas(app_qt, monkeypatch):  # noqa: ARG001
-    """SES-41: o `Gtk.Window(decorated=False)` da `main` é comum; sem `Tool`, `DoesNotAcceptFocus` nem `TransparentForInput`."""
+    """A janela é comum: sem `Tool`, `DoesNotAcceptFocus` nem `TransparentForInput`."""
     monkeypatch.setattr(window_geometry, "_place", lambda _janela, _geometria: True)
     placa = _CRIAR_PLACA_REAL(SEGUNDO, 200)
     try:

@@ -3,16 +3,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 """The automatic play session: what counts as running, and what gets written.
-
-Every test here drives ``_poll`` by hand against a controlled clock. Nothing
-waits for a real timer, because the thing being tested is the state machine,
-not Qt's ability to fire a callback. ``shared.sessao`` is a recording fake.
-
-The clock is monotonic on purpose and the tests reflect that: an NTP correction,
-a manual clock change or a resume from sleep with a drifted RTC all move
-``time()``, and a forward jump used to be credited to the game as playtime it
-never had.
-"""
+``_poll`` is driven by hand against a controlled monotonic clock (no real timers: the state machine is under test; ``shared.sessao`` is a recording fake).
+The clock is monotonic because an NTP correction or a resume from sleep moves ``time()`` and used to credit playtime the game never had."""
 
 import pytest
 
@@ -123,9 +115,7 @@ def make_session(make_game, executable=PACKAGED, **overrides):
     return ProcessSession(game)
 
 
-# ---------------------------------------------------------------------------
-# 5.1  What counts as running
-# ---------------------------------------------------------------------------
+# --- What counts as running ---
 
 
 def test_package_identity_alone_is_enough(make_game, running, clock):
@@ -138,13 +128,7 @@ def test_package_identity_alone_is_enough(make_game, running, clock):
 def test_a_configured_name_is_honoured_for_a_packaged_game(
     make_game, running, clock
 ):
-    """T5.1 The regression: the package path used to return early.
-
-    ``OpenProcess`` being refused comes back from the monitor as the same "no
-    package" a plain unpackaged process does, so a package that says nothing is
-    not evidence of a game that is not running. A user who went to the trouble
-    of configuring a process name must get it honoured.
-    """
+    """The package path must not return early: a refused ``OpenProcess`` looks like a plain unpackaged process, so a package that says nothing is no evidence the game is not running, and a configured process name must be honoured."""
     session = make_session(
         make_game, track_process=True, process_executable="halo.exe"
     )
@@ -156,7 +140,6 @@ def test_a_configured_name_is_honoured_for_a_packaged_game(
 
 
 def test_the_install_folder_is_the_third_answer(make_game, running, clock):
-    """T5.1"""
     session = make_session(make_game, executable=CLASSIC)
     assert session.install_dir, "precondition: the command names a folder"
     running.folder = True
@@ -179,16 +162,11 @@ def test_a_name_the_user_turned_off_is_not_used(make_game, running, clock):
     assert session.exe_name == ""
 
 
-# ---------------------------------------------------------------------------
-# 5.2 - 5.3  Accumulating time
-# ---------------------------------------------------------------------------
+# --- Accumulating time ---
 
 
 def test_sub_second_remainder_is_carried(make_game, running, clock):
-    """T5.2 100 polls of 2.5 s are 250 s, not 200.
-
-    Truncating every poll quietly lost time on a long session.
-    """
+    """100 polls of 2.5 s are 250 s, not 200: truncating every poll lost time."""
     session = make_session(make_game)
     session.started = True
     session.counting = True
@@ -203,7 +181,7 @@ def test_sub_second_remainder_is_carried(make_game, running, clock):
 
 
 def test_a_wall_clock_jump_changes_nothing(make_game, running, clock, monkeypatch):
-    """T5.3 The wall clock is never read; only the monotonic one is."""
+    """The wall clock is never read; only the monotonic one is."""
     session = make_session(make_game)
     session.started = True
     session.counting = True
@@ -247,19 +225,13 @@ def test_paused_time_is_not_counted(make_game, running, clock):
     assert session.session_seconds == 0
 
 
-# ---------------------------------------------------------------------------
-# 5.4 - 5.5  The process never appears
-# ---------------------------------------------------------------------------
+# --- The process never appears ---
 
 
 def test_a_packaged_game_that_never_appeared_records_nothing(
     make_game, running, clock, sessao, session_window
 ):
-    """T5.4 "No process of this package" is the game not having started.
-
-    Handing that to the manual window puts a counter on screen that runs until
-    somebody closes it, and shutdown then writes hours the game never had.
-    """
+    """No process of this package means the game has not started; handing that to the manual window would show a counter running until somebody closes it, and shutdown would write hours the game never had."""
     session = make_session(make_game)
 
     for _ in range(session.PACKAGE_STARTUP_GRACE // session.POLL_INTERVAL):
@@ -275,7 +247,7 @@ def test_a_packaged_game_that_never_appeared_records_nothing(
 def test_a_classic_game_that_never_appeared_falls_back_to_the_manual_window(
     make_game, running, clock, session_window
 ):
-    """T5.5 Here "never seen" really can mean "lost track of it"."""
+    """Here "never seen" really can mean "lost track of it"."""
     session = make_session(make_game, executable=CLASSIC)
 
     for _ in range(session.STARTUP_GRACE // session.POLL_INTERVAL):
@@ -295,23 +267,13 @@ def test_the_two_startup_graces_differ(make_game, running, clock):
     assert packaged.startup_grace < classic.startup_grace
 
 
-# ---------------------------------------------------------------------------
-# 5.6 - 5.7  The grace window
-# ---------------------------------------------------------------------------
+# --- The grace window ---
 
 
 def test_a_game_that_relaunches_itself_keeps_its_session(
     make_game, running, clock, schema
 ):
-    """T5.6 The session survives, and the wait is not counted.
-
-    "Not counted" is precise about where the boundary sits. When a poll finds
-    the process gone, the stretch since the previous poll — when it was still
-    there — is banked: the game died at some unknown point inside that interval,
-    and crediting the whole of it is the conservative end of a two-second
-    uncertainty. What is dropped is everything after that, the whole grace wait,
-    which is the part that would otherwise turn a relaunch into free playtime.
-    """
+    """The session survives and the wait is not counted. When a poll finds the process gone, the stretch since the previous poll is banked (the game died somewhere inside it); the whole grace wait after that is dropped."""
     schema["process-tracking-grace"] = 30
     session = make_session(make_game)
     # `start()` is what normally publishes this; these tests drive `_poll`
@@ -347,7 +309,6 @@ def test_a_game_that_relaunches_itself_keeps_its_session(
 def test_a_game_gone_past_the_grace_ends_and_records(
     make_game, running, clock, schema, sessao
 ):
-    """T5.7"""
     schema["process-tracking-grace"] = 5
     session = make_session(make_game)
     ProcessSession.active = session
@@ -369,14 +330,12 @@ def test_a_game_gone_past_the_grace_ends_and_records(
     assert [seg for _jogo, seg in sessao.toasts] == [30]
 
 
-# ---------------------------------------------------------------------------
-# 5.8 - 5.11  Teardown
-# ---------------------------------------------------------------------------
+# --- Teardown ---
 
 
 @pytest.mark.parametrize("packaged", [True, False])
 def test_o_timer_para_uma_vez_so(make_game, running, clock, session_window, packaged):
-    """T5.8 Desistir da espera para o timer, e o `stop` que vem logo depois não o para de novo."""
+    """Desistir da espera para o timer, e o `stop` que vem logo depois não o para de novo."""
     session = make_session(make_game, executable=PACKAGED if packaged else CLASSIC)
     timer = session.timer = TimerFalso()
 
@@ -388,7 +347,7 @@ def test_o_timer_para_uma_vez_so(make_game, running, clock, session_window, pack
 
 
 def test_parar_com_o_timer_ligado_para_uma_vez(make_game, running, clock):
-    """T5.8 (o outro sentido) Parar antes da hora para o timer, e parar de novo não repete."""
+    """Parar antes da hora para o timer, e parar de novo não repete."""
     session = make_session(make_game)
     timer = session.timer = TimerFalso()
     session.stop(record=False)
@@ -400,7 +359,7 @@ def test_parar_com_o_timer_ligado_para_uma_vez(make_game, running, clock):
 def test_flush_writes_the_current_stretch_and_touches_no_widget(
     make_game, running, clock, sessao
 ):
-    """T5.9 Used on shutdown, when widgets may already be gone."""
+    """Used on shutdown, when widgets may already be gone."""
     session = make_session(make_game)
     running.package = True
     session._poll()
@@ -417,7 +376,7 @@ def test_flush_writes_the_current_stretch_and_touches_no_widget(
 def test_flush_before_the_game_was_ever_seen_writes_nothing(
     make_game, running, clock
 ):
-    """T5.9 Nothing was counted, so nothing is persisted."""
+    """Nothing was counted, so nothing is persisted."""
     session = make_session(make_game)
 
     session.flush()
@@ -428,7 +387,7 @@ def test_flush_before_the_game_was_ever_seen_writes_nothing(
 def test_a_second_launch_ends_the_first_session_recording_it(
     make_game, running, clock, sessao
 ):
-    """T5.10 Two trackers must never count at once."""
+    """Two trackers must never count at once."""
     first = make_session(make_game)
     ProcessSession.active = first
     running.package = True
@@ -445,7 +404,7 @@ def test_a_second_launch_ends_the_first_session_recording_it(
 
 
 def test_the_never_launched_notice_carries_the_name_verbatim(make_game, running, clock, sessao):
-    """T5.11 O texto vai puro: o nome com "&" chega inteiro (a camada o mostra em PlainText)."""
+    """O texto vai puro: o nome com "&" chega inteiro (a camada o mostra em PlainText)."""
     session = make_session(make_game, name="Sam & Max")
 
     session.stop(record=False, never_launched=True)
@@ -462,13 +421,7 @@ def test_stopping_hides_the_session_blocker(make_game, running, clock, sessao):
 
 
 def test_the_clock_shows_the_time_that_is_being_recorded(make_game, running, clock, sessao):
-    """O relógio da tela de sessão anda com o tempo que vai ser gravado.
-
-    Ele lê `elapsed`, e não `session_seconds`: este último só se mexe a cada
-    verificação, então um relógio de um segundo ficaria parado e daria dois de
-    uma vez. E ele fica em zero enquanto o jogo ainda não apareceu, que é
-    exatamente o tempo que nunca entra em `game.playtime`.
-    """
+    """O relógio da tela de sessão lê `elapsed`, não `session_seconds` (que só se mexe a cada verificação e faria um relógio de um segundo ficar parado e pular dois); fica em zero enquanto o jogo não aparece."""
     session = make_session(make_game)
     session.start()
 

@@ -200,7 +200,7 @@ def test_monta_o_ffmpeg_ao_lado_do_lancador(insumos, tmp_path):
 
 
 def test_monta_o_ludusavi_ao_lado_do_lancador(insumos, tmp_path):
-    # O `[InstallDelete]` apaga o `ludusavi.exe` da versão GTK: sem este, o backup dos saves some em silêncio.
+    # O `[InstallDelete]` apaga o `ludusavi.exe` da versão anterior (GTK): sem este, o backup dos saves some em silêncio.
     destino = tmp_path / "saida"
     montar_app_qt.montar(destino, "final", **insumos)
     assert (destino / "bin" / "ludusavi.exe").is_file()
@@ -245,7 +245,7 @@ def test_monta_as_licencas(insumos, tmp_path):
 
 
 def test_monta_com_os_pyc_compilados(insumos, tmp_path):
-    # Em Program Files o Python não grava: sem `.pyc` prontos, cada abertura recompila tudo (M3). Por data não
+    # Em Program Files o Python não grava: sem `.pyc` prontos, cada abertura recompila tudo. Por data não
     # serve: o Inno repõe a data dos arquivos e um `.pyc` feito na CI deixaria de conferir.
     destino = tmp_path / "saida"
     montar_app_qt.montar(destino, "final", **insumos)
@@ -274,7 +274,7 @@ def test_compilar_pyc_recusa_um_py_que_nao_compila(tmp_path):
 
 
 def test_lancador_avisa_quando_o_python_sai_com_erro():
-    """Sem console, a recusa do `shared.py` e o QML que não carrega sairiam sem nenhum aviso (M2)."""
+    """Sem console, a recusa do `shared.py` e o QML que não carrega sairiam sem nenhum aviso."""
     fonte = (Path(montar_app_qt.RAIZ) / "build-aux" / "windows" / "lancador" / "cartridges.c").read_text(encoding="utf-8")
     assert "return py_main(" not in fonte
     assert re.search(r"int r = py_main\(argc, argv\);\s*return r \? falha\(\) : 0;", fonte)

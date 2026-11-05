@@ -435,7 +435,7 @@ def test_zerado_virado_desinstalado_comum_sai_dos_detalhes(app, store):
     assert _esperar(lambda: app.janela.property("paginaAtual") != "jogo")
 
 
-# -- capa, logo e papel de parede (tarefa 7) -----------------------------------------------------
+# -- capa, logo e papel de parede  -----------------------------------------------------
 
 
 def _imagem(caminho, tamanho=(120, 180), cor="red"):
@@ -692,7 +692,7 @@ def test_a_grade_e_a_pagina_largam_a_copia_animada_antes_de_gravar_a_capa(app, t
     assert vistos == [("", "")]
 
 
-# -- seletores de capa e de logo do SteamGridDB (tarefa 8) ------------------------------------------
+# -- seletores de capa e de logo do SteamGridDB ------------------------------------------
 
 
 @pytest.fixture
@@ -866,7 +866,7 @@ def test_save_cover_fora_do_aplicar_limpa_a_capa_da_sessao(app, tmp_path):
     assert "shortcuts_z2.tiff" in _papel_do_modelo(app, "shortcuts_z2", app.modelo.Papel.Capa)
 
 
-# -- Steam, HowLongToBeat e Ludusavi (tarefa 9) -----------------------------------------------------
+# -- Steam, HowLongToBeat e Ludusavi  -----------------------------------------------------
 
 
 @pytest.fixture
@@ -971,7 +971,7 @@ def test_aviso_de_busca_sem_resultado_no_seletor_da_steam(app, steam):
 
 
 def test_botoes_da_steam_sem_titulo(app, steam):
-    """DE-56: o botão dos dados da Steam fica ativo sem título e o clique não faz nada; o do AppID espera o título."""
+    """O botão dos dados da Steam fica ativo sem título e o clique não faz nada; o do AppID espera o título."""
     app.edicao.adicionar()
     _abrir_avancadas(app)
     assert app.achar("botaoBuscarMetadados").property("enabled") is True
@@ -1054,7 +1054,7 @@ def _formatos(raiz):
     return textos
 
 
-# -- seletor do papel de parede (tarefa 10) ----------------------------------------------------------
+# -- seletor do papel de parede  ----------------------------------------------------------
 
 
 @pytest.fixture
@@ -1101,7 +1101,7 @@ def test_seletor_de_papel_modal_esc_fecha_e_devolve_o_foco(app, wallhaven):
     for _ in range(40):
         QTest.keyClick(app.janela, Qt.Key.Key_Tab)
         assert _foco_dentro_de(app, "seletorDePapel")
-    # Esc fecha o seletor inteiro (como na versão anterior); o diálogo de edição segue aberto.
+    # Esc fecha o seletor inteiro; o diálogo de edição segue aberto.
     QTest.keyClick(app.janela, Qt.Key.Key_Escape)
     assert _esperar(lambda: not _visivel(app, "seletorDePapel"))
     assert app.edicao.aberto is True and app.edicao.seletorDePapelDeParede.aberto is False
@@ -1117,8 +1117,8 @@ def test_seletor_de_papel_escolhe_ajusta_e_o_aplicar_grava(app, wallhaven):
     app.achar("seletorDePapelMiniatura1").forceActiveFocus()
     QTest.keyClick(app.janela, Qt.Key.Key_Return)
     assert _esperar(lambda: _visivel(app, "seletorDePapelUsar"))
-    assert app.achar("seletorDePapelNaoTrocar").property("enabled") is True  # M1: sem `set_sensitive` na `main`
-    # Na etapa de ajuste o foco não é forçado a lugar nenhum (`DE-88`).
+    assert app.achar("seletorDePapelNaoTrocar").property("enabled") is True  # nunca fica insensível
+    # Na etapa de ajuste o foco não é forçado a lugar nenhum.
     assert app.achar("seletorDePapelUsar").property("activeFocus") is False
     # A barra desliza a faixa do monitor em pé.
     app.edicao.seletorDePapelDeParede.definirPosicao(0, 100)
@@ -1174,7 +1174,7 @@ def test_aviso_de_busca_sem_resultado_no_seletor_de_papel(app, wallhaven):
     assert vazio.property("descricao") == "Tente buscar por outro nome."
 
 
-# -- Iluminação inteligente (fitas de LED, D51) -------------------------------------------------------
+# -- Iluminação inteligente (fitas de LED) -------------------------------------------------------
 
 
 @pytest.fixture
@@ -1194,7 +1194,7 @@ def _abrir_o_seletor_de_cor(app):
     assert _esperar(lambda: _visivel(app, "dialogoDeEdicao"))
     _clique(app, "botaoDaCorDaFita")
     assert _esperar(lambda: app.achar("balaoDaCorDaFita").property("opened") is True)
-    # O balão abre na paleta (P46); o "+" leva ao seletor de cor livre.
+    # O balão abre na paleta; o "+" leva ao seletor de cor livre.
     seletor = app.achar("seletorDeCor")
     assert seletor.property("visible") is False
     QTest.mouseClick(app.janela, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, _centro_na_janela(app.achar("botaoDaCorDaFitaMais")))
@@ -1299,7 +1299,7 @@ def test_sem_fita_as_duas_linhas_ficam_apagadas_com_o_aviso(app):
     for linha in ("linhaDaFita", "linhaDoBrilhoDaFita"):
         assert app.achar(linha).property("enabled") is False
         assert app.achar(linha + "Subtitulo").property("text") == "Nenhum dispositivo configurado"
-    # Item 6: como na `main`, sem dispositivo o brilho mostra 0 e a amostra é um círculo branco (não um ponto escuro, nem 100).
+    # Sem dispositivo o brilho mostra 0 e a amostra é um círculo branco (não um ponto escuro, nem 100).
     assert app.edicao.fitaBrilho == 0
     assert app.edicao.fitaCor.name() == "#ffffff"
     assert app.achar("linhaDoBrilhoDaFitaCaixa").property("value") == 0
@@ -1363,7 +1363,7 @@ def test_sem_avisos_do_qml_ao_abrir_e_fechar(app_qt, store, monkeypatch):
 
 
 def test_sem_avisos_do_qml_na_pagina_nos_dialogos_e_nos_seletores(app_qt, store, monkeypatch):
-    """Nada de laço de binding, nem propriedade indefinida, nos arquivos do pacote B (página, editor e seletores)."""
+    """Nada de laço de binding, nem propriedade indefinida, nos arquivos da página, do editor e dos seletores."""
     jogos = [jogo(store, 1, name="Alfa", executable=r'"C:\Jogoslfa.exe"', developer="Dev A", description="Texto")]
     avisos = []
     anterior = qInstallMessageHandler(lambda tipo, _ctx, msg: avisos.append(msg) if tipo in (QtMsgType.QtWarningMsg, QtMsgType.QtCriticalMsg) else None)
@@ -1389,7 +1389,7 @@ def test_sem_avisos_do_qml_na_pagina_nos_dialogos_e_nos_seletores(app_qt, store,
     finally:
         qInstallMessageHandler(anterior)
     nossos = ("PaginaDoJogo", "DialogoDeEdicao", "Seletor", "LinhaDeCor", "AmostraDeCor", "BalaoDaAnotacao", "CampoDeBusca", "TelaDeDownload", "PaginaDoSeletor", "BotaoOsd")
-    # O laço de `altura` do `DialogoDeAlerta` (da fundação, pendência do pacote F) aparece com as confirmações da página.
+    # O laço de `altura` do `DialogoDeAlerta` aparece com as confirmações da página.
     assert [a for a in avisos if any(n in a for n in nossos) and "DialogoDeAlerta" not in a] == []
 
 
@@ -1432,7 +1432,7 @@ def test_escolher_executavel_poe_o_caminho_entre_aspas_e_url_vazia_nao_muda(app)
 
 
 def test_tab_ate_um_campo_abaixo_da_dobra_rola_o_editor(app):
-    """O `Connections` da Edição estava morto: a rolagem não seguia o foco (consertado com `dialogo.Window.window`)."""
+    """A rolagem do diálogo segue o foco."""
     app.edicao.abrir("shortcuts_z1")
     assert _esperar(lambda: _foco_dentro_de(app, "campoNome"))
     antes = _avaliar(app.achar("campoNome"), "rolagem.contentY")  # o nome, ao abrir, já ficou à vista
@@ -1462,7 +1462,7 @@ def test_aviso_fechado_devolve_o_foco_ao_ultimo_campo_e_nao_ao_nome(app, monkeyp
     assert app.achar("campoNome").property("activeFocus") is False
 
 
-# -- Auditoria GTK x Qt, pacote B: o editor e os seletores como os da `main` ---------------------------------------
+# -- o editor e os seletores ---------------------------------------
 
 
 def _x_da_cena(item):
@@ -1470,7 +1470,7 @@ def _x_da_cena(item):
 
 
 def test_a_moldura_do_editor_tem_480_e_os_botoes_da_capa_ficam_parados(app):
-    """DE-37, DE-43, DE-44: 480 de largura, sem teto de altura; Excluir, Buscar, Abrir arquivo, com posições fixas."""
+    """480 de largura, sem teto de altura; Excluir, Buscar, Abrir arquivo, com posições fixas."""
     app.edicao.abrir("shortcuts_z1")
     assert _esperar(lambda: _visivel(app, "dialogoDeEdicao"))
     cartao = _achar(app.achar("dialogoDeEdicao"), "cartaoDoDialogo")
@@ -1489,7 +1489,7 @@ def test_a_moldura_do_editor_tem_480_e_os_botoes_da_capa_ficam_parados(app):
 
 
 def test_clicar_na_linha_do_logo_aciona_o_botao_de_busca(app, sgdb):
-    """DE-52: as linhas Logo, Papel e Iluminação são ativáveis (`activatable-widget`)."""
+    """As linhas Logo, Papel e Iluminação são ativáveis."""
     app.edicao.abrir("shortcuts_z1")
     assert _esperar(lambda: _visivel(app, "dialogoDeEdicao"))
     linha = app.achar("linhaDoLogo")
@@ -1499,7 +1499,7 @@ def test_clicar_na_linha_do_logo_aciona_o_botao_de_busca(app, sgdb):
 
 
 def test_enter_no_appid_nao_aplica(app):
-    """DE-57: só o executável e o nome do processo chamam o Aplicar."""
+    """Só o executável e o nome do processo chamam o Aplicar."""
     app.edicao.abrir("shortcuts_z1")
     app.edicao.nome = "Mudou"
     _abrir_avancadas(app)
@@ -1510,7 +1510,7 @@ def test_enter_no_appid_nao_aplica(app):
 
 
 def test_o_foco_inicial_do_seletor_e_o_do_dialogo_da_main(app, sgdb):
-    """DE-66, DE-68: sem botão "Fechar" (o X é do cabeçalho); o foco inicial é o botão do cabeçalho, ou o campo se não há."""
+    """Sem botão "Fechar" (o X é do cabeçalho); o foco inicial é o botão do cabeçalho, ou o campo se não há."""
     app.edicao.abrir("shortcuts_z1")
     _abrir_seletor(app, "botaoEscolherCapaSgdb", "seletorDeCapa")
     assert app.achar("seletorDeCapaAtalho").property("activeFocus") is True
@@ -1520,7 +1520,7 @@ def test_o_foco_inicial_do_seletor_e_o_do_dialogo_da_main(app, sgdb):
 
 
 def test_o_campo_de_busca_tem_lupa_e_limpa_mantendo_o_foco(app, sgdb):
-    """DE-67: `SearchEntry` de 34, com o botão de limpar quando há texto."""
+    """Campo de busca de 34, com o botão de limpar quando há texto."""
     app.edicao.abrir("shortcuts_z1")
     _abrir_seletor(app, "botaoEscolherCapaSgdb", "seletorDeCapa")
     campo = app.achar("seletorDeCapaCampo")
@@ -1538,7 +1538,7 @@ def _centro_na_janela(item):
 
 
 def test_as_linhas_do_ludusavi_e_o_selecionado_tem_fundo(app):
-    """DE-91, DE-92: o jogo escolhido é a linha selecionada (fundo), e a linha tem 8 em cima e embaixo."""
+    """O jogo escolhido é a linha selecionada (fundo), e a linha tem 8 em cima e embaixo."""
     _manifesto()
     app.edicao.abrir("shortcuts_z1")
     app.edicao.ludusavi_escolhido("Portal")
@@ -1553,7 +1553,7 @@ def test_as_linhas_do_ludusavi_e_o_selecionado_tem_fundo(app):
 
 
 def test_botoes_da_capa_nao_recebem_clique_convertendo_e_a_amostra_fecha_o_balao(app, previas):
-    """M3 (convertendo, os botões não agem) e M8 (clicar de novo na amostra fecha o balão)."""
+    """Convertendo, os botões não agem; clicar de novo na amostra fecha o balão."""
     _com_fita()
     app.edicao.abrir("shortcuts_z1")
     assert _esperar(lambda: _visivel(app, "dialogoDeEdicao"))
@@ -1571,7 +1571,7 @@ def test_botoes_da_capa_nao_recebem_clique_convertendo_e_a_amostra_fecha_o_balao
 
 
 def test_a_grade_do_seletor_so_ocupa_as_colunas(app, sgdb):
-    """M6 (revisto): a grade tem a largura das colunas e fica centrada; as laterais rolam pelo `WheelHandler`."""
+    """A grade tem a largura das colunas e fica centrada; as laterais rolam pelo `WheelHandler`."""
     app.edicao.abrir("shortcuts_z1")
     _abrir_seletor(app, "botaoEscolherCapaSgdb", "seletorDeCapa")
     grade = app.achar("seletorDeCapaGrade")
@@ -1598,7 +1598,7 @@ def test_capas_cabem_no_cartao_do_seletor_em_janela_estreita(app, sgdb, largura)
 
 @pytest.mark.parametrize("largura", [560, 620, 672, 690, 760, 790, 900])
 def test_as_colunas_reais_da_grade_do_seletor_sao_as_de_colunas(app, sgdb, largura):
-    """Q1: mede, na tela, o `x` de cada miniatura: as colunas reais são `colunas` e a grade fica centrada."""
+    """Mede, na tela, o `x` de cada miniatura: as colunas reais são `colunas` e a grade fica centrada."""
     from tests.apoio_seletores import SgdbFalso, lista_de_grades  # noqa: PLC0415
 
     app.edicao.seletorDeCapa.sgdb = SgdbFalso(grids=lista_de_grades(9))
@@ -1647,7 +1647,7 @@ def _girar(app, grade, x, y, angulo=-120):
 
 @pytest.mark.parametrize("nome", ["seletorDeCapa", "seletorDePapel"])
 def test_a_roda_rola_a_grade_um_passo_por_entalhe_em_toda_a_pagina(app, sgdb, wallhaven, nome):
-    """M6: um entalhe rola o mesmo nas laterais, sobre a grade e na borda: o `GridView` e o `WheelHandler` não somam."""
+    """Um entalhe rola o mesmo nas laterais, sobre a grade e na borda: o `GridView` e o `WheelHandler` não somam."""
     erros = []
     anterior = qInstallMessageHandler(lambda _tipo, _ctx, texto: erros.append(texto))
     try:
@@ -1686,7 +1686,7 @@ def test_a_roda_rola_a_grade_um_passo_por_entalhe_em_toda_a_pagina(app, sgdb, wa
 
 @pytest.mark.parametrize("nome", ["seletorDeCapa", "seletorDePapel"])
 def test_a_barra_do_seletor_fica_na_borda_da_pagina_e_arrasta_a_grade(app, sgdb, wallhaven, nome):
-    """M6: como o `ScrolledWindow` da `main`, a barra é da página inteira, não da grade; e continua arrastando a grade."""
+    """A barra é da página inteira, não da grade; e continua arrastando a grade."""
     grade, pagina = _grade_longa(app, wallhaven, nome)
     barra = app.achar(nome + "Rolagem")
     direita = pagina.mapToScene(QPointF(pagina.width(), 0)).x()
@@ -1732,7 +1732,7 @@ def _assert_foco_visivel(app, nome, indice):
 
 
 SELETORES_DE_GRADE = [
-    ("seletorDeCapa", "botaoEscolherCapaSgdb", 9, [3, 4, 5, 8, 7]),  # 3 colunas, como na `main`
+    ("seletorDeCapa", "botaoEscolherCapaSgdb", 9, [3, 4, 5, 8, 7]),  # 3 colunas
     ("seletorDeLogo", "botaoEscolherLogoSgdb", 6, [2, 3, 4, 4, 3]),  # 2 colunas
     ("seletorDePapel", "botaoEscolherPapelWallhaven", 9, [4, 5, 6, 6, 5]),
 ]
@@ -1741,7 +1741,7 @@ SELETORES_DE_GRADE = [
 @pytest.mark.parametrize("pelo_controle", [False, True], ids=["teclado", "controle"])
 @pytest.mark.parametrize(("nome", "botao", "itens", "esperado"), SELETORES_DE_GRADE, ids=[s[0] for s in SELETORES_DE_GRADE])
 def test_as_setas_movem_o_foco_visivel_entre_as_miniaturas_e_enter_escolhe(app, sgdb, wallhaven, nome, botao, itens, esperado, pelo_controle):
-    """Como a `FlowBox` da `main`: índice coerente em sequência, anel aceso, e Enter ativa a célula. O controle entra pelo `teclar`."""
+    """Índice coerente em sequência, anel aceso, e Enter ativa a célula. O controle entra pelo `teclar`."""
 
     def tecla(codigo):
         if pelo_controle:
@@ -1793,7 +1793,7 @@ def test_a_seta_desce_a_grade_longa_e_volta_ao_campo(app, sgdb, wallhaven, nome,
 
 
 def test_clicar_de_novo_na_linha_da_iluminacao_fecha_o_balao(app, previas):
-    """M8: o aperto na linha fecha o balão e a soltura não o reabre, qualquer que seja a duração do aperto (pela ordem dos eventos)."""
+    """O aperto na linha fecha o balão e a soltura não o reabre, qualquer que seja a duração do aperto (pela ordem dos eventos)."""
     _com_fita()
     app.edicao.abrir("shortcuts_z1")
     assert _esperar(lambda: _visivel(app, "dialogoDeEdicao"))
@@ -1821,7 +1821,7 @@ def _campo_interno(linha):
 
 
 def test_titulo_abre_selecionado_e_o_texto_comeca_no_rotulo(app):
-    """Item 4: na `main` o foco no campo seleciona o texto; e o recuo de 4 px do estilo Basic fazia o texto sair do rótulo."""
+    """O foco no campo seleciona o texto; e o recuo de 4 px do estilo Basic fazia o texto sair do rótulo."""
     app.edicao.abrir("shortcuts_z1")
     assert _esperar(lambda: _foco_dentro_de(app, "campoNome"))
     campo = _campo_interno(app.achar("campoNome"))
@@ -1835,7 +1835,7 @@ def test_titulo_abre_selecionado_e_o_texto_comeca_no_rotulo(app):
 
 
 def test_anel_de_foco_do_titulo_tem_os_cantos_de_cima_arredondados(app):
-    """Item 5: o contorno da primeira linha do grupo segue os cantos do cartão, e não sai reto."""
+    """O contorno da primeira linha do grupo segue os cantos do cartão, e não sai reto."""
     app.edicao.abrir("shortcuts_z1")
     assert _esperar(lambda: _foco_dentro_de(app, "campoNome"))
     linha = app.achar("campoNome")

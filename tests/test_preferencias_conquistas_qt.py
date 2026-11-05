@@ -2,11 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""A página Conquistas das Preferências, as contas dentro delas e o fechamento completo (Task 8 do plano 7).
-
-Os que tinham par no GTK vieram de `test_conquistas_preferencias.py` e de `test_session_fita_preferencias.py` (mesmos
-nomes). Nenhuma conta, rede, fita ou janela de verdade: a prévia, o `aplicar` e o navegador são falsos.
-"""
+"""A página Conquistas das Preferências, as contas dentro delas e o fechamento completo. Nenhuma conta, rede, fita ou janela de verdade: a prévia, o `aplicar` e o navegador são falsos."""
 
 import json
 import os
@@ -488,7 +484,7 @@ def test_um_passo_que_falha_no_fechar_nao_pula_os_outros(p, monkeypatch, caplog)
 
 
 def test_fechar_depois_do_assistente_das_fitas_nao_mexe_nas_fitas(p, previas):
-    """P53: fechar as Preferências não devolve a cor do app; só o balão do pulso e os diálogos internos devolvem."""
+    """Fechar as Preferências não devolve a cor do app; só o balão do pulso e os diálogos internos devolvem."""
     _com_fitas("Centro")
     p.fitas.definirBrilho(30)
     p.abrirConfiguracaoDasFitas()

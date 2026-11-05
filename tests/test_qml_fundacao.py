@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""A fundação visual da auditoria GTK × Qt: `Tema`, `MolduraDoDialogo`, a pilha dos diálogos e o aviso na janela das tarefas."""
+"""A fundação visual: `Tema`, `MolduraDoDialogo`, a pilha dos diálogos e o aviso na janela das tarefas."""
 
 import os
 import subprocess
@@ -99,7 +99,7 @@ def test_nao_fechavel_ignora_o_esc(janela):
 
 
 def test_clique_fora_nao_fecha_o_flutuante_e_fecha_a_folha(janela):
-    """`dialog_backdrop.py` da `main`: fora do diálogo flutuante, nada; na folha de baixo, fecha."""
+    """Fora do diálogo flutuante, nada; na folha de baixo, fecha."""
     moldura = _achar(janela.contentItem(), "moldura")
     moldura.setProperty("aberto", True)
     assert _esperar(lambda: moldura.property("visible") is True)
@@ -207,7 +207,7 @@ def test_cor_de_destaque_sem_a_chave(monkeypatch):
     ajustes_do_windows.aplicar_cor_de_destaque()  # não levanta
 
 
-# --- B05: o erro com a principal escondida vai à janela das tarefas ----------------------------------
+# --- o erro com a principal escondida vai à janela das tarefas ----------------------------------
 
 
 class _PainelFalso(QObject):
@@ -245,7 +245,7 @@ def test_painel_so_conta_com_a_janela_aberta_e_a_principal_escondida(monkeypatch
     assert tarefas.painel_aberto_sem_a_principal() is None
 
 
-# --- J05, J01, J02, B14: a janela de verdade ---------------------------------------------------------
+# --- a janela de verdade ---------------------------------------------------------
 
 
 @pytest.fixture
@@ -285,7 +285,7 @@ def test_um_modal_cobre_e_tranca_a_barra(app):
 
 
 def test_a_confirmacao_de_excluir_da_pagina_do_jogo_tranca_a_barra(app):
-    """J05: o diálogo de PaginaDoJogo também trava e cobre a barra (nada de Voltar com a pergunta aberta)."""
+    """O diálogo de PaginaDoJogo também trava e cobre a barra (nada de Voltar com a pergunta aberta)."""
     pagina = _abrir_pelo_cartao(app)
     barra = app.achar("barraDeTitulo")
     assert barra.property("enabled") is True
@@ -317,7 +317,7 @@ def test_menu_principal_so_nas_duas_bibliotecas(app):
     assert botao.property("visible") is False
 
 
-# --- AdwAlertDialog: medidas tiradas da libadwaita real (`resultado-F.md`) --------------------------
+# --- Alerta: medidas do gabarito --------------------------
 
 
 def _alerta_aberto(app, corpo, rotulo="Sim"):
@@ -350,7 +350,7 @@ def test_alerta_empilha_com_o_primeiro_embaixo(app):
 
 
 def test_rotulo_longo_de_botao_empilhado_termina_em_reticencias(app):
-    """Item 8: a `main` (Gtk.Label dos botões do `AdwAlertDialog`) corta o rótulo que não cabe; o Qt deixava vazar."""
+    """O rótulo do botão que não cabe é cortado, não vaza."""
     alerta, _ = _alerta_aberto(app, "Corpo", "Buscar tudo de novo em todos os jogos da biblioteca " * 2)
     alerta.setProperty("rotuloConfirmar", "Um rótulo de resposta tão longo que não cabe de jeito nenhum no botão empilhado")
     confirmar = _achar(alerta, "botaoConfirmarDoDialogo")
@@ -409,7 +409,7 @@ def test_popover_da_escolha_alarga_pelo_texto(app_qt):
 
 
 def test_o_clique_esconde_a_dica_ate_o_ponteiro_sair(app_qt):
-    """No GTK a dica some com o clique: um diálogo aberto pelo botão não fica com ela por cima."""
+    """A dica some com o clique: um diálogo aberto pelo botão não fica com ela por cima."""
     motor = QQmlEngine()
     componente = QQmlComponent(motor)
     componente.setData(
@@ -435,7 +435,7 @@ def test_o_clique_esconde_a_dica_ate_o_ponteiro_sair(app_qt):
 
 
 def test_campo_fora_de_foco_mostra_o_comeco_do_texto(app_qt):
-    """Na `main` o texto longo aparece do início; no Qt o cursor iria ao fim e cortaria o começo."""
+    """O texto longo aparece do início: o cursor no fim cortaria o começo."""
     motor = QQmlEngine()
     componente = QQmlComponent(motor)
     componente.setData(

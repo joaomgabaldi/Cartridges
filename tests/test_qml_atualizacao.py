@@ -2,11 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""A pergunta da versão nova e o "Baixando atualização…" na camada dos avisos (D82), no `Aplicativo.qml` inteiro.
-
-Nada de verdade: o `download_installer` é falso (espera o Cancelar), o `_abrir_instalador` é o guarda
-`sem_instalador_de_verdade` e a pergunta é feita direto no atualizador (sem rede, sem checagem).
-"""
+"""A pergunta da versão nova e o "Baixando atualização…" na camada dos avisos, no `Aplicativo.qml` inteiro. Nada de verdade: o `download_installer` é falso (espera o Cancelar), o `_abrir_instalador` é o guarda `sem_instalador_de_verdade` e a pergunta é feita direto no atualizador."""
 
 import pytest
 from PySide6.QtCore import QMetaObject, Qt
@@ -90,7 +86,7 @@ def test_foco_inicial_em_agora_nao_e_tab_circula(janela):
 
 
 def test_enter_na_pergunta_nao_comeca_o_download(janela, download_falso):
-    """Review Focus 1: a caixa aparece sem ser pedida; um Enter perdido nunca começa o download."""
+    """A caixa aparece sem ser pedida; um Enter perdido nunca começa o download."""
     dialogo = _perguntar(janela)
     # Com o foco inicial (em "Agora não"), Enter só fecha a pergunta.
     assert esperar(lambda: janela.achar("botaoAgoraNao").property("activeFocus") is True)
@@ -161,7 +157,7 @@ def test_pergunta_fica_por_cima_das_preferencias(janela):
 
 
 def test_confirmacao_que_chega_com_a_pergunta_na_tela_fica_por_cima_e_leva_o_teclado(janela):
-    """R5: pilha. A pergunta fica por baixo, à vista; Esc e Enter são da confirmação, e depois o foco volta a "Agora não"."""
+    """Em pilha: a pergunta fica por baixo, à vista; Esc e Enter são da confirmação, e depois o foco volta a "Agora não"."""
     respostas = []
     dialogo = _perguntar(janela)
     assert esperar(lambda: janela.achar("botaoAgoraNao").property("activeFocus") is True)
@@ -183,7 +179,7 @@ def test_confirmacao_que_chega_com_a_pergunta_na_tela_fica_por_cima_e_leva_o_tec
 
 
 def test_a_pergunta_abre_por_cima_de_outro_dialogo(janela):
-    """B04: como o `dialog.present` da `main`, nada de esperar o outro fechar."""
+    """Nada de esperar o outro diálogo fechar."""
     janela.aplicativo.pedir_confirmacao("Restaurar?", "Corpo", "Restaurar", lambda _ok: None)
     confirmacao = janela.achar("confirmacaoDoApp")
     assert esperar(lambda: confirmacao.property("visible") is True)
@@ -219,7 +215,7 @@ def test_o_dialogo_nao_aparece_sem_atualizador_no_contexto(app_qt):  # noqa: ARG
 
 @pytest.mark.parametrize("tecla", [None, Qt.Key.Key_Escape])
 def test_ao_fechar_a_pergunta_o_foco_volta_a_grade(janela, tecla):
-    """Review final, M1: o foco volta à grade (não à janela) depois de "Agora não" e do Esc."""
+    """O foco volta à grade (não à janela) depois de "Agora não" e do Esc."""
     grade = janela.achar("grade")
     # Sem nada focado (a janela aberta e parada): o retorno capturado é o conteúdo da janela, não a grade.
     grade.forceActiveFocus(Qt.FocusReason.TabFocusReason)

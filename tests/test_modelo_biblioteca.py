@@ -55,7 +55,7 @@ def test_remover_chama_remove_game(app_qt):
     jogo.remove_game = lambda: chamados.append("a")
     modelo.atualizar(jogo)
     modelo.remover("a")
-    modelo.remover("inexistente")  # sem jogo: nada a fazer
+    modelo.remover("inexistente")
     pagina, _ = _pagina(modelo)
     pagina.remover("a")
     assert chamados == ["a", "a"]
@@ -196,7 +196,7 @@ def test_troca_de_id_tira_o_antigo(app_qt, store):
     assert "a" not in modelo._jogos  # noqa: SLF001
 
 
-# --- ordem, filtros e busca (tarefa 2 do plano 2) ---
+# --- ordem, filtros e busca ---
 
 
 def test_zerado_removido_so_na_pagina_de_zerados(app_qt):
@@ -552,11 +552,11 @@ def test_copia_velha_e_refeita_ao_ativar(app_qt, pedidos):
     assert pedidos == [[("a", caminho)]]
 
 
-# --- Halo da atualização (C01) -----------------------------------------------
+# --- Halo da atualização ---
 
 
 def test_tem_atualizacao_so_com_patch_esperando_e_fora_dos_zerados(app_qt):
-    """`has_update and not zerado`, como o `update-available` da `main` (`display_manager.py:90`)."""
+    """`has_update and not zerado`."""
     modelo = ModeloDaBiblioteca()
     modelo.atualizar(_jogo("a", "A", track_updates=True, update_available_ts=5))
     modelo.atualizar(_jogo("b", "B", track_updates=True, update_available_ts=0))
@@ -570,7 +570,7 @@ def test_tem_atualizacao_so_com_patch_esperando_e_fora_dos_zerados(app_qt):
 
 
 def test_pipeline_so_avanca_depois_da_exibicao(app_qt):
-    """B17: o `ExibicaoManager` leva o jogo à grade na principal e só então deixa o pipeline seguir (como o `DisplayManager`)."""
+    """O `ExibicaoManager` leva o jogo à grade na principal e só então deixa o pipeline seguir."""
     thread_principal.na_thread_principal(lambda: None)
     modelo = ModeloDaBiblioteca()
     ordem = []

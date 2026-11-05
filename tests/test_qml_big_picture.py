@@ -44,9 +44,9 @@ def _produto(a, b):
 
 
 # A convenção do giro (sinal) e da perspectiva é a mesma do QML: a equivalência com o `rotate_3d` do
-# Graphene vem das capturas do protótipo (D6); aqui pega-se regressão e erro de encadeamento.
+# Graphene vem das capturas do protótipo; aqui pega-se regressão e erro de encadeamento.
 def _referencia_do_gtk(i, posicao, virada, abertura, largura_tela, altura_tela):
-    """Os cantos projetados da capa `i`, pela cadeia do `_transformacao`/`_arranjo` da `main` (Gsk)."""
+    """Os cantos projetados da capa `i`, pela cadeia de transformação e de arranjo."""
     altura = altura_tela * 0.55
     largura = altura * 2 / 3
     d = i - posicao
@@ -114,8 +114,7 @@ def test_capa_em_acha_a_central_no_meio(app_qt):
 
 
 def test_capa_em_lateral_pela_caixa_alinhada(app_qt):
-    # Como a `main` (`transform_bounds` + `contains_point`): a caixa que contém a capa projetada acerta, mesmo nos cantos
-    # que o quadrilátero inclinado deixa de fora (BP-02; D7 só justifica o teste próprio, não a forma).
+    # A caixa que contém a capa projetada acerta, mesmo nos cantos que o quadrilátero inclinado deixa de fora.
     tela = _Tela()
     tela.bp.irPara(2)
     cantos = _cantos(tela, 1)
@@ -265,7 +264,7 @@ def test_roda_um_passo(app_qt):
 
 def test_ocupada_ignora_entrada(app_qt):
     tela = _Tela()
-    tela.bp._ocupada = True  # a fila de entrada (Task 3) liga isto
+    tela.bp._ocupada = True  # a fila de entrada liga isto
     tela.bp.alterado.emit()
     _esperar()
     for tecla in (Qt.Key.Key_Right, Qt.Key.Key_End, Qt.Key.Key_Return, Qt.Key.Key_Escape):
@@ -306,7 +305,7 @@ def test_central_em_alta_so_estatica(app_qt, tmp_path):
     lateral = _capa_de_teste(motor, tmp_path, central=False)
     animada = _capa_de_teste(motor, tmp_path, central=True, animada=True)
     _esperar()
-    # As texturas da `main` em pixels reais: 300 · 1,25 nas laterais (a da grade); a central ganha por cima a dos detalhes, 630 · 1,25.
+    # As texturas em pixels reais: 300 · 1,25 nas laterais (a da grade); a central ganha por cima a dos detalhes, 630 · 1,25.
     assert _avaliar(_achar(capa, "capa"), "sourceSize.height") == round(300 * 1.25)
     em_alta = _achar(capa, "capaEmAlta")
     assert _avaliar(em_alta, "sourceSize.height") == round(630 * 1.25)
@@ -352,7 +351,7 @@ def test_animar_central_segue_so_o_autoplay(app_qt):
         assert (bp.animarCentral, sem_sistema.animarCentral) == (False, False)
         shared.schema.set_boolean("cover-autoplay", True)
         _esperar()
-        assert (bp.animarCentral, sem_sistema.animarCentral) == (True, True)  # só a preferência (BP-15)
+        assert (bp.animarCentral, sem_sistema.animarCentral) == (True, True)  # só a preferência
     finally:
         shared.schema.set_boolean("cover-autoplay", antes)
 
@@ -457,7 +456,7 @@ def test_central_em_alta_so_no_fim_do_passo(app_qt):
 
     assert centrais() == [0]
     tela.bp.irPara(3)
-    assert centrais() == [0]  # durante o passo a antiga guarda a textura grande (BP-05)
+    assert centrais() == [0]  # durante o passo a antiga guarda a textura grande
     assert _esperar(lambda: centrais() == [3])
     tela.fechar()
 
@@ -532,9 +531,9 @@ def test_botao_indisponivel_sem_3d(app_qt, monkeypatch):
     botao = app.achar("botaoBigPicture")
     assert botao.property("indisponivel") is True
     assert botao.property("dica") == "Requer uma placa de vídeo com aceleração 3D."
-    # Insensível como na `main`: 50% de opacidade e sem o realce do ponteiro (BP-11); a dica continua a abrir.
+    # Insensível: 50% de opacidade e sem o realce do ponteiro; a dica continua a abrir.
     assert botao.property("opacity") == 0.5 and botao.property("semRealce") is True
-    # C5: nem o aperto muda a cor do fundo (a `main` insensível não reage).
+    # Nem o aperto muda a cor do fundo.
     fundo = _avaliar(botao, "background.color.a")
     ponto = botao.mapToScene(botao.boundingRect().center()).toPoint()
     QTest.mousePress(app.janela, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, ponto)
@@ -697,7 +696,7 @@ def test_dica_aparece_no_botao_indisponivel(app_qt, monkeypatch):
     app.fechar()
 
 
-# --- capas prontas antes da fila (P1) -------------------------------------------------------------
+# --- capas prontas antes da fila -------------------------------------------------------------
 
 
 def _preparos(tela):
@@ -743,7 +742,7 @@ print(json.dumps({
 
 
 def test_preparo_usa_o_mesmo_tamanho_das_capas():
-    # O cache do Qt Quick só acerta com a mesma URL, `sourceSize` e opções: senão a fila decodifica de novo (P1).
+    # O cache do Qt Quick só acerta com a mesma URL, `sourceSize` e opções: senão a fila decodifica de novo.
     import json  # noqa: PLC0415
     import os  # noqa: PLC0415
     import subprocess  # noqa: PLC0415
@@ -762,7 +761,7 @@ def test_preparo_usa_o_mesmo_tamanho_das_capas():
     assert dados["telaCheia"][0] == dados["telaCheia"][1]
     assert len(dados["vagas"]) == 1 and dados["vagas"] == dados["preparo"]
     altura = json.loads(dados["vagas"][0])[0]
-    assert altura == round(300 * 1.25)  # a textura da grade, como na `main`
+    assert altura == round(300 * 1.25)  # a textura da grade
     assert len(dados["central"]) == 1 and dados["central"] == dados["preparoCentral"]
     assert dados["central"][0][0] == round(630 * 1.25)
 
@@ -843,7 +842,7 @@ def test_abertura_cresce_a_central_e_esmaece_as_outras(app_qt, monkeypatch):
     app.big_picture.abrirJogo()
     assert app.big_picture.ocupada
     assert _esperar(lambda: tela.property("progressoAbertura") > 0.4, limite=3)
-    if os.environ.get("CARTRIDGES_CAPTURA"):  # a captura do lote 4 (fora do git)
+    if os.environ.get("CARTRIDGES_CAPTURA"):
         app.janela.grabWindow().save(os.environ["CARTRIDGES_CAPTURA"])
     assert _esperar(lambda: tela.property("progressoAbertura") > 0.9, limite=3)
     progresso = tela.property("progressoAbertura")
@@ -1016,7 +1015,7 @@ def test_modo_big_picture_do_controle_so_sem_dialogo_na_frente(app_qt, monkeypat
 
 
 def test_sem_capa_desenha_o_placeholder_da_biblioteca(app_qt, tmp_path):
-    # BP-01: `capa.get_texture() or GameCover.placeholder`; o quadro cinza com o nome do jogo não existe na `main`.
+    # Sem capa pronta aparece o placeholder, não um quadro cinza com o nome do jogo.
     motor = QQmlEngine()
     from cartridges.modelos.provedor_de_icones import ProvedorDeIcones  # noqa: PLC0415
     motor.addImageProvider("icone", ProvedorDeIcones())
@@ -1036,7 +1035,7 @@ def test_sem_capa_desenha_o_placeholder_da_biblioteca(app_qt, tmp_path):
 
 
 def test_tela_sem_capa_recebe_o_placeholder_do_modelo(app_qt):
-    # BP-01 (C3): o `BigPicture.qml` passa `bigPicture.placeholder` à capa; sem isso o jogo sem capa ficaria em branco.
+    # O `BigPicture.qml` passa `bigPicture.placeholder` à capa; sem isso o jogo sem capa ficaria em branco.
     tela = _Tela(quantidade=1)
     try:
         quadros = _itens(tela.tela, lambda i: i.objectName() == "placeholderDaCapa")
@@ -1052,7 +1051,7 @@ def _textos_de(raiz):
 
 
 def test_rodape_tem_os_tamanhos_da_main_e_so_quebra_na_largura_da_tela(app_qt):
-    # BP-07, BP-08, BP-09: nome em `title-1`, desenvolvedora no corpo, largura natural.
+    # Nome em `title-1`, desenvolvedora no corpo, largura natural.
     tela = _Tela(1, nome="Zelda")
     nome, dev = tela.achar("nomeDoRodape"), tela.achar("desenvolvedoraDoRodape")
     assert _avaliar(nome, "font.pixelSize") == _avaliar(nome, "Tema.titulo1") and _avaliar(nome, "font.weight") == 800

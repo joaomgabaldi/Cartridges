@@ -2,14 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Checks for shortcut name cleaning::
-
-    python3 tests/test_name_cleaner.py
-
-Cleaning happens before any Steam lookup, so leftover clutter here becomes a
-failed match later: an extra word in the local name has to be present on
-Steam's side too, and "(PC)" never is.
-"""
+"""Shortcut name cleaning runs before any Steam lookup, so leftover clutter becomes a failed match later."""
 
 import sys
 import unittest
@@ -81,12 +74,7 @@ class TestSearchVariant(unittest.TestCase):
         self.assertEqual("Hades", clean_for_search("Hades (PC)"))
 
     def test_curly_apostrophe_becomes_the_plain_one(self) -> None:
-        """Shortcuts carry "’"; catalogues index "'", and the query must match.
-
-        This is not cosmetic: HowLongToBeat found "Assassin's Creed Mirage" and
-        returned nothing at all for "Assassin’s Creed Shadows" from the same
-        library, purely because of this character.
-        """
+        """Shortcuts carry "’" but catalogues index "'": HowLongToBeat found nothing for "Assassin’s Creed Shadows" because of it."""
         self.assertEqual(
             "Assassin's Creed Shadows", clean_for_search("Assassin’s Creed Shadows")
         )

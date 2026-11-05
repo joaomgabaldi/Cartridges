@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""A pergunta do domínio (`Aplicativo.pedir_confirmacao`, D72) e a fila de diálogos, no `Aplicativo.qml` inteiro."""
+"""A pergunta do domínio (`Aplicativo.pedir_confirmacao`) e a fila de diálogos, no `Aplicativo.qml` inteiro."""
 
 import time
 from pathlib import Path
@@ -180,7 +180,7 @@ def test_confirmacao_simples_diz_dispensar(janela):
     janela.aplicativo.pedir_confirmacao("Saves sem backup", "Corpo", "Editar jogo", lambda _c: None)
     assert _esperar(lambda: janela.achar("confirmacaoDoApp").property("visible") is True)
     assert janela.dentro_da_confirmacao("botaoCancelarDoDialogo").property("text") == "Dispensar"
-    # Como o AdwAlertDialog sem resposta padrão (`create_dialog`): o foco começa no primeiro botão.
+    # Sem resposta padrão: o foco começa no primeiro botão.
     sair = janela.dentro_da_confirmacao("botaoCancelarDoDialogo")
     assert _esperar(lambda: sair.property("activeFocus") is True)
 
@@ -206,7 +206,7 @@ def test_confirmar_responde_que_sim_uma_vez(janela):
 
 
 def test_o_pedido_novo_cobre_a_confirmacao_e_ela_volta_ao_fechar(janela):
-    """R5: pilha, como o `Adw.Dialog.present` da `main`: o mais recente é o que se vê e responde."""
+    """Em pilha: o mais recente é o que se vê e responde."""
     respostas = []
     janela.aplicativo.pedir_confirmacao("Primeira", "A", "Sim", lambda c: respostas.append(("a", c)))
     janela.aplicativo.pedir_confirmacao("Segunda", "B", "Sim", lambda c: respostas.append(("b", c)), destrutivo=True)
@@ -327,7 +327,7 @@ def test_tab_nao_tira_o_foco_do_aviso_e_esc_ainda_fecha(janela):
 
 
 def test_erro_a_confirmacao_b_erro_c_dispensar_c_deixa_o_foco_em_b(janela):
-    """m5: o diálogo de erros reaproveitado (C) fecha com B ainda na tela: o foco fica em B, não vai à grade de trás."""
+    """O diálogo de erros reaproveitado (C) fecha com B ainda na tela: o foco fica em B, não vai à grade de trás."""
     janela.janela.show()
     janela.janela.requestActivate()
     from tests.apoio_qml_biblioteca import _achar as achar_rapido  # noqa: PLC0415  (a daqui é exponencial na árvore inteira)

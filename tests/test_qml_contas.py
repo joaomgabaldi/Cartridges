@@ -2,11 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""O grupo das contas e a janela de login numa janela de teste (QML offscreen, D61).
-
-Nenhuma delas tem lugar no app até o plano 7 (Preferências); aqui as duas ficam numa janela só, com um
-`ContasDasLojas` de verdade e o `abrir` do navegador sempre falso.
-"""
+"""O grupo das contas e a janela de login numa janela de teste (QML offscreen), com um `ContasDasLojas` de verdade e o `abrir` do navegador sempre falso."""
 
 from pathlib import Path
 
@@ -363,7 +359,7 @@ def test_a_janela_fechada_por_fora_some_sem_levantar(tela):
     assert isinstance(tela.janela, QQuickWindow)
 
 
-# -- Auditoria GTK x Qt, pacote E --------------------------------------------------------------------
+# -- moldura e medidas --------------------------------------------------------------------
 
 
 def _y(item, raiz):
@@ -371,7 +367,7 @@ def _y(item, raiz):
 
 
 def test_login_tem_cabecalho_com_titulo_centrado_e_x(tela):
-    """L1: faixa de 47 com o título em heading centrado e o X circular, como o `Adw.HeaderBar` da `main`."""
+    """Faixa de 47 com o título em heading centrado e o X circular."""
     tela.clicar("botaoDaConta_epic")
     janela = tela.achar("janelaEpic")
     assert _esperar(lambda: janela.property("visible") is True)
@@ -392,7 +388,7 @@ def test_login_tem_cabecalho_com_titulo_centrado_e_x(tela):
 
 
 def test_login_da_epic_usa_a_linha_de_texto_numa_lista(tela):
-    """L2/L3/L7: o código vai numa `Adw.EntryRow` de lista com borda, com o rótulo flutuando dentro; 18 entre os blocos."""
+    """O código vai num campo de lista com borda, com o rótulo flutuando dentro; 18 entre os blocos."""
     tela.clicar("botaoDaConta_epic")
     janela = tela.achar("janelaEpic")
     assert _esperar(lambda: janela.property("visible") is True)
@@ -412,7 +408,7 @@ def test_login_da_epic_usa_a_linha_de_texto_numa_lista(tela):
 
 
 def test_login_da_ea_tem_o_texto_na_moldura_da_main_e_12_entre_blocos(tela):
-    """L3/L4: `TextView` em moldura de 1 px a 15%, fundo da vista, margens 6, quebra por palavra, sem anel de foco."""
+    """`TextView` em moldura de 1 px a 15%, fundo da vista, margens 6, quebra por palavra, sem anel de foco."""
     tela.clicar("botaoDaConta_ea")
     janela = tela.achar("janelaEa")
     assert _esperar(lambda: janela.property("visible") is True)
@@ -431,7 +427,7 @@ def test_login_da_ea_tem_o_texto_na_moldura_da_main_e_12_entre_blocos(tela):
 
 
 def test_botoes_e_indicador_do_login_seguem_a_main(tela):
-    """L5/L8: botões da `main` (34, 12 px em negrito, "Conectar" em destaque) e o `Adw.Spinner` de 16 px."""
+    """Botões de 34, 12 px em negrito, "Conectar" em destaque, e o spinner de 16 px."""
     tela.clicar("botaoDaConta_epic")
     janela = tela.achar("janelaEpic")
     assert _esperar(lambda: janela.property("visible") is True)
@@ -444,7 +440,7 @@ def test_botoes_e_indicador_do_login_seguem_a_main(tela):
 
 
 def test_endereco_da_epic_em_cor_normal_do_texto(desconectadas, avisos):
-    """L7: o endereço mostrado sem navegador usa a cor do texto, não a secundária."""
+    """O endereço mostrado sem navegador usa a cor do texto, não a secundária."""
 
     def sem_navegador(_url):
         raise OSError("sem navegador")
@@ -461,19 +457,19 @@ def test_endereco_da_epic_em_cor_normal_do_texto(desconectadas, avisos):
 
 
 def test_login_abre_com_o_foco_no_campo_sem_anel(tela):
-    """L9: medido num `Adw.Dialog` com o mesmo corpo, o foco cai no campo (Epic: o texto da fileira; EA: o `TextView`), sem
+    """O foco cai no campo (Epic: o texto da fileira; EA: o `TextView`), sem
     anel de foco (a `TextView` não tem) e, na Epic, o contorno da fileira."""
     tela.clicar("botaoDaConta_epic")
     campo = tela.achar("campoDeUmaLinha", tela.achar("janelaEpic"))
     assert _esperar(lambda: campo.property("activeFocus") is True)
-    assert _valor(campo, "foco") is True  # a fileira acende o contorno do campo, como a `EntryRow` com foco
+    assert _valor(campo, "foco") is True  # a fileira acende o contorno do campo
     tela.clicar("botaoDaConta_ea")
     area = tela.achar("campoDeVariasLinhas", tela.achar("janelaEa"))
     assert _esperar(lambda: area.property("activeFocus") is True)
 
 
 def test_grupo_das_contas_segue_as_medidas_da_main(tela):
-    """C1: título e descrição de 12 (a descrição apagada), fileira de 54 com título 12 e subtítulo 10, margem de 14."""
+    """Título e descrição de 12 (a descrição apagada), fileira de 54 com título 12 e subtítulo 10, margem de 14."""
     titulo = tela.achar("tituloDoGrupoDasContas")
     assert _valor(titulo, "font.pixelSize") == 12 and _valor(titulo, "font.weight") == 700
     descricao = tela.achar("descricaoDoGrupoDasContas")
@@ -492,7 +488,7 @@ def test_grupo_das_contas_segue_as_medidas_da_main(tela):
 
 
 def test_nome_longo_da_conta_quebra_a_linha_e_alarga_a_fileira(monkeypatch, desconectadas, avisos):
-    """C2: o subtítulo quebra (o `AdwActionRow` faz o mesmo); a altura acompanha o conteúdo."""
+    """O subtítulo quebra; a altura acompanha o conteúdo."""
     nome = "Uma conta com um nome muito comprido que não cabe em uma linha só " * 2
     monkeypatch.setattr(epic_conta, "conectada", lambda: True)
     monkeypatch.setattr(epic_conta, "nome", lambda: nome)

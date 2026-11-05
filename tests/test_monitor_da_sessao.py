@@ -2,11 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""O monitor da sessão e o papel de parede (Task 4 do plano 5).
-
-Tudo com falsos: HWND falso, `user32` falso e área de trabalho falsa. Nenhuma janela é movida e o papel
-de parede de verdade nunca é tocado (o `conftest.py` faz `_AreaDeTrabalho` levantar).
-"""
+"""O monitor da sessão e o papel de parede, tudo com falsos: nenhuma janela é movida e o papel de parede real nunca é tocado (o `conftest.py` faz `_AreaDeTrabalho` levantar)."""
 
 import inspect
 import json
@@ -31,11 +27,7 @@ SEGUNDO = window_geometry.Monitor("\\\\.\\DISPLAY2", -1080, -512, 1080, 1920, Fa
 
 
 class _FakePlacementUser32:
-    """O bastante do user32 para o vaivém da janela entre monitores.
-
-    Guarda cada `SetWindowPlacement` recebido, que é o que o teste tem para olhar: é a única coisa que
-    a mudança de monitor faz com a janela. `zoomed` e `visible` respondem `IsZoomed` e `IsWindowVisible`.
-    """
+    """O bastante do user32 para o vaivém entre monitores; guarda cada `SetWindowPlacement`, a única coisa que a mudança faz com a janela."""
 
     def __init__(self, rect=(100, 50, 900, 650), show=1, visible=True):
         self.rect = rect
@@ -98,8 +90,6 @@ def user32(monkeypatch, sem_sessao):  # noqa: ARG001
 
     return montar
 
-
-# -- Portados de `test_ui_logic.py`: a regra do `window_geometry` --------------------------------------
 
 
 def test_the_window_never_moves_to_a_monitor_that_is_not_there(monkeypatch, sem_sessao, monitores):  # noqa: ARG001
@@ -175,8 +165,7 @@ def test_a_window_hidden_at_the_end_of_the_session_is_written_hidden(user32, mon
 
 
 def test_a_maximized_window_hidden_at_the_end_keeps_its_restore_rectangle(user32, monitores):
-    """Maximizada antes do jogo e escondida no fim: o retângulo de restauração é o de antes (não o do
-    monitor do jogo), gravado numa escrita só, escondida."""
+    """Maximizada antes do jogo e escondida no fim: restaura o retângulo de antes (não o do monitor do jogo), numa escrita só, escondida."""
     falso = user32(show=3)
     monitores(SEGUNDO)
     janela = _janela_falsa()
@@ -191,7 +180,7 @@ def test_a_maximized_window_hidden_at_the_end_keeps_its_restore_rectangle(user32
 
 
 def test_a_maximized_window_comes_back_maximized_where_it_was(user32, monitores):
-    """Maximizada antes do jogo, maximizada depois, no monitor de origem (D: a janela volta como estava)."""
+    """Maximizada antes e depois do jogo, no monitor de origem: a janela volta como estava."""
     falso = user32(show=3)
     monitores(SEGUNDO)
     janela = _janela_falsa()
@@ -202,8 +191,6 @@ def test_a_maximized_window_comes_back_maximized_where_it_was(user32, monitores)
     casa, estacionada = (100, 50, 900, 650), (-1080, -512, 0, 1408)
     assert falso.written == [(1, estacionada), (3, estacionada), (1, casa), (3, casa)]
 
-
-# -- Novos ---------------------------------------------------------------------------------------------
 
 
 def test_hwnd_da_qwindow():
@@ -353,10 +340,10 @@ def test_parede_so_com_a_opcao_ligada(modelo, schema, make_game):
 
 
 def test_encerrar_devolve_a_parede(modelo):
-    modelo.encerrar()  # o `saindo`: as janelas ainda na tela, nada que espere (R1)
+    modelo.encerrar()  # o `saindo`: as janelas ainda na tela, nada que espere
     assert modelo.chamadas == []
     modelo.devolver()  # o `aboutToQuit`
-    assert modelo.chamadas == ["parede"]  # sem tocar na janela (D: nada de interface no encerramento)
+    assert modelo.chamadas == ["parede"]  # sem tocar na janela
 
 
 # -- Papel de parede: a volta para a thread principal ---------------------------------------------------
@@ -454,7 +441,7 @@ def test_sessao_que_acaba_antes_da_arte_nao_veste(preparada, monkeypatch):  # no
 
 
 def test_abertura_desfaz_orfaos(monkeypatch):
-    # O comportamento: a marca de uma sessão que não voltou é desfeita.
+    # A marca de uma sessão que não voltou é desfeita.
     shared.schema.set_string("session-wallpaper-saved", json.dumps({"M1": "c:/a.jpg"}))
     area = _AreaFalsa({})
     monkeypatch.setattr(session_wallpaper, "_AreaDeTrabalho", lambda: area)

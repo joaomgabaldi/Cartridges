@@ -76,7 +76,7 @@ def test_caixa_de_numero_tem_uma_parada_de_tab_e_segue_as_setas(app):
     assert foco is not caixa and foco.parentItem() is not caixa  # o item interno não é uma segunda parada
     QTest.keyClick(app.janela, Qt.Key.Key_Backtab)
     foco = app.janela.property("activeFocusItem")
-    assert foco is caixa or foco.parentItem() is caixa  # editável (P35): a caixa passa o foco ao seu campo
+    assert foco is caixa or foco.parentItem() is caixa  # editável: a caixa passa o foco ao seu campo
 
 
 def test_menu_principal_abre_as_preferencias(app):
@@ -98,7 +98,7 @@ def test_item_do_menu_apagado_durante_a_importacao(app):
 def test_abas_na_ordem_da_main(app):
     _abrir(app)
     rotulos = app.achar("dialogoDePreferencias").property("rotulosDasAbas").toVariant()
-    # Personalização e Conquistas entram com as tasks delas (sem aba morta); a ordem é a da `main`.
+    # As abas aparecem nesta ordem.
     ordem = ["Geral", "Personalização", "Importação", "SteamGridDB", "Conquistas"]
     assert [r for r in ordem if r in rotulos] == rotulos
     assert rotulos[:2] == ["Geral", "Personalização"] and "Importação" in rotulos and "SteamGridDB" in rotulos
@@ -335,7 +335,7 @@ def test_linhas_dos_atalhos_so_com_atalhos_ligado_e_o_expansor_aberto(app):
     assert expansor.property("icone") == "shortcuts-source"
     assert app.achar("linhaDaPasta").property("visible") is False
     assert app.achar("interruptor-shortcuts-recursive").property("visible") is False
-    # Ligar abre as filhas (P48).
+    # Ligar abre as filhas.
     _clique(app, "interruptor-shortcutsChave")
     assert _esperar(lambda: app.achar("linhaDaPasta").property("visible") is True)
     assert app.achar("interruptor-shortcuts-recursive").property("visible") is True
@@ -344,7 +344,7 @@ def test_linhas_dos_atalhos_so_com_atalhos_ligado_e_o_expansor_aberto(app):
     expansor.setProperty("expandida", False)
     assert _esperar(lambda: app.achar("linhaDaPasta").property("visible") is False)
     assert shared.schema.get_boolean("shortcuts") is True
-    # P49: o caminho é o texto grande e o título o pequeno e apagado.
+    # O caminho é o texto grande e o título o pequeno e apagado.
     assert app.achar("linhaDaPasta").property("propriedade") is True
 
 
@@ -388,14 +388,14 @@ def test_descricao_da_autenticacao_e_o_link_abre_o_navegador_falso(app, monkeypa
 
 
 def test_grupos_do_plano_8b_aparecem(app):
-    """O backup e a Zona de perigo entraram no 8a (Task 7); "Atualizações" na Task 1 do 8b e "Barra superior" na Task 2."""
+    """Os grupos "Barra superior", "Atualizações", o backup e a Zona de perigo aparecem."""
     _abrir(app)
     todos = "\n".join(_textos(app.achar("dialogoDePreferencias")))
     for texto in ("Barra superior", "Atualizações", "Backup da sua biblioteca", "Zona de perigo", "Redefinir Kyron"):
         assert texto in todos
 
 
-# region Atualizar metadados e capas (Task 3)
+# region Atualizar metadados e capas
 
 
 def _com_refresh_falso(monkeypatch):
@@ -578,7 +578,7 @@ def test_foco_levado_para_outro_controle_nao_e_roubado_ao_terminar(app, store, m
     assert _foco_dentro_de(app, "aba-sgdb")
 
 
-# region Personalização (Task 4)
+# region Personalização
 
 
 def test_textos_da_personalizacao(app):
@@ -614,7 +614,7 @@ def test_monitor_apagado_com_o_interruptor_desligado_e_identificar_sempre_ativo(
     assert _enabled(app, "linhaIdentificarMonitores")
     app.preferencias.definir("session-move-window", True)
     assert _esperar(lambda: _enabled(app, "linhaDoMonitor"))
-    # Sem contar horas o grupo inteiro apaga, o "Identificar" inclusive (P41/P42), com o título e a descrição.
+    # Sem contar horas o grupo inteiro apaga, o "Identificar" inclusive, com o título e a descrição.
     app.preferencias.definir("playtime-tracking", False)
     assert _esperar(lambda: not _enabled(app, "linhaDoMonitor"))
     assert not _enabled(app, "interruptor-session-move-window")
@@ -637,7 +637,7 @@ def test_sem_segundo_monitor_o_grupo_apaga_e_explica(app, monkeypatch):
 
 
 def test_botao_em_linha_apagada_nao_soma_dois_apagados(app, store, make_game):
-    """Medido na `main`: 50% no total. O botão apagado fora de uma linha continua a 50% por conta própria."""
+    """50% no total. O botão apagado fora de uma linha continua a 50% por conta própria."""
     from cartridges.store.managers.sgdb_manager import SgdbManager  # noqa: PLC0415
     from tests.apoio_capas import _ManagerDeCapas  # noqa: PLC0415
 
@@ -672,7 +672,7 @@ def test_placa_mostra_o_numero(app_qt):
     placa = componente.createWithInitialProperties({"numero": "2"})
     assert placa is not None, componente.errorString()
     assert "2" in _textos(placa)
-    # SES-40: fundo e texto do tema, sem borda, número em 96 pt (128 px).
+    # Fundo e texto do tema, sem borda, número em 96 pt (128 px).
     ex = lambda o, t: QQmlExpression(QQmlEngine.contextForObject(o), o, t).evaluate()[0]  # noqa: E731
     assert ex(placa, "color.toString() === Tema.fundo.toString() && border.width === 0") is True
     numero = next(t for t in placa.childItems() if t.property("text") == "2")
@@ -680,7 +680,6 @@ def test_placa_mostra_o_numero(app_qt):
 
 
 def test_m14_sem_contar_horas_o_papel_de_parede_fica_apagado(app):
-    # A metade das fitas (seguem configuráveis sem contar horas) entra na Task 5.
     shared.schema.set_boolean("playtime-tracking", False)
     _abrir(app, "session")
     assert not _enabled(app, "grupoPapelDeParede")
@@ -721,7 +720,7 @@ def test_linhas_da_iluminacao_apagadas_sem_o_interruptor(app, fitas_espiadas):
     )  # fmt: skip
     assert _enabled(app, "interruptor-session-fita")
     assert [_enabled(app, n) for n in dependentes] == [False] * 5
-    assert app.achar("linhaDaCorDoApp").property("opacity") == 0.5  # P23: a linha travada aparece apagada
+    assert app.achar("linhaDaCorDoApp").property("opacity") == 0.5  # a linha travada aparece apagada
     _clique(app, "interruptor-session-fitaChave")
     assert shared.schema.get_boolean("session-fita") is True
     assert fitas_espiadas == ["reacender"]
@@ -780,7 +779,7 @@ def test_testar_troca_o_icone_e_mostra_o_resultado(app, fitas_espiadas, monkeypa
     _abrir(app, "session")
     assert app.achar("linhaTestarFitasBotao").property("icone") == "media-playback-start"
     _clique(app, "linhaTestarFitasBotao")
-    # Durante o teste o bot\u00e3o \u00e9 o de parar.
+    # Durante o teste o botão é o de parar.
     assert _esperar(lambda: app.achar("linhaTestarFitasBotao").property("icone") == "media-playback-stop")
     assert app.achar("linhaTestarFitas").property("subtitulo") == "Testando\u2026"
     solta.set()
@@ -840,7 +839,7 @@ def test_configurar_abre_o_assistente_com_a_conta_salva(app):
 
 
 def test_dispositivos_do_assistente_em_texto_puro(app):
-    """Review Focus 3: o nome do dispositivo vem da conta da Tuya e aparece como está."""
+    """O nome do dispositivo vem da conta da Tuya e aparece como está."""
     dialogo, _botao = _abrir_o_assistente(app)
     nome = "<b>Sala</b> & Cia"
     from cartridges.utils.session_fita import Fita  # noqa: PLC0415
@@ -942,7 +941,7 @@ def test_calibracao_mostra_a_amostra_na_cor_da_etapa(calibracao_aberta):
     assert _esperar(lambda: _perto(_centro_da_amostra(app, "amostraDaCalibracao"), assistente.corNaTela))
     assistente.proxima()  # amarelo
     assert _esperar(lambda: _perto(_centro_da_amostra(app, "amostraDaCalibracao"), assistente.corNaTela))
-    assert app.achar("amostraDaCalibracao").property("height") >= 240  # P65: ocupa o que sobra
+    assert app.achar("amostraDaCalibracao").property("height") >= 240  # ocupa o que sobra
 
 
 def test_temperatura_so_no_branco(calibracao_aberta):
@@ -1092,7 +1091,7 @@ def test_calibracao_clique_nos_botoes_de_ponta_a_ponta(calibracao_aberta, fitas_
 
 
 
-# --- A busca (P15 a P22) ---
+# --- A busca ---
 
 
 def _buscar(app, texto):
@@ -1127,7 +1126,7 @@ def test_buscar_brilho_lista_as_linhas_das_duas_paginas_com_pagina_e_grupo(app):
     _buscar(app, "brilho")
     assert _esperar(lambda: _visivel(app, "resultadosDaBuscaDasPreferencias"))
     resultados = _resultados(app)
-    # P16: uma lista só, cada linha com o subtítulo "Página → Grupo".
+    # Uma lista só, cada linha com o subtítulo "Página → Grupo".
     assert ("Brilho (%)", "Personalização → Iluminação inteligente") in resultados
     assert ("Brilho máximo por dispositivo", "Personalização → Iluminação inteligente") in resultados
     assert not any(t == "Usar o SteamGridDB" for t, _ in resultados)
@@ -1159,7 +1158,7 @@ def test_grupo_sem_titulo_mostra_so_a_pagina(app):
 
 
 def test_filhas_do_expansor_nao_entram_na_busca(app):
-    """P22: a `main` só indexa as linhas de nível de grupo; "Pasta" e "Buscar em subpastas" ficam fora."""
+    """Só as linhas de nível de grupo são indexadas; "Pasta" e "Buscar em subpastas" ficam fora."""
     app.preferencias.definir("shortcuts", True)
     _abrir(app)
     _buscar(app, "subpastas")
@@ -1176,7 +1175,7 @@ def test_nenhum_resultado(app):
     assert _esperar(lambda: _visivel(app, "estadoSemResultadoDasPreferencias"))
     vazio = app.achar("estadoSemResultadoDasPreferencias")
     assert vazio.property("titulo") == "Nenhum resultado encontrado"
-    # P21: o ícone de lupa e a descrição.
+    # O ícone de lupa e a descrição.
     assert vazio.property("descricao") == "Tente uma busca diferente."
     assert vazio.property("icone") == "edit-find"
     _buscar(app, "brilho")
@@ -1184,7 +1183,7 @@ def test_nenhum_resultado(app):
 
 
 def test_clicar_num_resultado_leva_a_pagina_e_poe_o_foco_na_linha(app):
-    """P17: o resultado só navega; não liga o interruptor dele."""
+    """O resultado só navega; não liga o interruptor dele."""
     _abrir(app)
     antes = shared.schema.get_boolean("gamepad")
     _buscar(app, "controle xbox")
@@ -1224,7 +1223,7 @@ def test_lupa_liga_o_campo_no_lugar_do_titulo(app):
 
 
 def test_digitar_em_qualquer_ponto_abre_a_busca(app):
-    """P18: a tecla que nenhum controle trata vai ao campo."""
+    """A tecla que nenhum controle trata vai ao campo."""
     _abrir(app)
     app.achar("aba-general").forceActiveFocus(Qt.FocusReason.TabFocusReason)
     for tecla in (Qt.Key.Key_B, Qt.Key.Key_R, Qt.Key.Key_I):
@@ -1244,7 +1243,7 @@ def test_esc_sai_da_busca_mesmo_com_texto_e_o_segundo_fecha(app):
         QTest.keyClick(app.janela, tecla)
     assert _esperar(lambda: campo.property("text") == "bri")
     QTest.keyClick(app.janela, Qt.Key.Key_Escape)
-    # P19: com o texto, um Esc só limpa e devolve o título.
+    # Com o texto, um Esc só limpa e devolve o título.
     assert _esperar(lambda: campo.property("text") == "" and dialogo.property("buscaAtiva") is False)
     assert app.preferencias.aberto
     assert _visivel(app, "abas")
@@ -1383,7 +1382,7 @@ def test_foco_que_passa_pela_propria_linha_ainda_volta_ao_botao_ao_terminar(app,
 
 
 def test_a_roda_nas_preferencias_anda_o_passo_do_gtk(app):
-    """V3: cada entalhe anda `pow(altura visível, 2/3)` px, como o `ScrolledWindow` da `main` (cerca de 78), e não os 23 do `Flickable`."""
+    """Cada entalhe anda `pow(altura visível, 2/3)` px (cerca de 78), e não os 23 do `Flickable`."""
     from PySide6.QtCore import QCoreApplication, QPoint  # noqa: PLC0415
     from PySide6.QtGui import QWheelEvent  # noqa: PLC0415
 
@@ -1412,7 +1411,7 @@ def test_a_roda_nas_preferencias_anda_o_passo_do_gtk(app):
 
 
 def test_o_primeiro_tab_vai_a_primeira_linha_habilitada_da_pagina(app):
-    """V5: na `main` o Tab inicial cai em "Contar horas de jogo"; antes o foco abria numa aba e o Tab andava por todas."""
+    """O Tab inicial cai em "Contar horas de jogo", não numa aba."""
     _abrir(app, "general")
     assert _foco_dentro_de(app, "fecharDoCabecalho")
     QTest.keyClick(app.janela, Qt.Key.Key_Tab)
@@ -1420,7 +1419,7 @@ def test_o_primeiro_tab_vai_a_primeira_linha_habilitada_da_pagina(app):
 
 
 def test_o_link_da_descricao_tem_a_opacidade_da_descricao(app):
-    """Item 9: o "Obtenha aqui" da `main` sai com os 55% da descrição `dim-label`, e não vivo."""
+    """O "Obtenha aqui" sai com os 55% da descrição apagada, e não vivo."""
     _abrir(app, "sgdb")
     grupo = app.achar("grupoAutenticacao")
     texto = [t for t in _filhos_text(grupo) if "Obtenha" in (t.property("text") or "")][0]

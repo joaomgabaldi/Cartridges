@@ -2,8 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""As Preferências como `Adw.PreferencesDialog` (auditoria GTK × Qt, pacote P): moldura, cabeçalho, barra das abas,
-palette de cores, o progresso fora do cartão e os diálogos internos."""
+"""As Preferências como diálogo: moldura, cabeçalho, barra das abas, paleta de cores, o progresso fora do cartão e os diálogos internos."""
 
 import re
 
@@ -67,12 +66,12 @@ def test_o_dialogo_e_uma_moldura_de_640_com_raio_15_e_altura_maxima(app):
     dialogo = _dialogo(app)
     assert _avaliar(dialogo, "cartao.width") == 640
     assert _avaliar(dialogo, "cartao.radius") == 15
-    # `content-height` sem teto: a janela limita, com a margem vertical da moldura (P08).
+    # `content-height` sem teto: a janela limita, com a margem vertical da moldura.
     assert _avaliar(dialogo, "cartao.height") == _avaliar(dialogo, "height") - 2 * _avaliar(dialogo, "margemV")
 
 
 def test_cartoes_das_paginas_tem_532_em_640(app):
-    """Medido na `main`: cartões de x=54 a x=586 no diálogo de 640 (P13)."""
+    """Cartões de x=54 a x=586 no diálogo de 640."""
     _abrir(app, "general")
     grupo = app.achar("grupoComportamentoGeral")
     assert grupo.property("width") == 532
@@ -86,8 +85,8 @@ def test_cabecalho_de_47_com_o_titulo_e_a_lupa_e_sem_linha_no_topo(app):
     _abrir(app)
     titulo, cabecalho = _cabecalho(app)
     assert titulo.property("text") == "Preferências"
-    assert cabecalho.property("height") == 47  # P05: uma faixa só
-    assert cabecalho.property("sombra") is False  # P07: sem linha com a rolagem no topo
+    assert cabecalho.property("height") == 47  # uma faixa só
+    assert cabecalho.property("sombra") is False  # sem linha com a rolagem no topo
     lupa = app.achar("botaoDeBuscaDasPreferencias")
     assert lupa.property("icone") == "system-search"
     # Rolada, a linha aparece.
@@ -101,13 +100,13 @@ def test_barra_das_abas_no_pe_com_icone_sobre_o_rotulo(app):
     barra = app.achar("abas")
     assert barra.property("height") == 47
     cartao = app.achar("cartaoDasPreferencias")
-    # No pé do cartão (P01).
+    # No pé do cartão.
     assert barra.mapToItem(cartao, QPointF(0, 0)).y() + barra.property("height") == pytest.approx(cartao.property("height"))
     icones = []
     for aba in ("general", "session", "import", "sgdb", "conquistas"):
         botao = app.achar(f"aba-{aba}")
         assert (botao.property("width"), botao.property("height")) == (100, 40)
-        icones.append(_avaliar(botao, "modelData.icone"))  # P03: os ícones simbólicos da `main`
+        icones.append(_avaliar(botao, "modelData.icone"))  # os ícones simbólicos
     assert icones == ["user-home", "video-joined-displays", "document-save", "image-x-generic", "starred"]
     # Ficam centralizadas, com 3 de vão (5 x 100 + 4 x 3 = 512 em 640).
     primeira, ultima = app.achar("aba-general"), app.achar("aba-conquistas")
@@ -130,7 +129,7 @@ def test_a_linha_da_barra_so_aparece_com_mais_conteudo_por_rolar(app):
 
 
 def test_clicar_fora_do_cartao_nao_fecha(app):
-    """A `main` segura o toque fora do diálogo flutuante: nem fecha nem arrasta."""
+    """O toque fora do diálogo flutuante é retido: nem fecha nem arrasta."""
     _abrir(app)
     QTest.mouseClick(app.janela, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, app.achar("botaoMenu").mapToScene(QPointF(-100, 200)).toPoint())
     _esperar()
@@ -138,7 +137,7 @@ def test_clicar_fora_do_cartao_nao_fecha(app):
 
 
 def test_o_aviso_das_preferencias_fica_no_cartao_delas(app):
-    """P14: o `Adw.ToastOverlay` é do diálogo; o aviso nasce dentro do cartão."""
+    """O aviso nasce dentro do cartão."""
     _abrir(app)
     app.aplicativo.avisar("Olá")
     aviso = app.achar("aviso")
@@ -152,21 +151,21 @@ def test_o_aviso_das_preferencias_fica_no_cartao_delas(app):
 
 
 def test_abre_com_o_foco_no_x_e_a_aba_da_pagina_a_vista(app):
-    # V5: o primeiro Tab vai à primeira linha da página, como na `main`; a aba à vista é a pedida, mas não leva o foco.
+    # O primeiro Tab vai à primeira linha da página; a aba à vista é a pedida, mas não leva o foco.
     _abrir(app, "sgdb")
     assert _esperar(lambda: app.janela.activeFocusItem() is app.achar("dialogoDePreferencias").property("botaoFechar"))
     assert app.achar("dialogoDePreferencias").property("aba") == "sgdb"
 
 
 def test_os_diretorios_de_arquivo_nao_tem_titulo_proprio():
-    """P54: o Windows mostra o título padrão, como na `main` (que não passa título)."""
+    """O Windows mostra o título padrão (nenhum título é passado)."""
     for nome in ("PaginaGeral.qml", "PaginaDeImportacao.qml"):
         texto = (QML / nome).read_text(encoding="utf-8")
         for bloco in re.findall(r"(?:FileDialog|FolderDialog) \{.*?\n        \}", texto, flags=re.S):
             assert "title:" not in bloco, nome
 
 
-# region Linhas com botão (P38 a P40)
+# region Linhas com botão
 
 
 def _rolar_ate(app, item):
@@ -182,7 +181,7 @@ def test_linhas_das_fitas_acionam_pela_linha_inteira(app, fitas_espiadas):  # no
     linha = app.achar("linhaDoBrilhoPorDispositivo")
     assert linha.property("ativavel").objectName() == "linhaDoBrilhoPorDispositivoBotao"
     _rolar_ate(app, linha)
-    # Um clique longe do botão, no texto da linha (P40: `activatable-widget`).
+    # Um clique longe do botão, no texto da linha.
     ponto = linha.mapToScene(QPointF(60, linha.property("height") / 2)).toPoint()
     QTest.mouseClick(app.janela, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, ponto)
     assert _esperar(lambda: app.preferencias.brilhoPorDispositivo is not None)
@@ -196,7 +195,7 @@ def test_pasta_dos_saves_e_buscar_atualizacoes_nao_sao_ativaveis(app):
 
 
 # endregion
-# region O progresso fora do cartão (P47)
+# region O progresso fora do cartão
 
 
 def test_progresso_dos_metadados_fica_abaixo_do_cartao(app, monkeypatch):
@@ -211,7 +210,7 @@ def test_progresso_dos_metadados_fica_abaixo_do_cartao(app, monkeypatch):
     assert app.achar("linhaDosMetadadosProgressoTexto").property("text") == "3 de 12"
     cartao = app.achar("grupoAtualizarMetadados")
     texto = app.achar("linhaDosMetadadosProgressoTexto")
-    # I3: o texto fica acima da trilha, com a margem de 12 sob o cartão; a trilha tem 8.
+    # O texto fica acima da trilha, com a margem de 12 sob o cartão; a trilha tem 8.
     assert texto.mapToItem(cartao, QPointF(0, 0)).y() == pytest.approx(cartao.property("height") + 12)
     assert barra.mapToItem(cartao, QPointF(0, 0)).y() >= texto.mapToItem(cartao, QPointF(0, 0)).y() + texto.property("height")
     assert barra.property("height") == 8
@@ -220,7 +219,7 @@ def test_progresso_dos_metadados_fica_abaixo_do_cartao(app, monkeypatch):
 
 
 # endregion
-# region A paleta de cores (P46)
+# region A paleta de cores
 
 
 def test_balao_da_cor_abre_na_paleta_e_o_mais_leva_ao_seletor(app, fitas_espiadas):
@@ -240,7 +239,7 @@ def test_balao_da_cor_abre_na_paleta_e_o_mais_leva_ao_seletor(app, fitas_espiada
     # Os 45 tons da paleta; clicar num grava a cor e acende as fitas.
     tons = _avaliar(amostra, "paleta")
     assert len(tons) == 9 and all(len(coluna) == 5 for coluna in tons)
-    # P-M3: cada tom tem o nome da paleta da `main` (vertido para o português), sem repetir.
+    # Cada tom tem o nome da paleta (em português), sem repetir.
     nomes = _avaliar(amostra, "nomesDosTons")
     assert [len(coluna) for coluna in nomes] == [5] * 9
     assert len({n for coluna in nomes for n in coluna}) == 45
@@ -288,7 +287,7 @@ def test_clicar_num_tom_da_paleta_escolhe_a_cor(app, fitas_espiadas):
 
 
 # endregion
-# region Os diálogos internos (P50, P59 a P72)
+# region Os diálogos internos
 
 
 def test_assistente_das_fitas_enter_nao_busca_e_o_segredo_tem_botao_de_mostrar(app):
@@ -301,8 +300,8 @@ def test_assistente_das_fitas_enter_nao_busca_e_o_segredo_tem_botao_de_mostrar(a
     app.achar("campoDoAccessId").forceActiveFocus(Qt.FocusReason.TabFocusReason)
     QTest.keyClick(app.janela, Qt.Key.Key_Return)
     _esperar()
-    assert app.preferencias.configuracaoDasFitas.pagina == "credenciais"  # P62: Enter não faz nada
-    # P50: o segredo vai mascarado e o botão o mostra.
+    assert app.preferencias.configuracaoDasFitas.pagina == "credenciais"  # Enter não faz nada
+    # O segredo vai mascarado e o botão o mostra.
     segredo = app.achar("campoDoAccessSecret")
     assert _avaliar(segredo, "echoMode") == 2
     _clique(app, "botaoMostrarOSegredo")
@@ -321,7 +320,7 @@ def test_cabecalho_dos_dialogos_internos_tem_47_e_o_titulo_centralizado(app, fit
     cabecalho = titulo.parentItem()
     assert cabecalho.property("height") == 47
     centro = titulo.mapToItem(cabecalho, QPointF(titulo.property("width") / 2, 0)).x()
-    assert centro == pytest.approx(cabecalho.property("width") / 2, abs=1)  # P60: centralizado
+    assert centro == pytest.approx(cabecalho.property("width") / 2, abs=1)  # centralizado
     assert titulo.property("text") == "Configurar a iluminação inteligente"
     assert _achar(dialogo, "fecharDoCabecalho").property("visible") is True  # o X redondo da base
 
@@ -333,10 +332,10 @@ def test_brilho_por_dispositivo_cabecalho_47_com_cancelar_e_salvar(app, fitas_es
     dialogo = app.achar("dialogoDoBrilhoPorDispositivo")
     assert _esperar(lambda: dialogo.property("visible") is True)
     titulo = _achar(dialogo, "tituloDoCabecalho")
-    assert titulo.parentItem().property("height") == 47  # P59
+    assert titulo.parentItem().property("height") == 47
     assert _avaliar(app.achar("botaoCancelarDoBrilho"), "estilo") == "plano"
     assert _avaliar(app.achar("botaoSalvarDoBrilho"), "estilo") == "sugestao"
-    assert _avaliar(dialogo, "cartao.radius") == 15  # P61
+    assert _avaliar(dialogo, "cartao.radius") == 15
 
 
 def test_calibracao_botoes_na_base_e_amostra_sem_borda(calibracao_aberta):
@@ -346,17 +345,17 @@ def test_calibracao_botoes_na_base_e_amostra_sem_borda(calibracao_aberta):
     assert _esperar(lambda: app.achar("amostraDaCalibracao").property("visible") is True)
     cartao = _avaliar(dialogo, "cartao.height")
     amostra = app.achar("amostraDaCalibracao")
-    assert amostra.property("height") > 240  # P65: ocupa o que sobra
+    assert amostra.property("height") > 240  # ocupa o que sobra
     botao = app.achar("botaoProximaCalibracao")
-    # P65/P66: os botões ficam na base, a 24 do fundo do cartão.
+    # Os botões ficam na base, a 24 do fundo do cartão.
     raiz = _achar(dialogo, "cartaoDoDialogo")
     base = botao.mapToItem(raiz, QPointF(0, botao.property("height"))).y()
     assert base == pytest.approx(cartao - 24, abs=1)
-    # P67: a amostra não tem borda (só a cor de referência, raio 12).
+    # A amostra não tem borda (só a cor de referência, raio 12).
     fonte = (QML / "AssistenteDeCalibracao.qml").read_text(encoding="utf-8")
     assert "border" not in fonte[fonte.index("component Amostra"):fonte.index("component Titulo")]
     assert _avaliar(amostra, "radius") == 12
-    # P70: o botão padrão da fundação; P69: o texto da tela inicial na cor do texto.
+    # O botão padrão da fundação; o texto da tela inicial na cor do texto.
     assert _avaliar(botao, "estilo") == "sugestao"
 
 
@@ -373,7 +372,7 @@ def test_calibracao_todos_os_dispositivos_sem_cartao(app, fitas_espiadas, monkey
     assert _esperar(lambda: dialogo.property("visible") is True)
     app.preferencias.calibracao.escolher("__todos__")
     assert _esperar(lambda: app.achar("amostraDeTodosDaCalibracao").property("visible") is True)
-    # P72: título e controles soltos, sem `GrupoDeLinhas` (o cartão) em volta.
+    # Título e controles soltos, sem `GrupoDeLinhas` (o cartão) em volta.
     rolagem = _achar(dialogo, "tomDaCalibracao-eb0")
     pai = rolagem
     cartoes = 0
@@ -387,7 +386,7 @@ def test_calibracao_todos_os_dispositivos_sem_cartao(app, fitas_espiadas, monkey
 # endregion
 
 
-# region Rodada 1 da revisão (I1, I2)
+# region Diálogo interno e camada dos avisos
 
 
 def test_dialogo_interno_acompanha_o_redimensionamento_da_janela(app, fitas_espiadas):  # noqa: ARG001
@@ -428,8 +427,7 @@ def test_aviso_e_contorno_ficam_abaixo_do_dialogo_interno(app, fitas_espiadas): 
 
 
 def test_alerta_do_app_fica_na_frente_das_preferencias_e_responde_ao_clique(app, fitas_espiadas):  # noqa: ARG001
-    """I6: a camada dos avisos (z 20) fica acima das molduras (z 10): com as Preferências abertas, o clique real no botão do
-    alerta o alcança e o fecha. Antes (z 0) o clique caía nas Preferências e o alerta ficava preso."""
+    """A camada dos avisos (z 20) fica acima das molduras (z 10): com as Preferências abertas, o clique real no botão do alerta o alcança e o fecha."""
     _abrir(app, "session")
     fechados = []
     app.aplicativo.pedir_dialogo("Aviso", "Corpo", [], lambda: fechados.append(1))

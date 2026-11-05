@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""A tela da sessão (D49): o Aplicativo inteiro, `semAgente`, sem nenhum jogo de verdade."""
+"""A tela da sessão: o Aplicativo inteiro, `semAgente`, sem nenhum jogo de verdade."""
 
 import pytest
 from PIL import Image
@@ -71,7 +71,7 @@ def test_camada_cobre_a_barra_e_a_grade(app_qt):
     assert app.achar("barraDeTitulo").property("visible") is False  # a camada cobre a barra também
     assert app.janela.property("telaCheia") is True
     assert app.achar("pagina").property("enabled") is False
-    # Só diálogo aberto recusa o arrasto (`window.py:572`, R7): na sessão a `main` ainda importa o atalho solto.
+    # Só diálogo aberto recusa o arrasto: na sessão ainda se importa o atalho solto.
     assert app.achar("alvoDeSoltar").property("enabled") is True
     assert camada.property("color").alpha() == 235  # rgba(0, 0, 0, 0.92)
     app.fechar()
@@ -93,7 +93,7 @@ def test_teclado_nao_alcanca_a_grade_com_a_sessao(app_qt, lancamentos):
     for tecla in (Qt.Key.Key_Return, Qt.Key.Key_Space, Qt.Key.Key_Tab, Qt.Key.Key_Return, Qt.Key.Key_Tab, Qt.Key.Key_Space):
         _tecla(app, tecla)
         assert app.janela.property("paginaAtual") == "todos"  # nenhum cartão abriu os detalhes
-        # Enter no "Onde eu parei" abre o balão (SES-08), e o foco vai à caixa dele: é da camada, não da grade.
+        # Enter no "Onde eu parei" abre o balão, e o foco vai à caixa dele: é da camada, não da grade.
         assert _foco_dentro_de(app, "camadaDaSessao") or _foco_dentro_de(app, "campoDaAnotacao"), tecla
         assert not _foco_dentro_de(app, "grade"), tecla
         assert not _foco_dentro_de(app, "barraDeTitulo"), tecla
@@ -183,7 +183,7 @@ def test_anotacao_da_sessao_vai_ao_jogo_da_sessao(app_qt):
 
 
 def test_balao_aberto_deixa_o_botao_marcado(app_qt):
-    """M4/M5: o `MenuButton` da `main` fica `:checked` com o balão aberto, e a dica não fica por cima dele."""
+    """O botão fica marcado com o balão aberto, e a dica não fica por cima dele."""
     app = _app()
     _comecar(app)
     botao = app.achar("botaoAnotacaoDaSessao")
@@ -343,11 +343,11 @@ def test_controle_nao_abre_menu_nem_detalhes_na_grade_com_a_sessao(app_qt, lanca
     app.fechar()
 
 
-# -- Auditoria GTK x Qt, pacote D (sessão) ----------------------------------------------------------
+# -- a tela da sessão ----------------------------------------------------------
 
 
 def test_enter_aciona_o_ja_terminei_e_abre_o_balao(app_qt, monkeypatch):
-    """SES-08: o `Gtk.Button` responde a Enter e a Espaço; o `Button` do Qt só respondia a Espaço."""
+    """Enter e Espaço acionam o botão (o `Button` do Qt só responde a Espaço)."""
     app = _app()
     processo = _ProcessoFalso()
     monkeypatch.setattr(ProcessSession, "active", processo)
@@ -365,7 +365,7 @@ def test_enter_aciona_o_ja_terminei_e_abre_o_balao(app_qt, monkeypatch):
 
 
 def test_foco_aberto_pelo_teclado_tem_anel_e_pelo_mouse_nao(app_qt):
-    """SES-07: o anel só vem se o teclado já estava em uso quando o jogo abriu (`grab_focus` depois do clique, na `main`)."""
+    """O anel só vem se o teclado já estava em uso quando o jogo abriu."""
     app = _app()
     _cartao_focado(app)
     _tecla(app, Qt.Key.Key_Right)  # o teclado em uso: a grade mostra o anel do cartão
@@ -387,7 +387,7 @@ def test_foco_aberto_pelo_teclado_tem_anel_e_pelo_mouse_nao(app_qt):
 
 
 def test_botoes_da_camada_sao_os_da_main(app_qt):
-    """SES-04/09/10/12: pílula de 44 com 12 px em negrito e padding 32; relógio e nome em title-1; "Onde eu parei" com a seta."""
+    """Pílula de 44 com 12 px em negrito e padding 32; relógio e nome em title-1; "Onde eu parei" com a seta."""
     app = _app()
     _comecar(app)
     botao, anotar = app.achar("botaoJaTerminei"), app.achar("botaoAnotacaoDaSessao")
@@ -416,12 +416,12 @@ def _nome_de_largura(minimo, maximo):
 
 
 def test_nome_ocupa_a_largura_natural_e_so_quebra_no_limite_da_janela(app_qt):
-    """SES-11: a coluna não é presa a 640; só o logo é. O nome quebra em `largura - 48`."""
+    """A coluna não é presa a 640; só o logo é. O nome quebra em `largura - 48`."""
     app = _app((1, _nome_de_largura(700, 1100), {}))
     app.janela.setWidth(1170)
     _comecar(app)
     nome = app.achar("nomeDaSessao")
-    assert _esperar(lambda: nome.width() > 640)  # antes: coluna presa a min(largura - 48, 640)
+    assert _esperar(lambda: nome.width() > 640)  # a coluna não é presa a min(largura - 48, 640)
     assert nome.property("lineCount") == 1
     app.fechar()
 
@@ -435,7 +435,7 @@ def test_nome_ocupa_a_largura_natural_e_so_quebra_no_limite_da_janela(app_qt):
 
 
 def test_anotacao_da_camada_grava_em_jogo_zerado(app_qt):
-    """SES-16: na `main` a caixa da camada nunca é só leitura; só uma caixa não editável deixa de gravar."""
+    """A caixa da camada nunca é só leitura; só uma caixa não editável deixa de gravar."""
     app = _app((1, "Alfa", {"status": "beaten", "removed": True}))
     assert app.jogos[0].zerado
     _comecar(app)

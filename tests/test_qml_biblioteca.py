@@ -139,7 +139,7 @@ def test_menu_do_popover_usa_as_cores_do_tema(app_qt):
 
 
 def test_submenus_deslizam_no_mesmo_popover_e_voltam(app_qt):
-    """M02: "Filtrar por" e "Ordenar por" trocam a página do mesmo popover, com o cabeçalho "‹ Título" para voltar."""
+    """"Filtrar por" e "Ordenar por" trocam a página do mesmo popover, com o cabeçalho "‹ Título" para voltar."""
     app = _App(_tres())
     menu = app.achar("menuPrincipal")
     menu.open()
@@ -169,7 +169,7 @@ def test_submenus_deslizam_no_mesmo_popover_e_voltam(app_qt):
 
 
 def test_menu_principal_navega_pelo_teclado_e_pelo_controle(app_qt):
-    """M02 com o controle: Enter entra, Esquerda volta, Esc fecha (o controle entrega estas teclas ao item em foco)."""
+    """Com o controle: Enter entra, Esquerda volta, Esc fecha (o controle entrega estas teclas ao item em foco)."""
     app = _App(_tres())
     menu = app.achar("menuPrincipal")
     menu.open()
@@ -312,7 +312,7 @@ def test_aviso_aparece_na_tela_e_desfaz(app_qt, monkeypatch):
 
 
 def test_menu_do_cartao_aponta_para_o_jogo_dele(app_qt):
-    # Do test_menu_do_card.py: o menu continua ligado ao jogo do cartão em que foi aberto.
+    # O menu continua ligado ao jogo do cartão em que foi aberto.
     app = _App(_tres())
     cartoes = {c.property("nome"): c for c in _cartoes(app.achar("grade"))}
     menu = app.achar("menuDoJogo")
@@ -342,7 +342,7 @@ def test_anel_so_por_teclado_e_botoes_so_pelo_ponteiro(app_qt):
         QCoreApplication.sendEvent(app.janela, QKeyEvent(tipo, Qt.Key.Key_Right, Qt.KeyboardModifier.NoModifier))
     _esperar(lambda: grade.property("porTeclado") is True)
     atual = next(c for c in _cartoes(grade) if c.property("focado"))
-    # Como na `main` (`game.py:564`, R7): o teclado acende o anel, mas só o ponteiro e o menu aberto mostram os botões.
+    # O teclado acende o anel, mas só o ponteiro e o menu aberto mostram os botões.
     assert atual.property("nome") == "Beta" and atual.property("mostrarBotoes") is False
     assert _achar(atual, "anelDeFoco").property("ativo") is True
     app.fechar()
@@ -382,14 +382,14 @@ def test_animacao_so_com_autoplay(app_qt, monkeypatch):
     assert _esperar(lambda: animada.property("playing") is True)
     assert animada.property("source").toString() == cartao.property("capaAnimada")
     assert _esperar(lambda: animada.property("visible"))  # a animação carregou e cobre a capa parada
-    # Fora da vista da grade nada toca; a capa para no quadro atual e guarda o arquivo por 30 s (`tocador_capas.py`).
+    # Fora da vista da grade nada toca; a capa para no quadro atual e guarda o arquivo por 30 s.
     cartao.setProperty("naVista", False)
     assert animada.property("playing") is False and animada.property("source").toString() == cartao.property("capaAnimada")
     assert cartao.property("retendo") is True
     # Passados os 30 s (ou além de 8 pausadas) larga o arquivo e volta ao primeiro quadro.
     QMetaObject.invokeMethod(cartao, "liberar", Qt.ConnectionType.DirectConnection)
     assert animada.property("source").toString() == ""
-    # Desligado de novo e sem o mouse: nada toca. Com o mouse em cima, toca mesmo assim (`game_cover.py:531`, C17).
+    # Desligado de novo e sem o mouse: nada toca. Com o mouse em cima, toca mesmo assim.
     cartao.setProperty("naVista", True)
     shared.schema.set_boolean("cover-autoplay", False)
     assert _esperar(lambda: not app.aplicativo.tocarSempre)
@@ -467,7 +467,7 @@ def test_deve_tocar(app_qt, monkeypatch):
     assert _esperar(lambda: animada.property("playing") is True)
     app.janela.showMinimized()
     assert _esperar(lambda: animada.property("playing") is False)
-    # Pausada no quadro atual, com o arquivo guardado por 30 s (C18), e não largada.
+    # Pausada no quadro atual, com o arquivo guardado por 30 s, e não largada.
     assert _cartao.property("retendo") is True and animada.property("source").toString() == _cartao.property("capaAnimada")
     app.janela.showNormal()
     assert _esperar(lambda: animada.property("playing") is True)
@@ -512,8 +512,7 @@ def test_filtrar_com_a_grade_cabendo_na_tela_reavalia_o_autoplay(app_qt, monkeyp
 # --- Controle do Xbox na interface -------------------------------------------------------------
 
 def test_controle_move_a_selecao_e_vibra_na_borda(app_qt):
-    # O `GtkFlowBox` responde que andou mesmo contra a parede (medido com o GTK 4.24 da `main`: `child_focus` devolve True e o
-    # foco fica): na grade a borda vibra o tique leve, não o toque firme.
+    # Na grade, a borda vibra o tique leve, não o toque firme.
     app = _App(_tres())
     grade = app.achar("grade")
     colunas = grade.property("colunas")
@@ -707,7 +706,7 @@ def test_copia_animada_valida_aparece_em_ate_3_s(app_qt, monkeypatch):
 
 
 def test_copia_animada_corrompida_deixa_a_capa_parada_visivel(app_qt, monkeypatch):
-    """Sem o refazer da `main`: a cópia lixo fica, o `AnimatedImage` a tenta e não carrega, e a capa parada segue à vista."""
+    """Sem refazer: a cópia lixo fica, o `AnimatedImage` a tenta e não carrega, e a capa parada segue à vista."""
     from cartridges.utils import copias_animadas  # noqa: PLC0415
 
     app, capa, copia, cartao, animada = _cartao_com_copia(monkeypatch, lixo=True)
@@ -717,7 +716,7 @@ def test_copia_animada_corrompida_deixa_a_capa_parada_visivel(app_qt, monkeypatc
     assert _esperar(lambda: animada.property("source").toString().split("?")[0].endswith(copia.name))
     # ...e, pelo mesmo tempo que a cópia boa leva para aparecer (teste vizinho), não carregou.
     assert not _esperar(lambda: animada.property("visible"), limite=3.0)
-    # A cópia não foi refeita (diferença aceita da `main`) e a capa parada é a capa real, não o espaço vazio.
+    # A cópia não foi refeita e a capa parada é a capa real, não o espaço vazio.
     assert copia.read_bytes() == LIXO
     assert parada.property("source").toString() == cartao.property("capa") != ""
     assert parada.property("source").toString().split("?")[0].endswith(capa.name)
@@ -727,7 +726,7 @@ def test_copia_animada_corrompida_deixa_a_capa_parada_visivel(app_qt, monkeypatc
 
 
 def test_janela_maximizada_volta_maximizada_depois_de_sair_da_frente(app_qt):
-    """Review Focus 4, pelo caminho do app: `sair_da_frente` minimiza, `present()` devolve a janela maximizada."""
+    """Pelo caminho do app: `sair_da_frente` minimiza, `present()` devolve a janela maximizada."""
     app = _App(_tres())
     jogo = app.jogos[0]
     app.ponte.ligar(jogo)
@@ -764,7 +763,7 @@ def test_grade_com_jogos_chegando_depois_mostra_varias_colunas(app_qt):
 
 
 def test_botao_das_tarefas_some_com_modal_no_big_picture_e_na_sessao(app_qt, flush_idle):  # noqa: ARG001
-    """No `Aplicativo.qml` de verdade, com uma tarefa, o botão do canto só pode aparecer sem nada por cima (D77)."""
+    """No `Aplicativo.qml` de verdade, com uma tarefa, o botão do canto só pode aparecer sem nada por cima."""
     from cartridges.modelos import tarefas  # noqa: PLC0415
 
     app = _App(_tres())
@@ -778,7 +777,7 @@ def test_botao_das_tarefas_some_com_modal_no_big_picture_e_na_sessao(app_qt, flu
         app.aplicativo.pedir_dialogo("Aviso", "Corpo", [], lambda: fechados.append(1))
         assert _esperar(lambda: app.janela.property("modalAberto") is True)
         assert botao.property("pode") is False
-        app.achar("dialogoDeErros").fechar()  # o "Dispensar": a resposta volta pela fila da D72
+        app.achar("dialogoDeErros").fechar()  # o "Dispensar": a resposta volta pela fila
         assert _esperar(lambda: botao.property("pode") is True)
         assert fechados == [1]
 
@@ -823,7 +822,7 @@ def test_itens_de_ano_tem_o_nome_do_grupo(app_qt):
         app.fechar()
 
 
-# -- Auditoria GTK x Qt, pacote A: grade, cartão, busca, atalhos, estados vazios e tarefas ---------------------------
+# -- grade, cartão, busca, atalhos, estados vazios e tarefas --------------------------------------------------
 
 
 def _tecla(app, tecla, modificadores=Qt.KeyboardModifier.NoModifier, texto=""):
@@ -836,7 +835,7 @@ def _tecla(app, tecla, modificadores=Qt.KeyboardModifier.NoModifier, texto=""):
 
 
 def test_grade_tem_o_passo_e_o_cartao_da_main(app_qt):
-    """G01-G04, C06: passo de 218x365 (200+6+12, 347+6+12), cartão de 200x347 com rodapé de 47, a 18 do topo."""
+    """Passo de 218x365 (200+6+12, 347+6+12), cartão de 200x347 com rodapé de 47, a 18 do topo."""
     app = _App(_tres())
     app.janela.resize(1170, 795)
     _esperar()
@@ -852,7 +851,7 @@ def test_grade_tem_o_passo_e_o_cartao_da_main(app_qt):
 
 
 def test_espaco_abre_e_tecla_menu_nao_abre(app_qt):
-    """G09, G11: Espaço abre os detalhes como o Enter; a tecla Menu e Shift+F10 não abrem nada (R7)."""
+    """Espaço abre os detalhes como o Enter; a tecla Menu e Shift+F10 não abrem nada."""
     app = _App(_tres())
     grade = app.achar("grade")
     grade.forceActiveFocus()
@@ -868,7 +867,6 @@ def test_espaco_abre_e_tecla_menu_nao_abre(app_qt):
 
 
 def test_tab_percorre_os_cartoes(app_qt):
-    """G10."""
     app = _App(_tres())
     grade = app.achar("grade")
     grade.forceActiveFocus()
@@ -882,7 +880,7 @@ def test_tab_percorre_os_cartoes(app_qt):
 
 
 def test_digitar_com_o_foco_num_botao_da_barra_abre_a_busca(app_qt):
-    """G12: o `key-capture-widget` é a página inteira (o Espaço não conta: aciona o botão)."""
+    """A captura de teclas é a página inteira (o Espaço não conta: aciona o botão)."""
     app = _App(_tres())
     botao = app.achar("botaoMenu")
     botao.forceActiveFocus(Qt.FocusReason.TabFocusReason)
@@ -890,12 +888,12 @@ def test_digitar_com_o_foco_num_botao_da_barra_abre_a_busca(app_qt):
     _tecla(app, Qt.Key.Key_G, texto="g")
     assert app.achar("pagina").property("buscaAberta") is True
     assert app.achar("campoDeBusca").property("text") == "g"
-    assert _esperar(lambda: app.todos.busca == "g")  # depois dos 150 ms do `GtkSearchEntry`
+    assert _esperar(lambda: app.todos.busca == "g")  # depois dos 150 ms de espera
     app.fechar()
 
 
 def test_busca_espera_150_ms_e_o_enter_aplica_na_hora(app_qt):
-    """S04, S03: o filtro espera; Enter aplica; o botão de limpar só existe com texto."""
+    """O filtro espera; Enter aplica; o botão de limpar só existe com texto."""
     app = _App(_tres())
     app.achar("pagina").setProperty("buscaAberta", True)
     campo = app.achar("campoDeBusca")
@@ -908,12 +906,11 @@ def test_busca_espera_150_ms_e_o_enter_aplica_na_hora(app_qt):
     assert app.todos.busca == "Beta"
     QMetaObject.invokeMethod(campo, "accepted", Qt.ConnectionType.DirectConnection)
     assert app.todos.busca == "Gama"
-    assert _esperar(lambda: app.achar("barraDeBusca").property("height") == 46)  # S01: 6 + 34 + 6 (CSS 2853)
+    assert _esperar(lambda: app.achar("barraDeBusca").property("height") == 46)  # 6 + 34 + 6
     app.fechar()
 
 
 def test_esc_e_alt_esquerda_voltam_de_jogos_zerados(app_qt):
-    """N01, N02."""
     from PySide6.QtTest import QTest  # noqa: PLC0415
 
     app = _App(_tres())
@@ -930,7 +927,7 @@ def test_esc_e_alt_esquerda_voltam_de_jogos_zerados(app_qt):
 
 
 def test_a_barra_de_titulo_acende_a_linha_com_a_grade_rolada(app_qt):
-    """B02: `sombraDaBarra` segue o `contentY` da grade (o topo é -topMargin, não 0)."""
+    """`sombraDaBarra` segue o `contentY` da grade (o topo é -topMargin, não 0)."""
     app = _App(_jogos(*[(n, f"Jogo {n:03}", {}) for n in range(1, 61)]))
     grade = app.achar("grade")
     _esperar()
@@ -943,7 +940,7 @@ def test_a_barra_de_titulo_acende_a_linha_com_a_grade_rolada(app_qt):
 
 
 def test_roda_do_mouse_anda_por_mola_ate_o_destino_e_nao_passa_dos_limites(app_qt):
-    """G06: cada entalhe soma 120 px ao destino; a mola assenta nele (sem repique) e para no topo."""
+    """Cada entalhe soma 120 px ao destino; a mola assenta nele (sem repique) e para no topo."""
     from PySide6.QtCore import Q_ARG  # noqa: PLC0415
 
     app = _App(_jogos(*[(n, f"Jogo {n:03}", {}) for n in range(1, 61)]))
@@ -961,7 +958,7 @@ def test_roda_do_mouse_anda_por_mola_ate_o_destino_e_nao_passa_dos_limites(app_q
 
 
 def test_cartao_halo_carregando_e_botoes_da_main(app_qt):
-    """C01, C09, C11, C13, C14: halo só com atualização, capa some carregando, botões de 34 sem dica própria."""
+    """Halo só com atualização, capa some carregando, botões de 34 sem dica própria."""
     jogos = _tres()
     jogos[0].loading = 1
     jogos[1].track_updates = True
@@ -976,14 +973,13 @@ def test_cartao_halo_carregando_e_botoes_da_main(app_qt):
     assert _achar(por_nome["Gama"], "capaParada").parentItem().property("opacity") == 1
     jogar = _achar(por_nome["Gama"], "botaoJogar")
     assert (jogar.width(), jogar.height()) == (34, 34) and jogar.property("dica") == "Jogar"
-    assert _achar(jogar, "dica") is None  # a `main` não tem dica nos botões do cartão
+    assert _achar(jogar, "dica") is None  # os botões do cartão não têm dica
     mais = _achar(por_nome["Gama"], "botaoMais")
     assert mais.x() == 200 - 34 - 6 and mais.y() == 6
     app.fechar()
 
 
 def test_estado_vazio_e_aviso_de_soltar_da_main(app_qt):
-    """V01-V03, L01."""
     app = _App([])
     assert app.achar("estadoVazio").property("iconeDoApp") is True
     assert abs(app.achar("avisoDeSoltar").property("color").alphaF() - 0.88) < 0.01
@@ -998,7 +994,7 @@ def test_estado_vazio_e_aviso_de_soltar_da_main(app_qt):
 
 
 def test_botao_das_tarefas_da_main(app_qt):
-    """K01-K04, B15: osd de 34, giro de 1,2 s e a dica da libadwaita."""
+    """Osd de 34, giro de 1,2 s e a dica."""
     app = _App(_tres())
     assert app.achar("giroDasTarefas").property("duration") == 1200
     circulo = app.achar("circuloDasTarefas")
@@ -1009,7 +1005,7 @@ def test_botao_das_tarefas_da_main(app_qt):
 
 
 def test_a_linha_da_rolagem_e_uma_so_abaixo_da_busca_aberta(app_qt):
-    """S01/B02: com a busca aberta a linha (`undershoot-top`) fica sob ela e a da barra de título apaga; nunca duas."""
+    """Com a busca aberta a linha do topo fica sob ela e a da barra de título apaga; nunca duas."""
     app = _App(_jogos(*[(n, f"Jogo {n:03}", {}) for n in range(1, 61)]))
     grade = app.achar("grade")
     _esperar()
@@ -1023,7 +1019,7 @@ def test_a_linha_da_rolagem_e_uma_so_abaixo_da_busca_aberta(app_qt):
 
 
 def test_roda_real_do_mouse_aciona_a_mola_e_o_teclado_a_cancela(app_qt):
-    """G06: um evento de roda de verdade chega ao `WheelHandler`; mover a rolagem por fora (Tab, setas) para a mola."""
+    """Um evento de roda de verdade chega ao `WheelHandler`; mover a rolagem por fora (Tab, setas) para a mola."""
     from PySide6.QtCore import QCoreApplication, QPoint, QPointF  # noqa: PLC0415
     from PySide6.QtGui import QWheelEvent  # noqa: PLC0415
 
@@ -1053,7 +1049,7 @@ def test_roda_real_do_mouse_aciona_a_mola_e_o_teclado_a_cancela(app_qt):
 
 
 def test_o_limite_de_8_capas_pausadas_e_global(app_qt):
-    """C18: como `MAX_PAUSADAS_ABERTAS` da `main`, o limite vale para todas as grades juntas (um só registro)."""
+    """O limite de pausadas abertas vale para todas as grades juntas (um só registro)."""
     motor = QQmlEngine()
     componente = QQmlComponent(motor)
     componente.setData(
@@ -1080,7 +1076,7 @@ def _nome_do_atual(menu):
 
 
 def test_setas_so_andam_pelos_itens_da_pagina_atual(app_qt):
-    """New-1: os itens das outras páginas são ocultos e desabilitados; nem ↓ nem o controle os alcançam."""
+    """Os itens das outras páginas são ocultos e desabilitados; nem ↓ nem o controle os alcançam."""
     app = _App(_tres())
     menu = app.achar("menuPrincipal")
     menu.open()
@@ -1102,7 +1098,7 @@ def test_setas_so_andam_pelos_itens_da_pagina_atual(app_qt):
 
 
 def test_trocar_de_pagina_nao_fecha_o_popover(app_qt):
-    """New-2: o clique e o Enter nos itens de navegação trocam a página sem passar por fechado."""
+    """O clique e o Enter nos itens de navegação trocam a página sem passar por fechado."""
     from PySide6.QtCore import QPointF  # noqa: PLC0415
     from PySide6.QtTest import QTest  # noqa: PLC0415
 
@@ -1129,7 +1125,7 @@ def test_trocar_de_pagina_nao_fecha_o_popover(app_qt):
 
 
 def test_push_durante_a_saida_animada_nao_e_apagado(app_qt):
-    """Round 3: um `empurrar` com a saída em curso termina a saída na hora e a página nova fica (depth 1, estado dos detalhes)."""
+    """Um `empurrar` com a saída em curso termina a saída na hora e a página nova fica (depth 1, estado dos detalhes)."""
     from PySide6.QtCore import Q_ARG  # noqa: PLC0415
 
     app = _App(_tres())
@@ -1146,7 +1142,7 @@ def test_push_durante_a_saida_animada_nao_e_apagado(app_qt):
 
 
 def test_soltar_atalho_fica_desligado_com_a_confirmacao_da_pagina_do_jogo(app_qt):
-    """m1: o alvo de soltar segue `modalAberto` (que inclui as confirmações da página do jogo)."""
+    """O alvo de soltar segue `modalAberto` (que inclui as confirmações da página do jogo)."""
     from PySide6.QtCore import Q_ARG  # noqa: PLC0415
 
     app = _App(_tres())
@@ -1176,7 +1172,7 @@ def test_o_botao_do_menu_principal_abre_e_fecha_o_menu(app_qt):
 
 
 def test_voltar_com_o_menu_principal_aberto_nao_volta_de_pagina(app_qt):
-    """m2: a tecla Voltar é do menu aberto; Alt+← o fecha ao voltar, e ele não fica sobre a outra página."""
+    """A tecla Voltar é do menu aberto; Alt+← o fecha ao voltar, e ele não fica sobre a outra página."""
     from PySide6.QtTest import QTest  # noqa: PLC0415
 
     app = _App(_tres())
@@ -1198,7 +1194,7 @@ def test_voltar_com_o_menu_principal_aberto_nao_volta_de_pagina(app_qt):
 
 
 def test_poucos_jogos_ficam_a_esquerda_da_grade(app_qt):
-    """Medido na `main`: a grade fica centrada pelas colunas que cabem, e não pelos jogos que há."""
+    """A grade fica centrada pelas colunas que cabem, e não pelos jogos que há."""
     app = _App(_tres())
     app.janela.show()
     grade = app.achar("grade")

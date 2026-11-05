@@ -2,12 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Backup da biblioteca e Zona de perigo nas Preferências (Task 7 do plano 8a, D80).
-
-Os que tinham par no GTK vieram de `test_saves_ui.py` e de `test_redefinir.py` (mesmos nomes). Nada de verdade: o
-Ludusavi é falso (`disponivel` trocado), o `exportar`/`validar` são falsos, o reinício só anota e o `FileDialog`
-nunca abre (os slots recebem a URL).
-"""
+"""Backup da biblioteca e Zona de perigo nas Preferências. Nada de verdade: o Ludusavi é falso (`disponivel` trocado), `exportar`/`validar` são falsos, o reinício só anota e o `FileDialog` nunca abre (os slots recebem a URL)."""
 
 import gc
 import threading
@@ -155,7 +150,7 @@ def test_preferencias_com_ludusavi_mostram_as_linhas(montar):
 
 
 def test_subtitulo_da_pasta_dos_saves_no_formato_do_windows_e_com_e_comercial(montar):
-    """O `&` e o `/` do caminho aparecem como o Windows os mostra, em texto puro (Review Focus 3)."""
+    """O `&` e o `/` do caminho aparecem como o Windows os mostra, em texto puro."""
     shared.schema.set_string("pasta-dos-saves", "D:/Saves & Cia")
     _p, pagina = montar()
     linha = pagina.achar("linhaPastaDosSaves")
@@ -221,7 +216,7 @@ def test_restaurar_saves_some_sem_o_ludusavi_e_o_grupo_fica_com_as_outras_linhas
 
 
 def test_grupo_some_quando_nenhuma_linha_aparece_e_volta_com_uma(app_qt):
-    """D58: o grupo conta as linhas pela regra (`aparece`); sem nenhuma ele some, e com uma ele volta."""
+    """O grupo conta as linhas pela regra (`aparece`); sem nenhuma ele some, e com uma ele volta."""
     motor = QQmlEngine()
     from cartridges.modelos.provedor_de_icones import ProvedorDeIcones  # noqa: PLC0415
     motor.addImageProvider("icone", ProvedorDeIcones())
@@ -251,7 +246,7 @@ def test_pasta_padrao_apaga_usar_a_padrao(montar, monkeypatch, flush_idle):
     p, pagina = montar()
     linha = pagina.achar("linhaPastaDosSaves")
     assert p.backup.pastaPadrao is True
-    # P38: a linha não é ativável; "Usar a padrão" e "Escolher" são botões de verdade.
+    # A linha não é ativável; "Usar a padrão" e "Escolher" são botões de verdade.
     usar, escolher = pagina.achar("linhaPastaDosSavesBotaoSecundario"), pagina.achar("linhaPastaDosSavesBotao")
     assert usar.property("text") == "Usar a padrão" and escolher.property("text") == "Escolher"
     assert usar.property("enabled") is False
@@ -645,7 +640,7 @@ def test_redefinir_que_nao_consegue_agendar_avisa(monkeypatch, modelo, aplicativ
 # endregion
 
 
-# region D106: sem duas execuções e sem cortar a exportação
+# region Sem duas execuções e sem cortar a exportação
 
 
 @pytest.fixture(autouse=True)
@@ -766,7 +761,7 @@ def test_tarefa_da_exportacao_termina_com_o_modelo_morto(monkeypatch, aplicativo
 # endregion
 
 
-# region D110/D111: exportação que falha ou prende com o app fechando
+# region Exportação que falha ou prende com o app fechando
 
 PRESA = (
     "Não foi possível exportar",

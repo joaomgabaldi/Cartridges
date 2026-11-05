@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""A janela "Jogando {nome}" da sessão manual (D50, R3): sem moldura (barra própria), 360x200, canto da área de trabalho."""
+"""A janela "Jogando {nome}" da sessão manual: sem moldura (barra própria), 360x200, canto da área de trabalho."""
 
 import json
 import os
@@ -66,7 +66,7 @@ def test_titulo_e_tamanho_fixo(app_qt, monkeypatch):
 
 
 def test_barra_propria_de_47_com_titulo_minimizar_e_fechar_e_o_botao_no_resto(app_qt, monkeypatch):
-    """SES-01/02/03/04: a `Adw.HeaderBar` da `main` (47 px, título centrado, sem maximizar) e o botão pílula no meio do resto."""
+    """Barra de 47 px, título centrado, sem maximizar, e o botão pílula no meio do resto."""
     monkeypatch.setattr(modulo, "_posicionar", lambda *a: None)
     app = _app(monkeypatch)
     janela = _abrir(app)
@@ -85,7 +85,7 @@ def test_barra_propria_de_47_com_titulo_minimizar_e_fechar_e_o_botao_no_resto(ap
 
 
 def test_enter_no_botao_da_janela_encerra_a_sessao(app_qt, monkeypatch, isolado):
-    """SES-08: Enter aciona o botão da janela (o `Gtk.Button` responde a Enter e a Espaço)."""
+    """Enter aciona o botão da janela."""
     monkeypatch.setattr(modulo, "_posicionar", lambda *a: None)
     app = _app(monkeypatch)
     janela = _abrir(app)
@@ -210,7 +210,7 @@ def test_queda_para_a_manual_mantem_a_camada_e_um_relogio_so(app_qt, monkeypatch
 
 
 def test_fechar_a_principal_com_a_manual_aberta_sai_e_grava(app_qt, monkeypatch, isolado):
-    """Como na `main`: o app sai; o `encerrar()` grava o tempo no jogo e uma linha no histórico.
+    """O app sai; o `encerrar()` grava o tempo no jogo e uma linha no histórico.
 
     O `quit()` de verdade está no teste `test_quit_real_com_a_manual_aberta_encerra_antes_de_fechar_as_janelas`."""
     monkeypatch.setattr(modulo, "_posicionar", lambda *a: None)
@@ -231,7 +231,7 @@ def test_fechar_a_principal_com_a_manual_aberta_sai_e_grava(app_qt, monkeypatch,
 
 
 def test_closing_da_manual_depois_do_encerrar_nao_roda_o_fim_normal(app_qt, monkeypatch, isolado):
-    """I1: no `quit()` o Qt fecha a janela "Jogando" depois do `encerrar()`; o `closing` dela não faz nada."""
+    """No `quit()` o Qt fecha a janela "Jogando" depois do `encerrar()`; o `closing` dela não faz nada."""
     monkeypatch.setattr(modulo, "_posicionar", lambda *a: None)
     # Registrados, e não `pytest.fail`: num slot chamado pelo QML a exceção é engolida.
     chamadas = []
@@ -325,7 +325,7 @@ print(json.dumps({"codigo": codigo, "ordem": ordem, "playtime": jogo.playtime}))
 
 
 def test_quit_real_com_a_manual_aberta_encerra_antes_de_fechar_as_janelas():
-    """I1: o `quit()` de verdade (Alt+F4 na principal). O Qt fecha as janelas dentro do `QEvent.Quit`, antes
+    """O `quit()` de verdade (Alt+F4 na principal). O Qt fecha as janelas dentro do `QEvent.Quit`, antes
     do `aboutToQuit`; o `encerrar()` vem antes delas, e o fim normal da sessão não roda."""
     ambiente = {**os.environ, "QT_QPA_PLATFORM": "offscreen"}
     resultado = subprocess.run(
@@ -336,10 +336,10 @@ def test_quit_real_com_a_manual_aberta_encerra_antes_de_fechar_as_janelas():
     saida = json.loads(resultado.stdout.strip().splitlines()[-1])
     assert saida["codigo"] == 0
     ordem = saida["ordem"]
-    # R4: a janela "Jogando" estava aberta (junto com a principal) quando o fechamento começou.
+    # A janela "Jogando" estava aberta (junto com a principal) quando o fechamento começou.
     assert ordem[ordem.index("principal.close") - 1] == ["antes", ["", "Jogando Alfa"]]
     depois = ordem[ordem.index("principal.close") + 1 :]
-    # R1: no `saindo` só a gravação; a parede e as fitas vêm no `aboutToQuit`, com as janelas já fora da tela.
+    # No `saindo` só a gravação; a parede e as fitas vêm no `aboutToQuit`, com as janelas já fora da tela.
     assert depois == [["record", 42], "aboutToQuit", ["restaurar", []], ["fechar", []]]
     assert saida["playtime"] == 42
 
@@ -431,7 +431,7 @@ print(json.dumps({"codigo": codigo, "ordem": ordem, "na_tela": conquista_aviso.n
     ("com", ["Jogando Alfa", "aviso", "principal"]),
 ])  # fmt: skip
 def test_fechar_a_principal_com_o_aviso_na_tela_encerra_o_app(sessao, antes):
-    """I1 da revisão final do plano 6: o aviso (janela de topo sem dono, D59) não segura o app aberto."""
+    """O aviso (janela de topo sem dono) não segura o app aberto."""
     ambiente = {**os.environ, "QT_QPA_PLATFORM": "offscreen"}
     resultado = subprocess.run(
         [sys.executable, "-c", _SAIDA_COM_O_AVISO, sessao], cwd=RAIZ, env=ambiente, capture_output=True,

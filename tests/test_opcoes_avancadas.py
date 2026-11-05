@@ -2,12 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""O grupo "Opções avançadas" do Editar: appID da Steam e jogo no Ludusavi.
-
-Só a regra (`cartridges.edicao`). Os casos de tela (subtítulos da linha do
-Ludusavi, botão de busca do appID, campo em erro) voltam com o diálogo Qt, nas
-Tasks 6 e 9 do plano 3.
-"""
+"""O grupo "Opções avançadas" do Editar: appID da Steam e jogo no Ludusavi (só a regra, `cartridges.edicao`)."""
 
 import pytest
 

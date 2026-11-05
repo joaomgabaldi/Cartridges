@@ -65,7 +65,7 @@ def test_esc_volta_e_foca_o_cartao(app_qt):
     grade = app.achar("grade")
     assert _esperar(lambda: grade.property("activeFocus") is True)
     assert grade.property("currentIndex") == 2
-    assert grade.property("porTeclado") is True  # o anel volta com o cartão, como no `:focus-visible` da `main`
+    assert grade.property("porTeclado") is True  # o anel volta com o cartão
     assert app.detalhes.jogoId == "imported_3"  # o modelo ainda guarda; o que importa é que parou de seguir
     assert app.detalhes._jogo is None  # noqa: SLF001
     app.fechar()
@@ -386,7 +386,7 @@ def _app_com_atualizacao(monkeypatch):
 
 
 def test_voce_instalou_a_atualizacao_foco_padrao_e_ja_instalei(app_qt, monkeypatch):
-    """Como a `main`: o padrão é "Já instalei" (`set_default_response("confirm")`); ele esconde a faixa."""
+    """O padrão é "Já instalei"; ele esconde a faixa."""
     app, dialogo, _abertos = _app_com_atualizacao(monkeypatch)
     assert dialogo.property("corpo") == "A página da atualização foi aberta no navegador. Confirme após instalá-la para ocultar o aviso."
     assert dialogo.property("rotuloConfirmar") == "Já instalei" and dialogo.property("rotuloCancelar") == "Ainda não"
@@ -402,7 +402,7 @@ def test_voce_instalou_a_atualizacao_foco_padrao_e_ja_instalei(app_qt, monkeypat
 
 @pytest.mark.parametrize("tecla", [None, Qt.Key.Key_Escape])
 def test_voce_instalou_a_atualizacao_ainda_nao_nao_descarta(app_qt, monkeypatch, tecla):
-    """"Ainda não" e Esc (o `set_close_response("cancel")` da `main`) não descartam; a faixa segue viva."""
+    """"Ainda não" e Esc não descartam; a faixa segue viva."""
     app, dialogo, abertos = _app_com_atualizacao(monkeypatch)
     if tecla is None:
         _clicar(app, _achar(dialogo, "botaoCancelarDoDialogo"))
@@ -433,7 +433,7 @@ def test_closing_the_notes_popover_saves_the_text(app_qt):
 
 
 def test_voltar_pelo_mouse_com_o_balao_aberto_grava_a_anotacao(app_qt):
-    """O botão Voltar do mouse com o balão aberto volta à biblioteca sem perder o que foi digitado (revisão final, I1).
+    """O botão Voltar do mouse com o balão aberto volta à biblioteca sem perder o que foi digitado.
 
     Alt+← não chega ao atalho com o balão aberto; o clique do mouse fecha o balão e volta no mesmo gesto."""
     app = _App(_jogos((1, "Alfa", {"status": "playing"})))
@@ -451,7 +451,7 @@ def test_voltar_pelo_mouse_com_o_balao_aberto_grava_a_anotacao(app_qt):
 
 
 def test_a_anotacao_nao_aparece_no_meio_das_informacoes(app_qt):
-    """A anotação se lê só no balão do botão: o bloco com o texto no meio das informações saiu (pedido de 18/10/2026)."""
+    """A anotação se lê só no balão do botão: o bloco com o texto no meio das informações saiu."""
     app = _App(_jogos((1, "Alfa", {"status": "playing", "notes": "Cofre: 8815"})))
     pagina = _abrir_pelo_cartao(app)
     balao = _achar(pagina, "balaoDaAnotacao")
@@ -486,7 +486,7 @@ def test_capa_ilegivel_na_pagina_mostra_a_capa_padrao(app_qt):
     app.fechar()
 
 
-# -- Auditoria GTK x Qt, pacote B: a página de detalhes como a da `main` --------------------------------------------
+# -- a página de detalhes --------------------------------------------
 
 
 def _centro(item):
@@ -494,7 +494,7 @@ def _centro(item):
 
 
 def test_a_pagina_vira_coluna_ate_850(app_qt):
-    """DE-06: o `Adw.Breakpoint (max-width: 850px)`: capa de 280 em cima, tudo numa coluna."""
+    """Abaixo de 850 px: capa de 280 em cima, tudo numa coluna."""
     app = _App(_tres())
     pagina = _abrir_pelo_cartao(app)
     app.janela.resize(1000, 795)
@@ -515,7 +515,7 @@ def test_a_pagina_vira_coluna_ate_850(app_qt):
 
 
 def test_barra_de_acao_botoes_de_34_e_jogar_de_44(app_qt):
-    """DE-03, DE-04, DE-05: "Jogar" é uma pílula de 44; os redondos, 34x34, a 15 do "Jogar" e a 6 entre si."""
+    """"Jogar" é uma pílula de 44; os redondos, 34x34, a 15 do "Jogar" e a 6 entre si."""
     app = _App(_tres())
     pagina = _abrir_pelo_cartao(app)
     jogar, editar, remover, buscar = (_achar(pagina, n) for n in ("botaoJogarDaPagina", "botaoEditar", "botaoRemover", "botaoBuscarDaPagina"))
@@ -525,13 +525,13 @@ def test_barra_de_acao_botoes_de_34_e_jogar_de_44(app_qt):
     x = lambda item: item.mapToScene(item.boundingRect().topLeft()).x()  # noqa: E731
     assert round(x(editar) - (x(jogar) + jogar.property("width"))) == 15
     assert round(x(remover) - (x(editar) + 34)) == 6
-    # Os ícones são os da `main` (Adwaita), não glifos da Segoe.
+    # Os ícones são os do aplicativo (Adwaita), não glifos da Segoe.
     assert (editar.property("icone"), remover.property("icone"), buscar.property("icone")) == ("document-edit", "user-trash", "system-search")
     app.fechar()
 
 
 def test_jogar_usa_o_texto_e_o_fundo_invertidos_por_tema(app_qt):
-    """DE-02: branco sobre preto a 80% no claro; preto a 80% sobre branco no escuro."""
+    """Branco sobre preto a 80% no claro; preto a 80% sobre branco no escuro."""
     app = _App(_tres())
     pagina = _abrir_pelo_cartao(app)
     jogar = _achar(pagina, "botaoJogarDaPagina")
@@ -546,7 +546,7 @@ def test_jogar_usa_o_texto_e_o_fundo_invertidos_por_tema(app_qt):
 
 
 def test_o_foco_inicial_so_tem_anel_quando_a_entrada_foi_pelo_teclado(app_qt):
-    """DE-26: abrir com o mouse põe o foco em "Jogar" sem o anel (`:focus-visible`); com o teclado, com ele."""
+    """Abrir com o mouse põe o foco em "Jogar" sem o anel; com o teclado, com ele."""
     app = _App(_tres())
     pagina = _abrir_pelo_cartao(app)  # pelo clique
     jogar = _achar(pagina, "botaoJogarDaPagina")
@@ -563,7 +563,7 @@ def test_o_foco_inicial_so_tem_anel_quando_a_entrada_foi_pelo_teclado(app_qt):
 
 
 def test_o_balao_da_anotacao_abre_centrado_no_botao_e_cresce_para_os_dois_lados(app_qt):
-    """DE-31, DE-32: centrado no botão (com seta), e a largura anda o dobro do mouse (`FATOR_DA_LARGURA`)."""
+    """Centrado no botão (com seta), e a largura anda o dobro do mouse (`FATOR_DA_LARGURA`)."""
     app = _App(_jogos((1, "Alfa", {"status": "playing"})))
     pagina = _abrir_pelo_cartao(app)
     botao = _achar(pagina, "botaoAnotacao")
@@ -581,7 +581,7 @@ def test_o_balao_da_anotacao_abre_centrado_no_botao_e_cresce_para_os_dois_lados(
 
 
 def test_o_titulo_do_menu_de_buscas_e_um_rotulo_de_secao_e_o_menu_e_um_popover_com_seta(app_qt):
-    """DE-17: "Buscar em…" não é um item apagado; o menu abre centrado no botão, com seta."""
+    """"Buscar em…" não é um item apagado; o menu abre centrado no botão, com seta."""
     app = _App(_tres())
     pagina = _abrir_pelo_cartao(app)
     botao = _achar(pagina, "botaoBuscarDaPagina")
@@ -597,7 +597,7 @@ def test_o_titulo_do_menu_de_buscas_e_um_rotulo_de_secao_e_o_menu_e_um_popover_c
 
 
 def test_jogar_tem_hover_visivel_nos_dois_temas(app_qt):
-    """I4/DE-03/Q2: o véu do hover é `currentColor` a 10% (o texto do botão), nos dois temas, não um branco fixo.
+    """O véu do hover é `currentColor` a 10% (o texto do botão), nos dois temas, não um branco fixo.
 
     O offscreen não aceita trocar o esquema de cores (`setColorScheme` fica em Unknown), então o escuro é provado pelo
     que o véu usa: a `corDoTexto`, que no escuro é preto a 80% (`test_jogar_usa_o_texto_e_o_fundo_invertidos_por_tema`),
@@ -619,7 +619,7 @@ def test_jogar_tem_hover_visivel_nos_dois_temas(app_qt):
 
 
 def test_barra_transparente_com_o_fundo_por_baixo_so_nos_detalhes(app_qt):
-    # `Adw.ToolbarView details_view_toolbar_view`: barra plana sobre a capa desfocada; nas outras páginas, a barra de sempre.
+    # Barra plana sobre a capa desfocada; nas outras páginas, a barra de sempre.
     app = _App(_tres())
     barra = app.achar("barraDeTitulo")
     assert barra.property("transparente") is False
@@ -648,8 +648,8 @@ def test_fundo_da_barra_acompanha_o_deslize_da_pagina(app_qt):
 
 
 def test_barra_antiga_fica_ate_a_pagina_nova_cobrir(app_qt):
-    """Na `main` a barra é da página: a de Todos fica intacta onde os Detalhes ainda não chegaram, e a barra nova
-    (transparente, com a seta de voltar) entra com a página. Antes, a barra inteira trocava no `push`.
+    """A barra é da página: a de Todos fica intacta onde os Detalhes ainda não chegaram, e a barra nova
+    (transparente, com a seta de voltar) entra com a página.
 
     Os testes rodam sem animações (o `push` acaba na hora): o deslize é o `avancoDaPilha`, posto a andar devagar."""
     from PySide6.QtQuick import QQuickItem  # noqa: PLC0415
@@ -688,7 +688,7 @@ def test_barra_antiga_fica_ate_a_pagina_nova_cobrir(app_qt):
 
 
 def test_rotulos_da_pagina_tem_a_linha_de_17_px_da_main(app_qt):
-    # Segoe UI de 12 px: o Pango da `main` dá 17 px por linha (o Qt, 16); a coluna inteira ficava 14 px mais baixa.
+    # Segoe UI de 12 px: a linha tem 17 px; sem isso a coluna inteira ficaria 14 px mais baixa.
     app = _App(_tres())
     pagina = _abrir_pelo_cartao(app)
     app.detalhes._mesclar({"desenvolvedora": "Estúdio", "descricao": "palavra " * 200})  # noqa: SLF001
@@ -702,7 +702,7 @@ def test_rotulos_da_pagina_tem_a_linha_de_17_px_da_main(app_qt):
 
 
 def test_abrir_o_app_e_os_alertas_nao_gera_binding_loop(app_qt):
-    """V7: `MolduraDoDialogo._alturaBase` e `DialogoDeAlerta.altura` (largura do layout lida de dentro da altura pedida)."""
+    """`MolduraDoDialogo._alturaBase` e `DialogoDeAlerta.altura` (largura do layout lida de dentro da altura pedida)."""
     from PySide6.QtCore import qInstallMessageHandler  # noqa: PLC0415
 
     mensagens = []

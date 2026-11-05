@@ -2,8 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""O grupo "Atualizações" da página Geral das Preferências (D82). Vieram de `test_buscar_atualizacoes_ui.py` os dois
-primeiros testes (mesmos nomes). Nada de verdade: a release é falsa e o instalador, o guarda do conftest."""
+"""O grupo "Atualizações" da página Geral das Preferências. Nada de verdade: a release é falsa e o instalador, o guarda do conftest."""
 
 import types
 
@@ -47,7 +46,7 @@ def test_linha_mostra_a_versao_atual(janela):
     linha = janela.achar("linhaBuscarAtualizacoes")
     assert linha.property("titulo") == "Buscar atualizações"
     assert linha.property("subtitulo") == f"Versão atual: {shared.VERSION}"
-    # P39: a linha não aciona nada; o botão "Buscar" é que responde.
+    # A linha não aciona nada; o botão "Buscar" é que responde.
     assert janela.achar("linhaBuscarAtualizacoesBotao").property("text") == "Buscar"
     assert janela.achar("grupoAtualizacoes").property("titulo") == "Atualizações"
 
@@ -89,7 +88,7 @@ def test_buscar_fica_apagado_enquanto_busca(janela, monkeypatch, tmp_path):
     _clicar_em_buscar(janela)
 
     assert janela.atualizador.buscando is True
-    # Só o botão apaga (como na `main`), não a linha inteira.
+    # Só o botão apaga, não a linha inteira.
     assert botao.property("enabled") is False
     assert linha.property("enabled") is True
     assert len(pendentes) == 1

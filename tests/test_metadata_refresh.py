@@ -2,16 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Checks for the whole-library metadata refresh.
-
-The run is deliberately owned by :mod:`cartridges.metadata_refresh` rather than
-by the preferences dialog, so the two halves are tested apart: the queue and
-its counters on one side, and on the other that the dialog reflects them —
-including a dialog opened in the middle of a run, which is the case that broke
-when the state lived in the dialog::
-
-    python3 -m pytest tests/test_metadata_refresh.py
-"""
+"""Whole-library metadata refresh: the queue and its counters, and the preferences view of them."""
 
 import subprocess
 import sys
@@ -76,8 +67,7 @@ def make_game(genre=None, appid=None):
 
 
 def complete_game(**overrides):
-    """A game every source has already answered for, so a test only has to say
-    what is missing about it."""
+    """A game every source has answered for; a test says only what is missing."""
     game = make_game(genre="Metroidvania", appid="367520")
     game.developer = "Team Cherry"
     game.release_date = "Fev 2017"
@@ -112,12 +102,7 @@ def refresh(monkeypatch):
 
 
 def drive(refresh_obj, managers, tags=None):
-    """Run the queue synchronously, skipping the prefetch thread.
-
-    The queued games are put in the store first: the refresh only saves a game
-    the library still holds, so a queue of games nobody knows about would be
-    walked without a single record being written.
-    """
+    """Run the queue synchronously; games go into the store first, since the refresh only saves games the library holds."""
     from cartridges import shared  # noqa: PLC0415
 
     for game in refresh_obj._queue:  # pylint: disable=protected-access
@@ -201,8 +186,7 @@ def test_a_fully_looked_up_game_needs_nothing(refresh) -> None:
 
 
 def test_each_source_is_asked_for_separately(refresh) -> None:
-    """One game short of its completion times and another short of its genre
-    must not drag each other's lookups along."""
+    """A game short of completion times and another short of genre must not drag each other's lookups."""
     only_hltb = complete_game(hltb_main=0, hltb_chapters=None)
     only_steam = complete_game(genre=None)
 
@@ -227,13 +211,7 @@ def test_an_older_stamp_brings_the_game_back_once(refresh) -> None:
 
 
 def test_legitimately_empty_fields_are_not_treated_as_gaps(refresh) -> None:
-    """The trap this design exists to avoid.
-
-    Fresh from the API, 29 of 30 games carry no gamepad recommendation and 5 no
-    controller support. Reading those as work to do would put nearly the whole
-    library back in the queue on every single run, and "only what is missing"
-    would cost exactly what "fetch everything" costs.
-    """
+    """Fresh from the API most games lack gamepad/controller data; reading that as work would requeue the whole library every run."""
     for field in ("gamepad_recommended", "controller_support", "metacritic", "steam_review"):
         game = complete_game(**{field: None if field != "gamepad_recommended" else False})
         assert refresh.needs_steam(game) is False, field
@@ -244,9 +222,7 @@ def test_fraction_is_zero_before_anything_starts(refresh) -> None:
 
 
 def test_a_wiped_library_is_not_written_back(refresh, monkeypatch) -> None:
-    """Resetting the app clears the store and deletes the records. A refresh
-    still walking its own list of Game objects used to save every one of them
-    afterwards, putting the games the user had just deleted back on disk."""
+    """A refresh still walking its list after a reset must not save the deleted games back to disk."""
     from cartridges import shared  # noqa: PLC0415
 
     monkeypatch.setattr(refresh, "_finish", lambda: None)
@@ -265,8 +241,7 @@ def test_a_wiped_library_is_not_written_back(refresh, monkeypatch) -> None:
 
 
 def test_a_reimported_game_is_not_overwritten(refresh) -> None:
-    """Same id, different record: writing this one over it would undo the
-    import that replaced it."""
+    """Same id, different record: writing it would undo the import that replaced it."""
     from cartridges import shared  # noqa: PLC0415
 
     game = make_game()
@@ -298,9 +273,7 @@ def _esperar_a_prefetch(antes):
 
 
 def test_prefetch_failure_does_not_wedge_the_run(refresh, monkeypatch) -> None:
-    """The prefetch thread is the only thing that schedules the queue. Anything
-    escaping it left `running` True with no queue behind it, and no refresh
-    could ever be started again."""
+    """Anything escaping the prefetch thread left `running` True, blocking every later refresh."""
     from cartridges import metadata_refresh, shared  # noqa: PLC0415
     from cartridges.store.managers.hltb_manager import HLTBManager  # noqa: PLC0415
     from cartridges.store.managers.steam_api_manager import (  # noqa: PLC0415
@@ -326,14 +299,12 @@ def test_prefetch_failure_does_not_wedge_the_run(refresh, monkeypatch) -> None:
     assert refresh.start([make_game(appid="440")]) is True
     _esperar_a_prefetch(antes)
 
-    # The queue was scheduled anyway, with the same empty mapping a failed bulk
-    # request produces — every genre left exactly as it is.
+    # A failed bulk request yields the same empty mapping: every genre stays as it is.
     assert scheduled and scheduled[-1][1] == {}
 
 
 def test_prefetch_stringifies_a_numeric_appid(refresh, monkeypatch) -> None:
-    """A hand-edited record can hold the appid unquoted, and the manager looks
-    the tags up under `str(appid)`."""
+    """A hand-edited record can hold the appid unquoted; the manager looks tags up under `str(appid)`."""
     from cartridges import metadata_refresh, shared  # noqa: PLC0415
     from cartridges.store.managers.hltb_manager import HLTBManager  # noqa: PLC0415
     from cartridges.store.managers.steam_api_manager import (  # noqa: PLC0415
@@ -402,8 +373,7 @@ def test_row_starts_idle(preferences) -> None:
 
 
 def test_dialog_opened_mid_run_shows_the_current_position(preferences) -> None:
-    """The case this whole split exists for: close the dialog at game 12 of 47,
-    reopen it, and the bar must still say 12 of 47."""
+    """Close the dialog at game 12 of 47, reopen it: the bar must still say 12 of 47."""
     from cartridges.modelos.preferencias import Preferencias  # noqa: PLC0415
 
     _modelo, refresh = preferences
@@ -450,8 +420,7 @@ def test_finishing_returns_the_row_to_idle(preferences) -> None:
 
 
 def test_closed_dialog_stops_following_the_run(preferences) -> None:
-    """The handler holds the view alive, so it has to go on close — and a stale
-    view must not keep reacting to a run it no longer shows."""
+    """The handler holds the view alive, so it goes on close; a stale view must not react to later runs."""
     modelo, refresh = preferences
     modelo.fechar()
     alterados = _contar(modelo.biblioteca)
@@ -464,8 +433,7 @@ def test_closed_dialog_stops_following_the_run(preferences) -> None:
 
 
 def test_row_is_insensitive_when_both_sources_are_off(preferences) -> None:
-    """Both managers no-op with their setting off, so the button would walk the
-    whole library and change nothing."""
+    """Both managers no-op with their setting off, so the button would walk the library and change nothing."""
     from cartridges import shared  # noqa: PLC0415
 
     modelo, _refresh = preferences
@@ -524,14 +492,7 @@ def test_metadata_refresh_sem_gi() -> None:
 
 
 def test_only_missing_runs_just_the_sources_each_game_needs(refresh) -> None:
-    """The four cases, in one run.
-
-    A is short of its completion times, B of its controller support, C of its
-    genre and D of its developer. A must cost one HowLongToBeat lookup and no
-    Steam requests; B, C and D must cost the Steam lookup and no HowLongToBeat
-    search. B is the one field emptiness cannot detect on its own — it is an
-    older stamp that brings it back.
-    """
+    """A (times) costs one HowLongToBeat lookup; B (controller support), C (genre), D (developer) cost Steam only. B shows only through the older stamp."""
     from cartridges import shared  # noqa: PLC0415
 
     game_a = complete_game(hltb_main=0)
@@ -575,8 +536,7 @@ def test_fetch_everything_ignores_what_is_already_there(refresh) -> None:
 
 
 def test_steam_stays_ahead_of_hltb_when_both_run(refresh) -> None:
-    """HowLongToBeat searches by title, and the Steam lookup is what corrects
-    it — selecting sources per game must not reorder them."""
+    """HowLongToBeat searches by title and the Steam lookup corrects it: per-game source selection must not reorder them."""
     game = complete_game(developer=None, hltb_main=0)
     steam, hltb = FakeManager(), FakeManager()
     refresh._managers = [steam, hltb]  # pylint: disable=protected-access
@@ -593,9 +553,7 @@ def test_a_game_needing_nothing_gets_no_lookups(refresh) -> None:
 
 
 def test_fetch_everything_forces_the_completion_times_too(refresh) -> None:
-    """The HowLongToBeat manager declines to look up a game that already has
-    times unless told otherwise, so without the flag "fetch everything" would
-    quietly skip them — an option that fetches all but one thing."""
+    """HowLongToBeat skips games that already have times unless told otherwise, so "fetch everything" needs the flag."""
     from cartridges import shared  # noqa: PLC0415
 
     game = complete_game()
@@ -613,8 +571,7 @@ def test_fetch_everything_forces_the_completion_times_too(refresh) -> None:
 
 
 def test_only_missing_never_forces_them(refresh) -> None:
-    """There the games with times are not queued for HowLongToBeat at all, so
-    forcing a refetch would only be a way to spend requests."""
+    """In only-missing mode games with times are not queued for HowLongToBeat, so forcing a refetch would waste requests."""
     from cartridges import shared  # noqa: PLC0415
 
     game = complete_game(hltb_main=0)
@@ -642,10 +599,7 @@ def _fully_looked_up(stamp):
 
 @pytest.mark.parametrize("stamp", [None, "", [], {}, object(), "abc"])
 def test_an_unreadable_version_stamp_reads_as_unchecked(refresh, stamp) -> None:
-    """`needs_steam` runs inside a comprehension over the whole library, on the
-    main thread. `None < 2` raising there stopped the scope dialog opening at
-    all, for every game, because of one bad record. Anything unreadable is
-    treated as "never looked up", which only costs a lookup."""
+    """`needs_steam` runs over the whole library on the main thread: one unreadable stamp must not raise; it counts as "never looked up"."""
     assert refresh.needs_steam(_fully_looked_up(stamp)) is True
 
 
@@ -653,9 +607,7 @@ def test_an_unreadable_version_stamp_reads_as_unchecked(refresh, stamp) -> None:
 def test_a_readable_stamp_is_honoured_whatever_its_type(
     refresh, as_type, expected
 ) -> None:
-    """A number written as a string is still a number. Derived from the
-    constant, not spelled out, so bumping the version cannot leave this test
-    quietly asserting the old one."""
+    """A number written as a string is still a number; derived from the constant so a version bump cannot leave it stale."""
     from cartridges.utils.steam import STEAM_METADATA_VERSION  # noqa: PLC0415
 
     stamp = as_type(STEAM_METADATA_VERSION)
@@ -684,10 +636,7 @@ def test_a_usable_stamp_still_short_circuits(refresh) -> None:
 
 
 def test_only_missing_mode_fills_gaps_without_reverting_edits() -> None:
-    """Auditoria 26/08, A3: o modo escolhia quais JOGOS entravam na fila mas
-    aplicava o dict inteiro — nome e desenvolvedora editados à mão voltavam
-    para os da Steam. Campo editável só preenche vazio; os não-editáveis
-    (Metacritic etc.) continuam sempre atualizados."""
+    """Only-missing fills only empty editable fields (name, developer); non-editable ones (Metacritic etc.) always update."""
     from cartridges.store.managers.steam_api_manager import _keep_user_edits
 
     game = SimpleNamespace(

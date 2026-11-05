@@ -2,11 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""As Novidades (D83): o `NewsChecker`, a lógica de tela `Novidades` e o botão, o selo e a página no `Aplicativo.qml`.
-
-Nada de verdade: o `fetch_news` é falso (a rede também é recusada pelo `sem_rede`), o navegador é o guarda
-`_sem_navegador` (abaixo: `abrir_url` anota em vez de abrir) e os timers do checker são parados antes e depois de cada teste.
-"""
+"""As Novidades: o `NewsChecker`, a lógica de tela `Novidades` e o botão, o selo e a página no `Aplicativo.qml`, com tudo falso: `fetch_news`, o navegador (`_sem_navegador`: `abrir_url` anota) e os timers do checker, parados antes e depois de cada teste."""
 
 import subprocess
 import sys
@@ -33,7 +29,7 @@ _ULTIMA = "news-last-seen-ts"
 
 @pytest.fixture(autouse=True)
 def _checkers_parados(monkeypatch):
-    """Os timers dos checkers criados no teste param antes e depois (lição c do plano 7)."""
+    """Os timers dos checkers criados no teste param antes e depois."""
     criados = []
     original = NewsChecker.__init__
 
@@ -187,7 +183,7 @@ def test_intervalo_enorme_nao_estoura_o_temporizador(app_qt, feed):
 
 
 def test_resultado_da_busca_depois_do_stop_e_descartado(app_qt, feed):
-    """Review Focus 3: a busca em voo que chega depois do `stop()` só solta a trava."""
+    """A busca em voo que chega depois do `stop()` só solta a trava."""
     feed.posts = [post(200)]
     checker = NewsChecker()
     emitidos = []
@@ -252,7 +248,7 @@ def test_datas_relativas_refeitas_ao_abrir(app_qt, monkeypatch):
     assert novidades.posts[0]["subtitulo"].startswith("hoje")
 
     datas[0] = "ontem"
-    # DA-37: a página voltar a ficar à vista não refaz a lista (recolheria as linhas abertas); abrir refaz.
+    # A página voltar a ficar à vista não refaz a lista (recolheria as linhas abertas); abrir refaz.
     novidades.paginaVisivel(True)
     assert novidades.posts[0]["subtitulo"].startswith("hoje")
     novidades.abrir()
@@ -325,7 +321,7 @@ def test_atualizar_com_o_feed_parado_nao_deixa_aviso_eterno(app_qt, feed):
 
 
 def test_atualizar_com_busca_em_voo_e_chave_desligada_nao_deixa_aviso_eterno(app_qt, monkeypatch):
-    """Review final: busca em voo + chave desligada + "Atualizar" antes do fim: a busca abandonada nunca responderia."""
+    """Busca em voo + chave desligada + "Atualizar" antes do fim: a busca abandonada nunca responderia."""
     soltar = threading.Event()
     monkeypatch.setattr(news_checker, "fetch_news", lambda: soltar.wait(10) and [])
     novidades, fila = _tela()
@@ -534,7 +530,7 @@ def test_carregando_mostra_o_indicador(janela):
 
 
 def test_post_com_tags_aparece_em_texto_puro(janela, feed):
-    """Review Focus 2: o feed é de terceiros; `&`, `<b>` e `<a href>` aparecem como estão."""
+    """O feed é de terceiros; `&`, `<b>` e `<a href>` aparecem como estão."""
     resumo_do_feed = 'Veja <a href="x">aqui</a> & <i>já</i>'
     feed.posts = [post(200, titulo="Tom & <b>Jerry</b>", resumo=resumo_do_feed, url="https://x/1")]
     _abrir_a_pagina(janela)
@@ -613,7 +609,7 @@ def test_sem_novidades_no_contexto_o_botao_fica_oculto_sem_erro(app_qt, monkeypa
 
 
 def test_posts_que_chegam_com_a_pagina_aberta_nao_puxam_o_foco(janela):
-    """DA-36: refazer a lista não leva o foco à primeira linha (a `main` não o move; o Tab já entra nela)."""
+    """Refazer a lista não leva o foco à primeira linha; o Tab já entra nela."""
     checker = janela.checker
     checker._running = True  # noqa: SLF001
     _abrir_a_pagina(janela)
@@ -627,8 +623,7 @@ def test_posts_que_chegam_com_a_pagina_aberta_nao_puxam_o_foco(janela):
 
 
 def test_reabrir_a_pagina_mantem_as_linhas_expandidas(janela, feed):
-    """DA-37 (I3): a `main` mantém as linhas até os posts mudarem; a página daqui é destruída ao voltar, então o estado
-    mora no modelo. Expandir, voltar e reabrir devolve a linha aberta; posts novos zeram."""
+    """As linhas abertas ficam no modelo (a página é destruída ao voltar): expandir, voltar e reabrir devolve a linha aberta; posts novos zeram."""
     feed.posts = [post(200, titulo="Alfa", resumo="Texto", url="https://x/1"), post(100, titulo="Beta")]
     _abrir_a_pagina(janela)
     assert esperar(lambda: len(_posts_na_lista(janela)) == 2)
@@ -654,7 +649,7 @@ def _clique_em(raiz, nome):
 
 
 def test_clique_na_linha_abrir_no_navegador_abre_o_endereco(janela, feed, _sem_navegador):
-    """I7 (DA-33): a linha inteira "Abrir no navegador" é ativável; o navegador de verdade nunca abre (`abrir_url` anota)."""
+    """A linha inteira "Abrir no navegador" é ativável; o navegador de verdade nunca abre (`abrir_url` anota)."""
     feed.posts = [post(200, titulo="Alfa", resumo="Texto", url="https://x/1")]
     _abrir_a_pagina(janela)
     assert esperar(lambda: len(_posts_na_lista(janela)) == 1)
@@ -667,7 +662,7 @@ def test_clique_na_linha_abrir_no_navegador_abre_o_endereco(janela, feed, _sem_n
 
 
 def test_controle_alcanca_o_link_da_linha_aberta_e_o_a_o_abre(janela, feed, monkeypatch):
-    # M3 do pacote G: ↑/↓ chegam ao "Abrir no navegador" e o A age nele, em vez de recolher a linha.
+    # ↑/↓ chegam ao "Abrir no navegador" e o A age nele, em vez de recolher a linha.
     abertos = []
     monkeypatch.setattr(janela.novidades, "abrirNoNavegador", abertos.append, raising=False)
     feed.posts = [post(200, titulo="Alfa"), post(100, titulo="Beta")]

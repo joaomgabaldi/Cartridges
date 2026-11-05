@@ -2,11 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""A iluminação inteligente nas Preferências: o interruptor, o brilho, a cor do app, o teste e o brilho por dispositivo.
-
-Os que tinham par no GTK vieram de `test_session_fita_preferencias.py` (mesmos nomes). Nenhuma fita de verdade: a
-prévia, o arranque e o `aplicar` são espiões, e o `sem_fita_de_verdade` do conftest falha alto se algo escapar.
-"""
+"""A iluminação inteligente nas Preferências: o interruptor, o brilho, a cor do app, o teste e o brilho por dispositivo. Nenhuma fita de verdade: a prévia, o arranque e o `aplicar` são espiões, e o `sem_fita_de_verdade` do conftest falha alto se algo escapar."""
 
 import gc
 import subprocess
@@ -136,8 +132,7 @@ def test_ligar_grava_a_chave_antes_de_arrancar(p, arranques):
 
 
 def test_abrir_nao_acende_nem_grava_alem_do_previsto(app_qt, monkeypatch):  # noqa: ARG001
-    """Review Focus 1: com fitas, o recurso ligado e uma escolha de monitor antiga (pelo nome), abrir não chama
-    `reacender`, `previa` nem `aplicar`, e o registro só muda em `session-monitor` (regravado pelo caminho)."""
+    """Com fitas, o recurso ligado e uma escolha de monitor antiga (pelo nome), abrir não chama `reacender`, `previa` nem `aplicar`, e o registro só muda em `session-monitor` (regravado pelo caminho)."""
     _com_fitas("Centro", "Direita")
     shared.schema.set_boolean("session-fita", True)
     shared.schema.set_boolean("playtime-tracking", True)
@@ -215,7 +210,7 @@ def test_brilho_mostra_na_hora(p, previas):
 
 
 def test_fechar_depois_de_uma_previa_nao_mexe_nas_fitas(app_qt, previas):  # noqa: ARG001
-    """P53: a `main` só devolve a cor no balão do pulso e nos diálogos internos; fechar as Preferências não."""
+    """Só o balão do pulso e os diálogos internos devolvem a cor do app; fechar as Preferências não."""
     modelo = Preferencias(None, lambda: True)
     modelo.abrir()
     modelo.fitas.definirBrilho(30)
@@ -254,7 +249,7 @@ def test_o_teste_nao_escreve_em_tela_ja_fechada(app_qt, monkeypatch, teste_preso
 
 
 def test_resultado_do_teste_sobrevive_ao_fechar_do_assistente_das_fitas(app_qt, monkeypatch, teste_preso):  # noqa: ARG001
-    """P57: o resultado fica até as Preferências fecharem, mesmo depois do assistente (`recontar`)."""
+    """O resultado fica até as Preferências fecharem, mesmo depois do assistente (`recontar`)."""
     _com_fitas()
     monkeypatch.setattr(session_fita, "aplicar", lambda *_a: True)
     modelo = Preferencias(None, lambda: True)
@@ -268,7 +263,7 @@ def test_resultado_do_teste_sobrevive_ao_fechar_do_assistente_das_fitas(app_qt, 
 
 
 def test_resultado_do_teste_depois_de_fechar_nao_levanta(app_qt, monkeypatch, teste_preso, previas):  # noqa: ARG001
-    """Review Focus 2: fechar e coletar a tela com o teste na rede; a entrega que chega depois não levanta nem reabre."""
+    """Fechar e coletar a tela com o teste na rede; a entrega que chega depois não levanta nem reabre."""
     _com_fitas()
     monkeypatch.setattr(session_fita, "aplicar", lambda *_a: True)
     modelo = Preferencias(None, lambda: True)
@@ -457,7 +452,7 @@ def _textos_com_formato(raiz):
 
 
 def test_nome_da_fita_em_texto_puro(app):
-    """Review Focus 3: o nome da fita aparece como está, sem virar marcação."""
+    """O nome da fita aparece como está, sem virar marcação."""
     nome = "<b>Sala</b> & Cia"
     session_fita.gravar_fitas([session_fita.Fita(nome, "eb0", "192.0.2.10", "k", brilho=70)])
     shared.schema.set_boolean("session-fita", True)
@@ -507,7 +502,7 @@ def test_brilho_por_dispositivo_foco_no_salvar_tab_e_esc(app, flush_idle):
     QMetaObject.invokeMethod(botao, "click", Qt.ConnectionType.DirectConnection)
     dialogo = app.achar("dialogoDoBrilhoPorDispositivo")
     assert _esperar(lambda: dialogo.property("visible") is True)
-    # P64: o `Adw.Dialog` da `main` não tem resposta padrão; o foco abre no primeiro controle, o Cancelar.
+    # Sem resposta padrão: o foco abre no primeiro controle, o Cancelar.
     cancelar = app.achar("botaoCancelarDoBrilho")
     assert _esperar(lambda: cancelar.hasActiveFocus())
     caixas = {app.achar("brilhoDoDispositivo-eb0Caixa"), app.achar("brilhoDoDispositivo-eb1Caixa")}

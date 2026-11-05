@@ -25,7 +25,7 @@ def test_preferencia_vai_para_o_schema(com_3d_falso):
 
 
 def test_textos_da_linha(com_3d_falso):
-    # O texto fixo da linha vai ao QML (Task 2); aqui, que o modelo não põe o aviso de 3D quando há 3D.
+    # O texto fixo da linha vai ao QML; aqui, que o modelo não põe o aviso de 3D quando há 3D.
     p = com_3d_falso()
     assert p.estado["subtituloSem3d"] == ""
 
@@ -58,7 +58,7 @@ def test_som_vai_para_o_schema(com_3d_falso):
 
 
 def test_textos_da_linha_do_som(com_3d_falso):
-    # Título e subtítulo fixos vão ao QML (Task 2); aqui, o som segue ativo com 3D.
+    # Título e subtítulo fixos vão ao QML; aqui, o som segue ativo com 3D.
     assert com_3d_falso().estado["somDoBigPictureAtivo"]
 
 
