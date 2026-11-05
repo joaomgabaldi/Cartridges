@@ -628,7 +628,7 @@ from cartridges import app as m, conquista_aviso, shared
 from cartridges.utils import janela_por_cima, session_fita, session_wallpaper
 from PySide6.QtCore import QTimer
 
-m.session_fita = SimpleNamespace(abrir=lambda: None, fechar=lambda: None)
+m.session_fita = SimpleNamespace(migrar_roxo_antigo=lambda: None, abrir=lambda: None, fechar=lambda: None)
 m.session_wallpaper = SimpleNamespace(restaurar_orfaos=lambda: None)
 m.restauracao = SimpleNamespace(existe=lambda: True)  # sem a importação automática da abertura
 # A pasta de dados vazia mostraria o assistente da primeira abertura (D86) no lugar da principal.

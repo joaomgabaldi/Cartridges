@@ -892,7 +892,7 @@ if single_instance.nomes()[0] == "Local\\io.github.joaomgabaldi.Cartridges.Singl
 single_instance.present_running_instance = lambda: None
 shared.schema.set_boolean("auto-import", False)
 shared.schema.set_boolean("gamepad", False)
-modulo_app.session_fita = SimpleNamespace(abrir=lambda: None, fechar=lambda: None)
+modulo_app.session_fita = SimpleNamespace(migrar_roxo_antigo=lambda: None, abrir=lambda: None, fechar=lambda: None)
 modulo_app.session_wallpaper = SimpleNamespace(restaurar_orfaos=lambda: None)
 # A pasta de dados vazia mostraria o assistente da primeira abertura (D86) no lugar da principal.
 modulo_app.assistente.precisa_mostrar = lambda: False
