@@ -26,6 +26,7 @@ from requests.exceptions import HTTPError, SSLError, Timeout
 from cartridges import shared
 from cartridges.jogo import Jogo
 from cartridges.store.managers.async_manager import AsyncManager
+from cartridges.store.managers.emulador_manager import EmuladorManager
 from cartridges.utils.name_cleaner import clean_for_search
 from cartridges.utils.steam import (
     STEAM_METADATA_VERSION,
@@ -61,6 +62,7 @@ class SteamAPIManager(AsyncManager):
     Com appid conhecido consulta o appdetails direto e o guarda; sem ele (atalhos) resolve o nome e só adota um resultado inequívoco: "The Outer Worlds" fica abaixo da sequência na busca da Steam. Falhas deixam o jogo intacto.
     """
 
+    run_after = (EmuladorManager,)
     retryable_on = (HTTPError, SSLError, RequestsConnectionError, Timeout)
 
     steam_api_helper: SteamAPIHelper = None

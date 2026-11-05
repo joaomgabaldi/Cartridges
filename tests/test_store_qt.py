@@ -20,6 +20,11 @@ from cartridges.store.managers.manager import Manager
 # O que a versão anterior (GTK) grava para um jogo novo com estes campos. Escrito à mão de propósito: se um padrão
 # ou uma chave mudar, o arquivo do jogo deixa de ser o mesmo para a versão anterior.
 _FICHA_GTK = {
+    "appid_manual": False,
+    "idioma_proprio": "",
+    "idiomas_steam": None,
+    "inis": None,
+    "nome_proprio": "",
     "added": 1_700_000_000,
     "backup_dos_saves_desligado": False,
     "blacklisted": False,

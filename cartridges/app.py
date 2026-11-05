@@ -60,6 +60,8 @@ from cartridges.modelos.tarefas import PainelDasTarefas
 from cartridges.ponte import Ponte
 from cartridges.saves import backup_de_saves
 from cartridges.store.managers import async_manager
+from cartridges.store.managers.aplicacao_dos_inis_manager import AplicacaoDosInisManager
+from cartridges.store.managers.emulador_manager import EmuladorManager
 from cartridges.store.managers.exibicao_manager import ExibicaoManager
 from cartridges.store.managers.file_manager import FileManager
 from cartridges.store.managers.hltb_manager import HLTBManager
@@ -312,7 +314,9 @@ def _abrir(app: AplicacaoQt, argv: list[str], abertura: _Abertura) -> int | None
     modelo.ligar_store(shared.store)
     carregados = carregar_jogos_do_disco(shared.store)
 
+    shared.store.add_manager(EmuladorManager())
     shared.store.add_manager(SteamAPIManager())
+    shared.store.add_manager(AplicacaoDosInisManager())
     shared.store.add_manager(HLTBManager())
     shared.store.add_manager(SgdbManager())
     shared.store.toggle_manager_in_pipelines(FileManager, True)
