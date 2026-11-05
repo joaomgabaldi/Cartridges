@@ -20,6 +20,7 @@ from PIL import Image, UnidentifiedImageError
 from cartridges import shared
 from cartridges.conquistas import fontes, historico
 from cartridges.emuladores import aplicacao, idiomas, ini
+from cartridges.emuladores import varredura as varredura_dos_inis
 from cartridges.errors.friendly_error import FriendlyError
 from cartridges.jogo import STATUS_LABELS, Jogo
 from cartridges.store.managers.sgdb_manager import SgdbManager
@@ -338,11 +339,18 @@ def saiu_da_store(jogo: Optional[Jogo]) -> bool:
 
 
 def _aplicar_inis_em_thread(jogo: Jogo) -> None:
-    """O idioma e o nome do jogo valem já: a gravação nos .ini toca o disco, então sai da thread principal."""
+    """O idioma e o nome do jogo valem já: a gravação nos .ini toca o disco, então sai da thread principal.
+
+    Com os .ini por procurar (jogo novo, executável trocado), procura antes e adota o AppID deles.
+    """
+    procurar = jogo.inis is None
 
     def tarefa() -> None:
         try:
-            aplicacao.aplicar_no_jogo(jogo)
+            if procurar:
+                varredura_dos_inis.procurar_jogo(jogo)
+            else:
+                aplicacao.aplicar_no_jogo(jogo)
         except Exception:  # noqa: BLE001
             logging.exception("Falha ao aplicar o idioma e o nome em %s", jogo.name)
 
@@ -411,6 +419,8 @@ def aplicar(form: Formulario, jogo: Optional[Jogo], appid_inicial: str) -> Resul
         jogo.update_values(dict(hltb))
     executavel_mudou = form.executavel != (jogo.executable or "")
     jogo.executable = form.executavel
+    if executavel_mudou:
+        jogo.inis = None  # os da pasta antiga não valem: procurados de novo no fim
     jogo.run_as_admin = form.admin
     jogo.track_process = _rastrear(form)
     jogo.process_executable = form.executavel_do_processo.strip()
@@ -478,7 +488,7 @@ def aplicar(form: Formulario, jogo: Optional[Jogo], appid_inicial: str) -> Resul
         if (verificador := getattr(shared.aplicativo, "verificador_de_atualizacoes", None)) is not None:
             verificador.check_async()
 
-    if proprios_antes != (jogo.idioma_proprio, jogo.nome_proprio):
+    if jogo.inis is None or proprios_antes != (jogo.idioma_proprio, jogo.nome_proprio):
         _aplicar_inis_em_thread(jogo)
 
     if form.capa is None and (sgdb := shared.store.managers.get(SgdbManager)) is not None:

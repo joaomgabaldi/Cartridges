@@ -752,3 +752,31 @@ def test_appid_do_campo_intocado_nao_liga_appid_manual(edicao, store, sgdb):
     game = jogo(store, 61, steam_appid="620")
     _aplicar(edicao, game)
     assert game.appid_manual is False
+
+
+@pytest.fixture
+def inis_na_hora(edicao, monkeypatch):
+    """A thread dos .ini roda no `start`; registra o que ela fez."""
+    from cartridges.emuladores import aplicacao, varredura  # noqa: PLC0415
+
+    feitos = []
+    monkeypatch.setattr(
+        edicao, "threading", SimpleNamespace(Thread=lambda target, **_k: SimpleNamespace(start=target))
+    )
+    monkeypatch.setattr(varredura, "procurar_jogo", lambda j: feitos.append(("procurar", j.inis)))
+    monkeypatch.setattr(aplicacao, "aplicar_no_jogo", lambda j: feitos.append(("aplicar", j.inis)))
+    return feitos
+
+
+def test_trocar_o_executavel_zera_os_inis_e_procura(edicao, store, sgdb, inis_na_hora):
+    game = jogo(store, 63, executable="a.exe", inis=["C:/a/steam_emu.ini"])
+    _aplicar(edicao, game, nome="Outro")
+    assert game.inis == ["C:/a/steam_emu.ini"] and inis_na_hora == []  # sem troca, nada a procurar
+    _aplicar(edicao, game, executavel="b.exe")
+    assert game.inis is None and inis_na_hora == [("procurar", None)]
+
+
+def test_jogo_com_inis_por_procurar_procura_ao_aplicar(edicao, store, sgdb, inis_na_hora):
+    game = jogo(store, 64, executable="a.exe")
+    _aplicar(edicao, game, nome="Outro")
+    assert inis_na_hora == [("procurar", None)]

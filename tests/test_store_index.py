@@ -332,6 +332,7 @@ def test_packaged_command_is_refreshed_when_the_aumid_changes(store, make_game, 
     stored = seed(
         make_game(game_id=A_ID, executable="explorer.exe shell:AppsFolder\\Old_h!App")
     )
+    stored.inis = ["C:/Old/steam_emu.ini"]
 
     store.add_game(
         make_game(game_id=A_ID, executable="explorer.exe shell:AppsFolder\\New_h!App"),
@@ -340,6 +341,7 @@ def test_packaged_command_is_refreshed_when_the_aumid_changes(store, make_game, 
 
     assert stored.executable == "explorer.exe shell:AppsFolder\\New_h!App"
     assert stored.saves == 1
+    assert stored.inis is None  # os .ini da pasta antiga são procurados de novo
 
 
 def test_packaged_command_may_degrade_to_the_shortcut_fallback(store, make_game, seed):

@@ -336,6 +336,7 @@ class Store(QObject):
             "Updating the launch command for %s (%s)", game.name, game.game_id
         )
         stored_game.executable = game.executable
+        stored_game.inis = None  # os .ini da pasta antiga não valem: o próximo play procura de novo
         return True
 
     def _index_shortcut(self, game: Jogo) -> None:
