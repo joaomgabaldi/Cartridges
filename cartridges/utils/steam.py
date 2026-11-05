@@ -27,6 +27,7 @@ from typing import Callable, Optional, TypedDict
 from requests.exceptions import HTTPError, RequestException
 
 from cartridges import shared
+from cartridges.emuladores import idiomas
 from cartridges.utils.download import get_capped
 from cartridges.utils.rate_limiter import RateLimiter
 from cartridges.utils.steam_genre import pick_genre
@@ -80,6 +81,8 @@ class SteamAPIData(TypedDict, total=False):
     controller_support: str
     gamepad_recommended: bool
     description: str
+    # Códigos Steam dos idiomas do jogo (`cartridges.emuladores.idiomas`); ausente se a resposta não os traz.
+    idiomas_steam: list[str]
 
 
 class SteamRateLimiter(RateLimiter):
@@ -315,6 +318,8 @@ class SteamAPIHelper:
             raise SteamNotAGameError()
 
         values = self.parse_app_data(app_data)
+        if isinstance(app_data.get("supported_languages"), str):
+            values["idiomas_steam"] = idiomas.do_appdetails(app_data["supported_languages"])
 
         # `skip_genre` deixa a chave de fora para o `update_values` não tocar no campo: cair no gênero amplo trocaria um "Metroidvania" por "Ação" quando a requisição de tags falhou.
         if not skip_genre and (genre := self.get_genre(appid, app_data, tag_ids)):
