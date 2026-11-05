@@ -135,13 +135,13 @@
     </key>
     <!-- A cor das fitas de LED quando não há jogo correndo — a "cor do app".
          Matiz de 0 a 359 e saturação de 0 a 1000, como o módulo Tuya conta; o
-         brilho continua sendo o brilho padrão acima. O padrão é o ciano do
-         Kyron (#22D3EE), e é para ele que o botão de voltar leva. -->
+         brilho continua sendo o brilho padrão acima. O padrão é o azul do
+         Kyron (#158AFF), e é para ele que o botão de voltar leva. -->
     <key name="fita-matiz-app" type="i">
-      <default>188</default>
+      <default>210</default>
     </key>
     <key name="fita-saturacao-app" type="i">
-      <default>857</default>
+      <default>918</default>
     </key>
     <!-- Fazer as fitas de LED acompanharem o app e a sessão. Desligado até que
          haja fita configurada: sem chave local não há como falar com elas. -->

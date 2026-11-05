@@ -39,8 +39,8 @@ from cartridges.utils.ler_json import ler_json
 if TYPE_CHECKING:
     from cartridges.game import Game
 
-# Matiz e saturação do #22D3EE, o ciano do Kyron: o padrão da "cor do app" (a das fitas sem jogo), trocável nas Preferências. O brilho é do usuário.
-COR_PADRAO_DO_APP = (188, 857)
+# Matiz e saturação do #158AFF, o azul do Kyron: o padrão da "cor do app" (a das fitas sem jogo), trocável nas Preferências. O brilho é do usuário.
+COR_PADRAO_DO_APP = (210, 918)
 # O padrão de antes do Kyron (#9141ac): só ele e o "Restaurar padrão" antigo gravavam (284, 620); a amostra roxa da paleta grava (285, 622).
 ROXO_ANTIGO = (284, 620)
 
@@ -1006,12 +1006,12 @@ def salvar_tom_do_app(matiz: int, saturacao: int) -> None:
 
 
 def redefinir_tom_do_app() -> None:
-    """Volta a cor do app ao ciano de fábrica."""
+    """Volta a cor do app ao azul de fábrica."""
     salvar_tom_do_app(*COR_PADRAO_DO_APP)
 
 
 def migrar_roxo_antigo() -> None:
-    """Quem ficou com o roxo de fábrica de antes do Kyron passa ao ciano; outra cor não muda."""
+    """Quem ficou com o roxo de fábrica de antes do Kyron passa ao azul; outra cor não muda."""
     if tom_do_app() == ROXO_ANTIGO:
         salvar_tom_do_app(*COR_PADRAO_DO_APP)
 

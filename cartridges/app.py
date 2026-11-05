@@ -381,7 +381,7 @@ def _abrir(app: AplicacaoQt, argv: list[str], abertura: _Abertura) -> int | None
     # Um app morto no meio da sessão (ou a máquina desligada) não devolveu o papel de parede: desfaz agora.
     session_wallpaper.restaurar_orfaos()
     # Desfaz o que uma execução anterior deixou nas fitas e acende na cor do app (numa thread), antes do QML, que segura a thread principal por um ou dois segundos.
-    session_fita.migrar_roxo_antigo()  # antes de acender: o roxo de antes do Kyron vira o ciano
+    session_fita.migrar_roxo_antigo()  # antes de acender: o roxo de antes do Kyron vira o azul
     session_fita.abrir()
     motor.load(QUrl.fromLocalFile(str(_RAIZ / "qml" / "Aplicativo.qml")))
     if not motor.rootObjects():

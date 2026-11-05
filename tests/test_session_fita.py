@@ -1245,7 +1245,7 @@ def test_fita_sem_endereco_nao_chega_a_abrir_conexao(monkeypatch, schema):
 
 
 
-def test_a_cor_do_app_vem_de_fabrica_no_ciano(schema):
+def test_a_cor_do_app_vem_de_fabrica_no_azul(schema):
     assert session_fita.tom_do_app() == session_fita.COR_PADRAO_DO_APP
 
 
@@ -2745,14 +2745,14 @@ def test_retentativa_atropelada_por_outra_troca_nao_volta_a_suspensao(pulso, rel
 # endregion
 
 
-def test_cor_padrao_e_o_ciano_do_kyron():
-    assert session_fita.COR_PADRAO_DO_APP == session_fita.rgb_para_cor(0x22 / 255, 0xD3 / 255, 0xEE / 255, 0)[:2] == (188, 857)
+def test_cor_padrao_e_o_azul_do_kyron():
+    assert session_fita.COR_PADRAO_DO_APP == session_fita.rgb_para_cor(0x15 / 255, 0x8A / 255, 0xFF / 255, 0)[:2] == (210, 918)
 
 
 def test_migra_o_roxo_antigo_gravado(schema):
     session_fita.salvar_tom_do_app(*session_fita.ROXO_ANTIGO)
     session_fita.migrar_roxo_antigo()
-    assert session_fita.tom_do_app() == (188, 857)
+    assert session_fita.tom_do_app() == (210, 918)
 
 
 def test_nao_migra_outra_cor(schema):
@@ -2763,5 +2763,5 @@ def test_nao_migra_outra_cor(schema):
         assert session_fita.tom_do_app() == cor
 
 
-def test_sem_nada_gravado_o_padrao_e_ciano(schema):
-    assert session_fita.tom_do_app() == (188, 857)
+def test_sem_nada_gravado_o_padrao_e_azul(schema):
+    assert session_fita.tom_do_app() == (210, 918)
