@@ -17,7 +17,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Avisa quando saiu uma versão nova do Cartridges e instala, se a pessoa quiser.
+"""Avisa quando saiu uma versão nova do Kyron e instala, se a pessoa quiser.
 
 A cada abertura do app instalado, uma thread pergunta ao GitHub a última release; se a tag for mais nova que ``shared.VERSION``, a principal mostra as notas com "Agora não"/"Atualizar". No "Atualizar", o instalador é baixado para ``%TEMP%\\Cartridges-update``, conferido pelo SHA256 do GitHub e aberto em modo silencioso; o app fecha e o instalador o reabre. Não confundir com ``updates_checker`` (atualizações dos jogos).
 """

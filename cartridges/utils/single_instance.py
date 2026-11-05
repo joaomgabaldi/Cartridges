@@ -217,7 +217,7 @@ def present_running_instance() -> None:
             class_name = ctypes.create_unicode_buffer(64)
             user32.GetWindowTextW(hwnd, title, 64)
             user32.GetClassNameW(hwnd, class_name, 64)
-            # Título + classe "Qt*" (ex.: Qt6120QWindowIcon) evita realçar uma pasta do Explorer com o mesmo nome e a versão anterior (GTK).
+            # Título + classe "Qt*" (ex.: Qt6120QWindowIcon) evita realçar uma pasta do Explorer com o mesmo nome.
             if title.value == _MAIN_WINDOW_TITLE and class_name.value.lower().startswith(
                 "qt"
             ):

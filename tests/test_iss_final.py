@@ -231,3 +231,9 @@ def test_verificacao_recusa_o_canal_final_fora_da_ci(tmp_path):
     )  # fmt: skip
     assert resultado.returncode != 0
     assert "só roda na CI" in resultado.stderr
+
+
+def test_iss_de_desenvolvimento_tambem_corrige_os_fixados(renderizado, final):
+    dev = _ramo(renderizado, "DESENVOLVIMENTO", "Repo", "PastaApp")
+    assert re.search(r"CorrigirFixados\(''\);\s*Exit;", dev)
+    assert "CorrigirFixados(MigrarInstalacaoDoUsuario);" in final

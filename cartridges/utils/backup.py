@@ -77,7 +77,7 @@ def _extensoes() -> dict[str, tuple[str, ...]]:
 
 
 class BackupInvalido(ValueError):
-    """O arquivo não é um backup válido do Cartridges (ou está corrompido)."""
+    """O arquivo não é um backup válido do Kyron (ou está corrompido)."""
 
 
 class SavesInacessiveis(Exception):

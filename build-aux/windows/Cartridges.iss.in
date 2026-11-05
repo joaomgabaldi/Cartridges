@@ -294,6 +294,8 @@ begin
   if CurStep <> ssPostInstall then
     Exit;
 #ifdef DESENVOLVIMENTO
+  // O [InstallDelete] também apaga o Cartridges.exe do desenvolvimento: sem isto o fixado quebra.
+  CorrigirFixados('');
   Exit;
 #endif
   CorrigirFixados(MigrarInstalacaoDoUsuario);

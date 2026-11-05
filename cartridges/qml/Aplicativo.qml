@@ -250,6 +250,7 @@ Principal {
 
     onPaginaAtualChanged: if (paginaAtual === "todos") todos.focarGrade()
 
+    // A ordem de declaração é a ordem das camadas: páginas < diálogos < Big Picture < sessão < avisos (docs/arquitetura.md).
     PaginaDaBiblioteca {
         id: todos
         objectName: "pagina"

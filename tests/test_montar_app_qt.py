@@ -278,7 +278,7 @@ def test_lancador_avisa_quando_o_python_sai_com_erro():
     fonte = (Path(montar_app_qt.RAIZ) / "build-aux" / "windows" / "lancador" / "cartridges.c").read_text(encoding="utf-8")
     assert "return py_main(" not in fonte
     assert re.search(r"int r = py_main\(argc, argv\);\s*return r \? falha\(\) : 0;", fonte)
-    assert 'L"Não foi possível abrir o Cartridges. Reinstale o aplicativo."' in fonte
+    assert 'L"Não foi possível abrir o Kyron. Reinstale o aplicativo."' in fonte
 
 
 def _normalizado(nome: str) -> str:

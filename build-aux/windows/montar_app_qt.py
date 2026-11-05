@@ -76,7 +76,7 @@ LICENCAS = {
 }
 
 # Sem eles o app nem importa (`shared` lê o gschema na importação), mostra cartões vazios ou perde, em silêncio,
-# as "Novidades" e a descrição do "Sobre o Cartridges" (a metainfo).
+# as "Novidades" e a descrição do "Sobre o Kyron" (a metainfo).
 OBRIGATORIOS = (
     "cartridges/janela/qwk_ponte.dll",
     "data/io.github.joaomgabaldi.Cartridges.gschema.xml.in",

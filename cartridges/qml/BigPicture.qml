@@ -109,6 +109,7 @@ Item {
         }
         bigPicture.filaTerminou()
     }
+    // Na saída o quadro só volta com a camada já escondida, no escuro: antes o carrossel reapareceria.
     onVisibleChanged: if (!visible) {
         abertura.stop()
         progressoAbertura = 0
@@ -229,6 +230,7 @@ Item {
         const fator = 1 + (escalaNaAbertura - 1) * progressoAbertura * (1 - a)
         const r = angulo * Math.PI / 180
         const c = Math.cos(r), s = Math.sin(r)
+        // A projeção zera o z para nada ser recortado em profundidade.
         const projecao = Qt.matrix4x4(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, -1 / perspectiva, 1)
         const giro = Qt.matrix4x4(c, 0, s, 0, 0, 1, 0, 0, -s, 0, c, 0, 0, 0, 0, 1)
         const tamanho = Qt.matrix4x4(fator, 0, 0, 0, 0, fator, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1)

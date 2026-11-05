@@ -575,7 +575,7 @@ def main(argv: list[str]) -> int:
     aplicar_cor_de_destaque()
     abertura = _Abertura()
     app.aboutToQuit.connect(lambda: _fechar(abertura))
-    # "Redefinir Cartridges", agendado nas Preferências: antes do log, que mora na pasta do app e a travaria.
+    # "Redefinir Kyron", agendado nas Preferências: antes do log, que mora na pasta do app e a travaria.
     redefinido = redefinir.aplicar_pendente()
     _configurar_log()
     filtro = instalar_filtro(app)  # noqa: F841  # a referência vive até o fim do main

@@ -162,7 +162,7 @@ from types import SimpleNamespace
 from cartridges import app as modulo_app
 
 chamadas = []
-modulo_app.session_fita = SimpleNamespace(migrar_roxo_antigo=lambda: None, abrir=lambda: chamadas.append("abrir"), fechar=lambda: chamadas.append("fechar"))
+modulo_app.session_fita = SimpleNamespace(migrar_roxo_antigo=lambda: chamadas.append("migrar"), abrir=lambda: chamadas.append("abrir"), fechar=lambda: chamadas.append("fechar"))
 modulo_app.session_wallpaper = SimpleNamespace(restaurar_orfaos=lambda: None)
 
 
@@ -220,7 +220,7 @@ def test_qml_que_nao_carrega_nao_deixa_as_fitas_acesas_e_o_saindo_encerra_a_sess
     assert resultado.returncode == 0, resultado.stderr
     saida = json.loads(resultado.stdout.strip().splitlines()[-1])
     assert saida["codigo"] == 1
-    assert saida["fitas"] == ["abrir", "fechar"]
+    assert saida["fitas"] == ["migrar", "abrir", "fechar"]  # a migração do roxo antes de as luzes acenderem
     assert saida["receptores"] == 1
     assert (saida["antes"], saida["depois"]) == (False, True)
     assert saida["depois_do_saindo"] == []

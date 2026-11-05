@@ -214,7 +214,7 @@ dispositivos na sua conta; depois disso, o aplicativo conversa com eles direto p
 
 ## Instalação
 
-1. Baixe e instale através do instalador `Kyron Windows.exe` da versão mais recente em
+1. Baixe e instale através do instalador `Kyron.Windows.exe` da versão mais recente em
    [Releases](https://github.com/joaomgabaldi/Cartridges/releases).
 
 O instalador pede permissão de administrador e instala para todos os usuários. Depois de instalado,

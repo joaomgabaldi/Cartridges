@@ -22,8 +22,8 @@ typedef int (*PyMainFn)(int, wchar_t **);
 
 static int falha(void)
 {
-    MessageBoxW(NULL, L"Não foi possível abrir o Cartridges. Reinstale o aplicativo.",
-                L"Cartridges", MB_OK | MB_ICONERROR);
+    MessageBoxW(NULL, L"Não foi possível abrir o Kyron. Reinstale o aplicativo.",
+                L"Kyron", MB_OK | MB_ICONERROR);
     return 1;
 }
 
