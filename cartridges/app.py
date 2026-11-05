@@ -59,6 +59,7 @@ from cartridges.modelos.zerados_manuais import SeletorDeZerados
 from cartridges.modelos.tarefas import PainelDasTarefas
 from cartridges.ponte import Ponte
 from cartridges.saves import backup_de_saves
+from cartridges.emuladores import varredura as varredura_dos_inis
 from cartridges.store.managers import async_manager
 from cartridges.store.managers.aplicacao_dos_inis_manager import AplicacaoDosInisManager
 from cartridges.store.managers.emulador_manager import EmuladorManager
@@ -405,6 +406,7 @@ def _abrir(app: AplicacaoQt, argv: list[str], abertura: _Abertura) -> int | None
     # Depois da janela e antes dos avisos da abertura. A pergunta da versão nova fica fora da fila de pedidos: com um diálogo aberto, espera escondida (`DialogoDaAtualizacao.outroAberto`).
     atualizador.start()
     _importar_na_abertura(aplicativo, continuacao)
+    varredura_dos_inis.ligar_ao_app()
     return None
 
 

@@ -19,7 +19,6 @@
 
 import logging
 
-from cartridges import shared
 from cartridges.emuladores import aplicacao
 from cartridges.jogo import Jogo
 from cartridges.store.managers.async_manager import AsyncManager
@@ -31,15 +30,8 @@ class EmuladorManager(AsyncManager):
     def main(self, game: Jogo, additional_data: dict) -> None:
         if game.blacklisted or (game.removed and not additional_data.get("zerado_manual")):
             return
-        outros = []
-        if shared.store is not None:
-            outros = [
-                o.executable
-                for o in shared.store
-                if o.game_id != game.game_id and not o.removed and o.executable
-            ]
         try:
-            appid = aplicacao.atualizar_inis(game, outros)
+            appid = aplicacao.atualizar_inis(game, aplicacao.executaveis_dos_outros(game))
         except OSError as erro:
             logging.warning("Falha ao procurar os .ini de %s: %s", game.name, erro)
             return

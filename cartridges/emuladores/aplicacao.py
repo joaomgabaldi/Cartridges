@@ -65,6 +65,13 @@ def aplicar_no_jogo(jogo) -> bool:
     return True
 
 
+def executaveis_dos_outros(jogo) -> list[str]:
+    """Os executáveis dos outros jogos da biblioteca: a busca não entra em pasta que abriga mais de um jogo."""
+    if shared.store is None:
+        return []
+    return [o.executable for o in shared.store if o.game_id != jogo.game_id and not o.removed and o.executable]
+
+
 def atualizar_inis(jogo, executaveis_dos_outros: Iterable[str]) -> Optional[str]:
     """Procura de novo os .ini do jogo, grava `jogo.inis` e devolve o AppID que eles dizem (ou None)."""
     raiz = busca.raiz_do_jogo(jogo.executable, executaveis_dos_outros)
