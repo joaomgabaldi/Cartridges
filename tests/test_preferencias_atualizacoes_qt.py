@@ -142,7 +142,7 @@ def test_busca_acha_buscar_atualizacoes(janela):
     _abrir_preferencias(janela)
     janela.achar("dialogoDePreferencias").setProperty("filtro", "atualiza")
     assert esperar(lambda: janela.achar("campoDeBuscaDasPreferencias").property("text") == "atualiza")
-    assert esperar(lambda: ("Buscar atualizações", "Geral → Atualizações") in _resultados_da_busca(janela))
+    assert esperar(lambda: ("Buscar atualizações", "Aplicativo → Atualizações") in _resultados_da_busca(janela))
     # Uma busca que não combina não deixa resultado: só a tela de nenhum resultado.
     janela.achar("dialogoDePreferencias").setProperty("filtro", "zzzz")
     assert esperar(lambda: janela.achar("estadoSemResultadoDasPreferencias").property("visible") is True)

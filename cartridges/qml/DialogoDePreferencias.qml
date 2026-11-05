@@ -11,10 +11,15 @@ MolduraDoDialogo {
 
     readonly property var abas: [
         { id: "geral", titulo: "Geral", icone: "user-home" },
-        { id: "monitores", titulo: "Personalização", icone: "video-joined-displays" },
+        { id: "controle", titulo: "Controle", icone: "input-gaming" },
+        { id: "monitores", titulo: "Monitores", icone: "video-joined-displays" },
+        { id: "iluminacao", titulo: "Iluminação", icone: "applications-engineering" },
         { id: "importacao", titulo: "Importação", icone: "document-save" },
-        { id: "metadados", titulo: "SteamGridDB", icone: "image-x-generic" },
-        { id: "conquistas", titulo: "Conquistas", icone: "starred" }
+        { id: "metadados", titulo: "Metadados e capas", icone: "image-x-generic" },
+        { id: "conquistas", titulo: "Conquistas", icone: "starred" },
+        { id: "contas", titulo: "Contas", icone: "user-home" },
+        { id: "backup", titulo: "Backup", icone: "document-save" },
+        { id: "aplicativo", titulo: "Aplicativo", icone: "applications-engineering" }
     ]
     readonly property var rotulosDasAbas: abas.map(a => a.titulo)
     property string aba: "geral"
@@ -42,7 +47,7 @@ MolduraDoDialogo {
         rolagem.contentY = 0
         filtro = ""
         buscaAtiva = false
-        // O foco começa no X: o primeiro Tab vai à primeira linha habilitada da página, e não pelas cinco abas.
+        // O foco começa no X: o primeiro Tab vai à primeira linha habilitada da página, e não pelas abas.
         focoInicial = cabecalho.botaoFechar
     } else {
         confirmacaoDosMetadados.aberto = false
@@ -77,28 +82,44 @@ MolduraDoDialogo {
         botaoDaLupa.forceActiveFocus(Qt.TabFocusReason)
     }
 
-    function procurar() {
-        var achados = []
-        if (filtro === "") { resultados = achados; return }
-        function andar(item, pagina) {
+    // As linhas buscáveis e visíveis de uma seção, na ordem da tela (uma por entrada de `itens` dos grupos).
+    function linhasBuscaveis(id: string): list<Item> {
+        var achadas = []
+        function andar(item) {
             for (var i = 0; i < item.children.length; ++i) {
                 var c = item.children[i]
                 if (c.itens !== undefined && c.separada !== undefined) {
-                    var grupo = c.parent
-                    var tituloDoGrupo = grupo.titulo !== undefined ? grupo.titulo : (grupo.contas ? grupo.contas.titulo : "")
                     for (var j = 0; j < c.itens.length; ++j) {
                         var linha = c.itens[j]
-                        if (linha.buscavel !== true || !linha.aparece || !linha.titulo) continue
-                        if (!preferencias.corresponde(linha.titulo + " " + (linha.subtitulo || ""), filtro)) continue
-                        achados.push({
-                            linha: linha, titulo: linha.titulo, aba: pagina.id,
-                            local: tituloDoGrupo ? pagina.titulo + " → " + tituloDoGrupo : pagina.titulo
-                        })
+                        if (linha.buscavel === true && linha.aparece && linha.titulo) achadas.push(linha)
                     }
-                } else andar(c, pagina)
+                } else andar(c)
             }
         }
-        for (var k = 0; k < paginas.children.length; ++k) andar(paginas.children[k], abas[k])
+        var k = abas.findIndex(a => a.id === id)
+        if (k >= 0) andar(paginas.children[k])
+        return achadas
+    }
+
+    function procurar() {
+        var achados = []
+        if (filtro === "") { resultados = achados; return }
+        for (var k = 0; k < abas.length; ++k) {
+            var pagina = abas[k]
+            var linhas = linhasBuscaveis(pagina.id)
+            for (var j = 0; j < linhas.length; ++j) {
+                var linha = linhas[j]
+                if (!preferencias.corresponde(linha.titulo + " " + (linha.subtitulo || ""), filtro)) continue
+                var grupo = linha.parent
+                while (grupo && !(grupo.itens !== undefined && grupo.separada !== undefined)) grupo = grupo.parent
+                var dono = grupo ? grupo.parent : null
+                var tituloDoGrupo = dono ? (dono.titulo !== undefined ? dono.titulo : (dono.contas ? dono.contas.titulo : "")) : ""
+                achados.push({
+                    linha: linha, titulo: linha.titulo, aba: pagina.id,
+                    local: tituloDoGrupo ? pagina.titulo + " → " + tituloDoGrupo : pagina.titulo
+                })
+            }
+        }
         resultados = achados
     }
     function focarLinha(linha) {
@@ -220,10 +241,15 @@ MolduraDoDialogo {
                     visible: !dialogo.buscando
 
                     PaginaGeral { visible: dialogo.aba === "geral" }
-                    PaginaDePersonalizacao { visible: dialogo.aba === "monitores" }
+                    PaginaDoControle { visible: dialogo.aba === "controle" }
+                    PaginaDosMonitores { visible: dialogo.aba === "monitores" }
+                    PaginaDaIluminacao { visible: dialogo.aba === "iluminacao" }
                     PaginaDeImportacao { visible: dialogo.aba === "importacao" }
-                    PaginaDoSteamGridDB { visible: dialogo.aba === "metadados" }
+                    PaginaDosMetadados { visible: dialogo.aba === "metadados" }
                     PaginaDasConquistas { visible: dialogo.aba === "conquistas" }
+                    PaginaDasContas { visible: dialogo.aba === "contas" }
+                    PaginaDoBackup { visible: dialogo.aba === "backup" }
+                    PaginaDoAplicativo { visible: dialogo.aba === "aplicativo" }
                 }
 
                 GrupoDeLinhas {
@@ -285,7 +311,7 @@ MolduraDoDialogo {
                             readonly property bool atual: dialogo.aba === modelData.id
                             objectName: "aba-" + modelData.id
                             text: modelData.titulo
-                            width: Math.min(100, (barraDeAbas.width - 4 * 3) / dialogo.abas.length)
+                            width: Math.min(100, (barraDeAbas.width - (dialogo.abas.length - 1) * 3) / dialogo.abas.length)
                             height: 40
                             padding: 0
                             hoverEnabled: true

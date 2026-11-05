@@ -8,14 +8,6 @@ Column {
     width: parent ? parent.width : implicitWidth
     spacing: 24
 
-    component Interruptor: LinhaDeAlternancia {
-        property string chave
-        buscavel: true
-        objectName: "interruptor-" + chave
-        checked: preferencias.valores[chave] === true
-        onAlternado: preferencias.definir(chave, checked)
-    }
-
     function escolherPasta() {
         if (carga.item) carga.item.open(); else carga.active = true
     }
@@ -32,60 +24,8 @@ Column {
         objectName: "grupoComportamentoDaImportacao"
         titulo: "Comportamento"
 
-        Interruptor { chave: "auto-import"; titulo: "Importar jogos automaticamente" }
-        Interruptor { chave: "remove-missing"; titulo: "Remover jogos desinstalados" }
-        Interruptor {
-            chave: "steam-metadata"
-            titulo: "Buscar metadados da Steam"
-            subtitulo: "Busca na Steam título, desenvolvedora, publicadora, lançamento, gênero, descrição, avaliações e compatibilidade com controle"
-        }
-        Interruptor {
-            chave: "hltb-metadata"
-            titulo: "Buscar tempos do HowLongToBeat"
-            subtitulo: "Busca as estimativas de história principal, extras e completista"
-        }
-    }
-
-    Column {
-        width: parent.width
-        spacing: 12
-
-        GrupoDePreferencias {
-            objectName: "grupoAtualizarMetadados"
-
-            LinhaDeAtualizacao {
-                buscavel: true
-                objectName: "linhaDosMetadados"
-                titulo: "Atualizar metadados"
-                subtitulo: "Busca dados para jogos já na biblioteca"
-                // Sem nenhuma das duas fontes ligadas a busca não faria nada.
-                enabled: preferencias.biblioteca.metadadosAtivos
-                emAndamento: preferencias.biblioteca.rodando
-                podeParar: true
-                paradaPedida: preferencias.biblioteca.cancelado
-                onAcionada: preferencias.biblioteca.atualizarMetadados()
-                onParada: preferencias.biblioteca.cancelarMetadados()
-            }
-        }
-        Column {
-            width: parent.width
-            spacing: 0
-            visible: preferencias.biblioteca.rodando
-            Text {
-                objectName: "linhaDosMetadadosProgressoTexto"
-                width: parent.width
-                horizontalAlignment: Text.AlignHCenter
-                text: preferencias.biblioteca.progresso
-                textFormat: Text.PlainText
-                color: Tema.textoSecundario
-                font { family: Tema.fonte; pixelSize: Tema.legenda; features: { "tnum": 1 } }
-            }
-            BarraDeProgresso {
-                objectName: "linhaDosMetadadosProgresso"
-                width: parent.width
-                value: preferencias.biblioteca.fracao
-            }
-        }
+        InterruptorDaPreferencia { chave: "auto-import"; titulo: "Importar jogos automaticamente" }
+        InterruptorDaPreferencia { chave: "remove-missing"; titulo: "Remover jogos desinstalados" }
     }
 
     GrupoDePreferencias {

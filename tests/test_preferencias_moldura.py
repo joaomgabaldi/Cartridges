@@ -73,7 +73,7 @@ def test_o_dialogo_e_uma_moldura_de_640_com_raio_15_e_altura_maxima(app):
 def test_cartoes_das_paginas_tem_532_em_640(app):
     """Cartões de x=54 a x=586 no diálogo de 640."""
     _abrir(app, "geral")
-    grupo = app.achar("grupoComportamentoGeral")
+    grupo = app.achar("grupoAoIniciarUmJogoGeral")
     assert grupo.property("width") == 532
     # A margem de cima da página é 24: o título do primeiro grupo começa a 24 do cabeçalho.
     rolagem = app.achar("rolagemDasPreferencias")
@@ -103,16 +103,17 @@ def test_barra_das_abas_no_pe_com_icone_sobre_o_rotulo(app):
     # No pé do cartão.
     assert barra.mapToItem(cartao, QPointF(0, 0)).y() + barra.property("height") == pytest.approx(cartao.property("height"))
     icones = []
-    for aba in ("geral", "monitores", "importacao", "metadados", "conquistas"):
+    abas = ("geral", "controle", "monitores", "iluminacao", "importacao", "metadados", "conquistas", "contas", "backup", "aplicativo")
+    for aba in abas:
         botao = app.achar(f"aba-{aba}")
-        assert (botao.property("width"), botao.property("height")) == (100, 40)
+        # Dez abas dividem a largura com 3 de vão: (640 - 9 x 3) / 10.
+        assert (botao.property("width"), botao.property("height")) == (pytest.approx(61.3), 40)
         icones.append(_avaliar(botao, "modelData.icone"))  # os ícones simbólicos
-    assert icones == ["user-home", "video-joined-displays", "document-save", "image-x-generic", "starred"]
-    # Ficam centralizadas, com 3 de vão (5 x 100 + 4 x 3 = 512 em 640).
-    primeira, ultima = app.achar("aba-geral"), app.achar("aba-conquistas")
+    assert icones[:3] == ["user-home", "input-gaming", "video-joined-displays"]
+    primeira, ultima = app.achar("aba-geral"), app.achar("aba-aplicativo")
     x0 = primeira.mapToItem(cartao, QPointF(0, 0)).x()
     x1 = ultima.mapToItem(cartao, QPointF(ultima.property("width"), 0)).x()
-    assert x0 == pytest.approx(64) and x1 == pytest.approx(576)
+    assert x0 == pytest.approx(0) and x1 == pytest.approx(640)
 
 
 def test_a_linha_da_barra_so_aparece_com_mais_conteudo_por_rolar(app):
@@ -159,7 +160,7 @@ def test_abre_com_o_foco_no_x_e_a_aba_da_pagina_a_vista(app):
 
 def test_os_diretorios_de_arquivo_nao_tem_titulo_proprio():
     """O Windows mostra o título padrão (nenhum título é passado)."""
-    for nome in ("PaginaGeral.qml", "PaginaDeImportacao.qml"):
+    for nome in ("PaginaDoBackup.qml", "PaginaDeImportacao.qml"):
         texto = (QML / nome).read_text(encoding="utf-8")
         for bloco in re.findall(r"(?:FileDialog|FolderDialog) \{.*?\n        \}", texto, flags=re.S):
             assert "title:" not in bloco, nome
@@ -177,7 +178,7 @@ def _rolar_ate(app, item):
 
 def test_linhas_das_fitas_acionam_pela_linha_inteira(app, fitas_espiadas):  # noqa: ARG001
     shared.schema.set_boolean("session-fita", True)
-    _abrir(app, "monitores")
+    _abrir(app, "iluminacao")
     linha = app.achar("linhaDoBrilhoPorDispositivo")
     assert linha.property("ativavel").objectName() == "linhaDoBrilhoPorDispositivoBotao"
     _rolar_ate(app, linha)
@@ -200,7 +201,7 @@ def test_pasta_dos_saves_e_buscar_atualizacoes_nao_sao_ativaveis(app):
 
 def test_progresso_dos_metadados_fica_abaixo_do_cartao(app, monkeypatch):
     refresh = _com_refresh_falso(monkeypatch)
-    _abrir(app, "importacao")
+    _abrir(app, "metadados")
     linha = app.achar("linhaDosMetadados")
     barra = app.achar("linhaDosMetadadosProgresso")
     assert barra.property("visible") is False

@@ -406,8 +406,8 @@ def app(app_qt, previas, arranques):  # noqa: ARG001
 
 
 def _abrir(app):
-    assert app.preferencias.abrir("monitores")
-    assert _esperar(lambda: app.achar("paginaDePersonalizacao").property("visible") is True)
+    assert app.preferencias.abrir("iluminacao")
+    assert _esperar(lambda: app.achar("paginaDaIluminacao").property("visible") is True)
 
 
 def _enabled(app, nome):
@@ -434,7 +434,7 @@ def test_m14_sem_contar_horas_as_fitas_seguem_configuraveis(app):
     _com_fitas()
     shared.schema.set_boolean("playtime-tracking", False)
     _abrir(app)
-    assert _enabled(app, "grupoIluminacao")
+    assert _enabled(app, "grupoCores")
     assert _enabled(app, "interruptor-session-fita")
     assert _enabled(app, "linhaConfigurarFitas")
     assert not _enabled(app, "grupoPapelDeParede")

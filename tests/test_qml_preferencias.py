@@ -55,8 +55,8 @@ def test_setas_trocam_de_aba_e_levam_o_foco(app):
     _abrir(app)
     app.achar("aba-geral").forceActiveFocus(Qt.FocusReason.TabFocusReason)
     QTest.keyClick(app.janela, Qt.Key.Key_Right)
-    assert app.achar("dialogoDePreferencias").property("aba") == "monitores"
-    assert _foco_dentro_de(app, "aba-monitores")
+    assert app.achar("dialogoDePreferencias").property("aba") == "controle"
+    assert _foco_dentro_de(app, "aba-controle")
     QTest.keyClick(app.janela, Qt.Key.Key_Left)
     assert app.achar("dialogoDePreferencias").property("aba") == "geral"
     assert _foco_dentro_de(app, "aba-geral")
@@ -99,19 +99,19 @@ def test_abas_na_ordem_da_main(app):
     _abrir(app)
     rotulos = app.achar("dialogoDePreferencias").property("rotulosDasAbas").toVariant()
     # As abas aparecem nesta ordem.
-    ordem = ["Geral", "Personalização", "Importação", "SteamGridDB", "Conquistas"]
-    assert [r for r in ordem if r in rotulos] == rotulos
-    assert rotulos[:2] == ["Geral", "Personalização"] and "Importação" in rotulos and "SteamGridDB" in rotulos
-    assert rotulos.index("Importação") < rotulos.index("SteamGridDB")
+    assert rotulos == [
+        "Geral", "Controle", "Monitores", "Iluminação", "Importação", "Metadados e capas", "Conquistas", "Contas",
+        "Backup", "Aplicativo",
+    ]
 
 
 def test_abre_na_pagina_pedida_e_a_aba_troca_de_pagina(app):
     _abrir(app, "metadados")
-    assert app.achar("paginaDoSteamGridDB").property("visible") is True
+    assert app.achar("paginaDosMetadados").property("visible") is True
     assert app.achar("paginaGeral").property("visible") is False
     _clique(app, "aba-importacao")
     assert _esperar(lambda: app.achar("paginaDeImportacao").property("visible") is True)
-    assert app.achar("paginaDoSteamGridDB").property("visible") is False
+    assert app.achar("paginaDosMetadados").property("visible") is False
 
 
 def test_esc_fecha_e_o_foco_volta_ao_botao_do_menu(app):
@@ -213,7 +213,7 @@ def test_tempo_de_espera_pelo_spinbox(app):
 
 
 def test_b25_subtitulos_de_preferencias_descrevem_o_comportamento():
-    texto = "".join((QML / n).read_text(encoding="utf-8") for n in ("PaginaGeral.qml", "PaginaDeImportacao.qml"))
+    texto = "".join((QML / n).read_text(encoding="utf-8") for n in ("PaginaGeral.qml", "PaginaDoControle.qml", "PaginaDosMetadados.qml"))
     assert (
         '"Minimiza a janela ao iniciar um jogo quando a contagem de horas '
         'está desligada"'
@@ -231,7 +231,7 @@ def test_b25_subtitulos_de_preferencias_descrevem_o_comportamento():
 
 def test_textos_da_pagina_geral_e_da_importacao(app):
     _abrir(app)
-    assert app.achar("grupoComportamentoGeral").property("titulo") == "Comportamento"
+    assert app.achar("grupoSessoes").property("titulo") == "Sessões"
     esperado = {
         "interruptor-minimize-after-launch": (
             "Minimizar ao iniciar um jogo",
@@ -296,7 +296,7 @@ def test_big_picture_sem_3d_explica_na_linha(app):
 
     app.preferencias._tem_3d = lambda: False  # noqa: SLF001
     shared.schema.set_boolean("gamepad", True)
-    _abrir(app)
+    _abrir(app, "controle")
     for nome in ("interruptor-big-picture-ao-conectar", "interruptor-big-picture-som"):
         assert _esperar(lambda n=nome: app.achar(n).property("enabled") is False)
         assert app.achar(nome).property("subtitulo") == SEM_3D == "Requer uma placa de vídeo com aceleração 3D."
@@ -372,13 +372,13 @@ def test_descricao_da_autenticacao_e_o_link_abre_o_navegador_falso(app, monkeypa
     urls = []
     monkeypatch.setattr(open_uri, "abrir_url", lambda url: urls.append(url) or True)
     _abrir(app, "metadados")
-    grupo = app.achar("grupoAutenticacao")
-    assert grupo.property("titulo") == "Autenticação"
+    grupo = app.achar("grupoSteamGridDB")
+    assert grupo.property("titulo") == "SteamGridDB"
     assert grupo.property("descricao") == (
         'É necessária uma chave da API para usar o SteamGridDB. '
         '<a href="https://www.steamgriddb.com/profile/preferences/api">Obtenha aqui</a>.'
     )
-    descricao = app.achar("grupoAutenticacaoDescricao")
+    descricao = app.achar("grupoSteamGridDBDescricao")
     assert _avaliar(descricao, "textFormat") == 4  # Text.StyledText
     QMetaObject.invokeMethod(
         descricao, "linkActivated", Qt.ConnectionType.DirectConnection,
@@ -388,10 +388,10 @@ def test_descricao_da_autenticacao_e_o_link_abre_o_navegador_falso(app, monkeypa
 
 
 def test_grupos_do_plano_8b_aparecem(app):
-    """Os grupos "Barra superior", "Atualizações", o backup e a Zona de perigo aparecem."""
+    """Os grupos "Interface", "Atualizações", "Biblioteca" e "Saves" do backup e a Zona de perigo aparecem."""
     _abrir(app)
     todos = "\n".join(_textos(app.achar("dialogoDePreferencias")))
-    for texto in ("Barra superior", "Atualizações", "Backup da sua biblioteca", "Zona de perigo", "Redefinir Kyron"):
+    for texto in ("Interface", "Atualizações", "Biblioteca", "Saves", "Zona de perigo", "Redefinir Kyron"):
         assert texto in todos
 
 
@@ -421,7 +421,7 @@ def test_escopo_dos_metadados_tem_tres_botoes_e_comeca_no_que_falta(app, store, 
     _refresh, chamadas = _com_refresh_falso(monkeypatch)
     jogo = make_game(game_id="a", has_hltb_times=False)
     store.add_game(jogo, {})
-    _abrir(app, "importacao")
+    _abrir(app, "metadados")
     assert app.achar("linhaDosMetadados").property("titulo") == "Atualizar metadados"
     assert app.achar("linhaDosMetadados").property("subtitulo") == "Busca dados para jogos já na biblioteca"
     assert app.achar("linhaDosMetadadosBotao").property("text") == "Atualizar"
@@ -464,7 +464,7 @@ def test_confirmar_o_escopo_busca_so_o_que_falta_e_cancelar_nao_busca(app, store
 
 def test_barra_de_progresso_so_durante_a_atualizacao(app, monkeypatch):
     refresh, _ = _com_refresh_falso(monkeypatch)
-    _abrir(app, "importacao")
+    _abrir(app, "metadados")
     assert app.achar("linhaDosMetadadosBotao").property("visible") is True
     assert app.achar("linhaDosMetadadosProgresso").property("visible") is False
     assert app.achar("linhaDosMetadadosParar").property("visible") is False
@@ -490,7 +490,7 @@ def test_barra_de_progresso_so_durante_a_atualizacao(app, monkeypatch):
 
 def test_linha_dos_metadados_apagada_sem_as_duas_fontes(app):
     shared.schema.set_boolean("steam-metadata", True)
-    _abrir(app, "importacao")
+    _abrir(app, "metadados")
     assert app.achar("linhaDosMetadados").property("enabled") is True
     shared.schema.set_boolean("steam-metadata", False)
     shared.schema.set_boolean("hltb-metadata", False)
@@ -532,7 +532,7 @@ def test_atualizar_capas_apagado_sem_sgdb(app, store, make_game):
 def test_foco_acompanha_o_botao_dos_metadados(app, store, make_game, monkeypatch):
     refresh, _ = _com_refresh_falso(monkeypatch)
     store.add_game(make_game(game_id="a", has_hltb_times=False), {})
-    _abrir(app, "importacao")
+    _abrir(app, "metadados")
     app.achar("linhaDosMetadadosBotao").forceActiveFocus(Qt.FocusReason.TabFocusReason)
     refresh.running, refresh.done, refresh.total = True, 0, 1
     refresh.progress.emit()
@@ -566,7 +566,7 @@ def test_foco_das_capas_fica_no_dialogo_e_esc_fecha(app, store, make_game):
 def test_foco_levado_para_outro_controle_nao_e_roubado_ao_terminar(app, store, make_game, monkeypatch):
     refresh, _ = _com_refresh_falso(monkeypatch)
     store.add_game(make_game(game_id="a", has_hltb_times=False), {})
-    _abrir(app, "importacao")
+    _abrir(app, "metadados")
     app.achar("linhaDosMetadadosBotao").forceActiveFocus(Qt.FocusReason.TabFocusReason)
     refresh.running, refresh.done, refresh.total = True, 0, 1
     refresh.progress.emit()
@@ -583,8 +583,8 @@ def test_foco_levado_para_outro_controle_nao_e_roubado_ao_terminar(app, store, m
 
 def test_textos_da_personalizacao(app):
     _abrir(app, "monitores")
-    assert app.achar("paginaDePersonalizacao").property("visible") is True
-    assert app.achar("grupoBiblioteca").property("titulo") == "Biblioteca"
+    assert app.achar("paginaDosMonitores").property("visible") is True
+    assert app.achar("grupoInterface").property("titulo") == "Interface"
     assert _linha(app, "interruptor-cover-autoplay") == (
         "Reproduzir capas animadas automaticamente",
         "As capas animadas são reproduzidas na biblioteca automaticamente e em loop.",
@@ -693,9 +693,9 @@ def test_m14_sem_contar_horas_o_papel_de_parede_fica_apagado(app):
 
 def test_linhas_da_iluminacao_apagadas_sem_o_interruptor(app, fitas_espiadas):
     shared.schema.set_boolean("session-fita", False)
-    _abrir(app, "monitores")
-    assert app.achar("grupoIluminacao").property("titulo") == "Iluminação inteligente"
-    assert app.achar("grupoIluminacao").property("descricao") == (
+    _abrir(app, "iluminacao")
+    assert app.achar("grupoDispositivos").property("titulo") == "Dispositivos"
+    assert app.achar("grupoDispositivos").property("descricao") == (
         "Muda a cor da iluminação inteligente enquanto o Kyron está aberto: a cor do aplicativo fora do jogo e "
         "a cor do jogo durante a sessão. Ao fechar o aplicativo, a iluminação inteligente volta ao estado anterior."
     )
@@ -730,7 +730,7 @@ def test_linhas_da_iluminacao_apagadas_sem_o_interruptor(app, fitas_espiadas):
 
 def test_interruptor_das_fitas_apagado_sem_fita(app):
     shared.schema.set_boolean("session-fita", True)
-    _abrir(app, "monitores")
+    _abrir(app, "iluminacao")
     assert not _enabled(app, "interruptor-session-fita")
     assert _linha(app, "interruptor-session-fita")[1] == "Nenhum dispositivo configurado"
     assert app.achar("interruptor-session-fita").property("checked") is False
@@ -740,7 +740,7 @@ def test_amostra_abre_o_seletor_e_a_cor_vai_ao_modelo(app, fitas_espiadas):
     from cartridges.utils import session_fita  # noqa: PLC0415
 
     shared.schema.set_boolean("session-fita", True)
-    _abrir(app, "monitores")
+    _abrir(app, "iluminacao")
     assert app.achar("linhaDaCorDoAppAmostra").property("dica") == "Escolher a cor da iluminação inteligente"
     _clique(app, "linhaDaCorDoAppAmostra")
     assert _esperar(lambda: app.achar("linhaDaCorDoAppBalao").property("opened") is True)
@@ -758,7 +758,7 @@ def test_voltar_a_cor_padrao_so_fora_do_roxo(app, fitas_espiadas):
     from cartridges.utils import session_fita  # noqa: PLC0415
 
     shared.schema.set_boolean("session-fita", True)
-    _abrir(app, "monitores")
+    _abrir(app, "iluminacao")
     assert app.achar("linhaDaCorDoAppVoltar").property("visible") is False
     session_fita.salvar_tom_do_app(200, 800)
     assert _esperar(lambda: app.achar("linhaDaCorDoAppVoltar").property("visible") is True)
@@ -776,7 +776,7 @@ def test_testar_troca_o_icone_e_mostra_o_resultado(app, fitas_espiadas, monkeypa
 
     solta = threading.Event()
     monkeypatch.setattr(session_fita, "aplicar", lambda *_a: solta.wait(5) and False)
-    _abrir(app, "monitores")
+    _abrir(app, "iluminacao")
     assert app.achar("linhaTestarFitasBotao").property("icone") == "media-playback-start"
     _clique(app, "linhaTestarFitasBotao")
     # Durante o teste o botão é o de parar.
@@ -801,7 +801,7 @@ def conta_da_tuya(tmp_path, monkeypatch):
 
 
 def _abrir_o_assistente(app):
-    _abrir(app, "monitores")
+    _abrir(app, "iluminacao")
     assert app.achar("linhaConfigurarFitas").property("titulo") == "Configurar a iluminação inteligente"
     assert app.achar("linhaConfigurarFitas").property("subtitulo") == "Busca os dispositivos na sua conta da Tuya"
     assert _enabled(app, "linhaConfigurarFitas")
@@ -914,7 +914,7 @@ def calibracao_aberta(app, fitas_espiadas, monkeypatch):
         [session_fita.Fita("<b>Sala</b> & Cia", "eb0", "192.0.2.10", "k"), session_fita.Fita("Quarto", "eb1", "192.0.2.11", "k")]
     )
     monkeypatch.setattr(session_fita, "previa_calibracao", lambda *_a: fitas_espiadas.append("so"))
-    _abrir(app, "monitores")
+    _abrir(app, "iluminacao")
     app.preferencias.abrirCalibracao()
     dialogo = app.achar("assistenteDeCalibracao")
     assert _esperar(lambda: dialogo.property("visible") is True)
@@ -1127,8 +1127,8 @@ def test_buscar_brilho_lista_as_linhas_das_duas_paginas_com_pagina_e_grupo(app):
     assert _esperar(lambda: _visivel(app, "resultadosDaBuscaDasPreferencias"))
     resultados = _resultados(app)
     # Uma lista só, cada linha com o subtítulo "Página → Grupo".
-    assert ("Brilho (%)", "Personalização → Iluminação inteligente") in resultados
-    assert ("Brilho máximo por dispositivo", "Personalização → Iluminação inteligente") in resultados
+    assert ("Brilho (%)", "Iluminação → Cores") in resultados
+    assert ("Brilho máximo por dispositivo", "Iluminação → Dispositivos") in resultados
     assert not any(t == "Usar o SteamGridDB" for t, _ in resultados)
     assert not _visivel(app, "abas")  # a barra de abas some
     assert not _visivel(app, "paginaGeral")
@@ -1147,14 +1147,14 @@ def test_busca_no_subtitulo(app):
     _abrir(app)
     _buscar(app, "segundos de espera")
     assert _esperar(lambda: _visivel(app, "resultadosDaBuscaDasPreferencias"))
-    assert _resultados(app) == [("Tempo de espera ao fechar o jogo", "Geral → Comportamento")]
+    assert _resultados(app) == [("Tempo de espera ao fechar o jogo", "Geral → Sessões")]
 
 
 def test_grupo_sem_titulo_mostra_so_a_pagina(app):
     _abrir(app)
     _buscar(app, "atualizar metadados")
     assert _esperar(lambda: _visivel(app, "resultadosDaBuscaDasPreferencias"))
-    assert ("Atualizar metadados", "Importação") in _resultados(app)
+    assert ("Atualizar metadados", "Metadados e capas") in _resultados(app)
 
 
 def test_filhas_do_expansor_nao_entram_na_busca(app):
@@ -1193,19 +1193,19 @@ def test_clicar_num_resultado_leva_a_pagina_e_poe_o_foco_na_linha(app):
     assert _esperar(lambda: app.achar("campoDeBuscaDasPreferencias").property("text") == "")
     dialogo = app.achar("dialogoDePreferencias")
     assert dialogo.property("buscaAtiva") is False
-    assert dialogo.property("aba") == "geral"
-    assert _visivel(app, "paginaGeral") and _visivel(app, "abas")
+    assert dialogo.property("aba") == "controle"
+    assert _visivel(app, "paginaDoControle") and _visivel(app, "abas")
     assert _esperar(lambda: _foco_dentro_de(app, "interruptor-gamepad"))
     assert shared.schema.get_boolean("gamepad") is antes
 
 
 def test_clicar_num_resultado_de_outra_pagina_troca_de_aba(app):
     _abrir(app, "geral")
-    _buscar(app, "capas animadas")
+    _buscar(app, "buscar atualiza")
     assert _esperar(lambda: _resultados(app) != [])
     _clicar_resultado(app, 0)
-    assert _esperar(lambda: app.achar("dialogoDePreferencias").property("aba") == "monitores")
-    assert _esperar(lambda: _foco_dentro_de(app, "interruptor-cover-autoplay"))
+    assert _esperar(lambda: app.achar("dialogoDePreferencias").property("aba") == "aplicativo")
+    assert _esperar(lambda: _foco_dentro_de(app, "linhaBuscarAtualizacoes"))
 
 
 def test_lupa_liga_o_campo_no_lugar_do_titulo(app):
@@ -1275,7 +1275,7 @@ def test_filtro_nao_esvazia_os_assistentes_abertos_por_cima(app, fitas_espiadas,
     from cartridges.utils import session_fita  # noqa: PLC0415
 
     monkeypatch.setattr(session_fita, "previa_calibracao", lambda *_a: None)
-    _abrir(app, "monitores")
+    _abrir(app, "iluminacao")
     _buscar(app, "brilho")
     assert _esperar(lambda: _visivel(app, "resultadosDaBuscaDasPreferencias"))
     app.preferencias.abrirBrilhoPorDispositivo()
@@ -1294,7 +1294,7 @@ def test_buscar_epic_lista_a_conta(app):
     assert _esperar(lambda: _resultados(app) != [])
     resultados = _resultados(app)
     assert len(resultados) == 1 and "Epic" in resultados[0][0]
-    assert resultados[0][1].startswith("Conquistas")
+    assert resultados[0][1].startswith("Contas")
 
 
 def test_fechar_com_texto_e_reabrir_volta_com_campo_vazio_e_abas(app):
@@ -1352,9 +1352,12 @@ def _itens_com_nome(raiz, prefixo):
 
 def test_foco_num_campo_abaixo_da_dobra_rola_a_pagina(app):
     """O `dentro()`/`contem()` subiam por `parentItem` (inexistente no QML): a rolagem não seguia o foco."""
-    _abrir(app, "monitores")
+    _abrir(app, "conquistas")  # a seção mais comprida
     assert app.achar("rolagemDasPreferencias").property("contentY") == 0
-    interruptores = [i for i in _itens_com_nome(app.achar("rolagemDasPreferencias"), "interruptor-") if i.property("enabled")]
+    interruptores = [
+        i for i in _itens_com_nome(app.achar("rolagemDasPreferencias"), "interruptor-")
+        if i.property("enabled") and i.property("visible")
+    ]
     ultimo = max(interruptores, key=lambda i: i.mapToScene(QPointF(0, 0)).y())  # o mais baixo da página
     assert ultimo.mapToScene(QPointF(0, 0)).y() > app.achar("rolagemDasPreferencias").mapToScene(QPointF(0, 0)).y() + app.achar("rolagemDasPreferencias").height()
     ultimo.forceActiveFocus(Qt.FocusReason.TabFocusReason)
@@ -1365,7 +1368,7 @@ def test_foco_que_passa_pela_propria_linha_ainda_volta_ao_botao_ao_terminar(app,
     """O `_dentro()` subia por `parentItem` (inexistente no QML): qualquer foco num filho da linha contava como "saiu"."""
     refresh, _ = _com_refresh_falso(monkeypatch)
     store.add_game(make_game(game_id="a", has_hltb_times=False), {})
-    _abrir(app, "importacao")
+    _abrir(app, "metadados")
     app.achar("linhaDosMetadadosBotao").forceActiveFocus(Qt.FocusReason.TabFocusReason)
     refresh.running, refresh.done, refresh.total = True, 0, 1
     refresh.progress.emit()
@@ -1386,7 +1389,7 @@ def test_a_roda_nas_preferencias_anda_o_passo_do_gtk(app):
     from PySide6.QtCore import QCoreApplication, QPoint  # noqa: PLC0415
     from PySide6.QtGui import QWheelEvent  # noqa: PLC0415
 
-    _abrir(app, "geral")
+    _abrir(app, "conquistas")  # a seção que mais passa da altura visível
     rolagem = app.achar("rolagemDasPreferencias")
     assert rolagem.property("contentHeight") > rolagem.property("height")
     esperado = rolagem.property("height") ** (2 / 3)
@@ -1421,7 +1424,7 @@ def test_o_primeiro_tab_vai_a_primeira_linha_habilitada_da_pagina(app):
 def test_o_link_da_descricao_tem_a_opacidade_da_descricao(app):
     """O "Obtenha aqui" sai com os 55% da descrição apagada, e não vivo."""
     _abrir(app, "metadados")
-    grupo = app.achar("grupoAutenticacao")
+    grupo = app.achar("grupoSteamGridDB")
     texto = [t for t in _filhos_text(grupo) if "Obtenha" in (t.property("text") or "")][0]
     assert abs(_avaliar(texto, "linkColor.a") - 0.55 * _avaliar(texto, "Tema.destaqueTexto.a")) < 0.02
 

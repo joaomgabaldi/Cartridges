@@ -82,12 +82,12 @@ def _achar(raiz, nome):
 
 
 class _Pagina:
-    def __init__(self, preferencias):
+    def __init__(self, preferencias, arquivo="PaginaDoBackup.qml"):
         self.motor = QQmlEngine()
         from cartridges.modelos.provedor_de_icones import ProvedorDeIcones  # noqa: PLC0415
         self.motor.addImageProvider("icone", ProvedorDeIcones())
         self.motor.rootContext().setContextProperty("preferencias", preferencias)
-        componente = QQmlComponent(self.motor, QUrl.fromLocalFile(str(QML / "PaginaGeral.qml")))
+        componente = QQmlComponent(self.motor, QUrl.fromLocalFile(str(QML / arquivo)))
         self.item = componente.create()
         assert self.item is not None, componente.errorString()
         self.componente = componente
@@ -110,15 +110,15 @@ class _Pagina:
 
 @pytest.fixture
 def montar(app_qt, aplicativo, monkeypatch):  # noqa: ARG001
-    """`montar(disponivel)` abre as Preferências e monta a página Geral sobre elas."""
+    """`montar(disponivel, arquivo)` abre as Preferências e monta uma página (a do Backup, por padrão) sobre elas."""
     abertas, paginas = [], []
 
-    def fazer(disponivel=True):
+    def fazer(disponivel=True, arquivo="PaginaDoBackup.qml"):
         _com_ludusavi(monkeypatch, disponivel)
         p = Preferencias(aplicativo.avisos, lambda: True)
         assert p.abrir()
         abertas.append(p)
-        pagina = _Pagina(p)
+        pagina = _Pagina(p, arquivo)
         paginas.append(pagina)
         return p, pagina
 
@@ -160,14 +160,14 @@ def test_subtitulo_da_pasta_dos_saves_no_formato_do_windows_e_com_e_comercial(mo
 
 def test_descricao_do_backup_menciona_os_saves_so_com_ludusavi(montar):
     _p, pagina = montar()
-    assert pagina.achar("grupoBackupDaBiblioteca").property("descricao") == (
+    assert pagina.achar("grupoDaBibliotecaNoBackup").property("descricao") == (
         "Salve em um arquivo .zip a biblioteca completa, as cópias dos saves dos jogos e "
         "todas as configurações. A restauração substitui a biblioteca, as configurações e as "
         "cópias dos saves pelas do backup. Para devolver os saves aos jogos, use "
         "“Restaurar saves de todos os jogos”."
     )
     _p, pagina = montar(disponivel=False)
-    assert pagina.achar("grupoBackupDaBiblioteca").property("descricao") == (
+    assert pagina.achar("grupoDaBibliotecaNoBackup").property("descricao") == (
         "Salve em um arquivo .zip a biblioteca completa e todas as configurações. "
         "A restauração substitui a biblioteca e as configurações atuais pelas do backup."
     )
@@ -175,7 +175,7 @@ def test_descricao_do_backup_menciona_os_saves_so_com_ludusavi(montar):
 
 def test_subtitulo_de_contar_horas_com_ludusavi(montar):
     """O backup dos saves só acontece ao fim de uma sessão, e sessão só existe com a contagem."""
-    _p, pagina = montar()
+    _p, pagina = montar(arquivo="PaginaGeral.qml")
     assert pagina.achar("interruptor-playtime-tracking").property("subtitulo") == (
         "Registra o tempo de cada sessão e faz o backup dos saves ao fim dela; quando o jogo "
         "não pode ser acompanhado automaticamente, abre uma janela compacta para encerrar a sessão"
@@ -183,7 +183,7 @@ def test_subtitulo_de_contar_horas_com_ludusavi(montar):
 
 
 def test_subtitulo_de_contar_horas_sem_ludusavi(montar):
-    _p, pagina = montar(disponivel=False)
+    _p, pagina = montar(disponivel=False, arquivo="PaginaGeral.qml")
     assert pagina.achar("interruptor-playtime-tracking").property("subtitulo") == (
         "Registra o tempo de cada sessão; quando o jogo não pode ser acompanhado "
         "automaticamente, abre uma janela compacta para encerrar a sessão"
@@ -193,11 +193,10 @@ def test_subtitulo_de_contar_horas_sem_ludusavi(montar):
 def test_grupos_na_ordem_da_main(montar):
     _p, pagina = montar()
     titulos = [i.property("titulo") for i in pagina.item.childItems() if i.property("titulo")]
-    assert titulos == [
-        "Comportamento", "Backup da sua biblioteca", "Atualizações", "Idioma e nome do jogador", "Zona de perigo"
-    ]
-    assert pagina.achar("linhaRedefinir").property("titulo") == "Redefinir Kyron"
-    assert pagina.achar("linhaRedefinir").property("destrutivo") is True
+    assert titulos == ["Biblioteca", "Saves"]
+    _p, aplicativo = montar(arquivo="PaginaDoAplicativo.qml")
+    assert aplicativo.achar("linhaRedefinir").property("titulo") == "Redefinir Kyron"
+    assert aplicativo.achar("linhaRedefinir").property("destrutivo") is True
     for nome, titulo in (
         ("linhaExportarBackup", "Exportar para arquivo"),
         ("linhaImportarBackup", "Importar de arquivo"),
@@ -211,10 +210,10 @@ def test_grupos_na_ordem_da_main(montar):
 def test_restaurar_saves_some_sem_o_ludusavi_e_o_grupo_fica_com_as_outras_linhas(montar):
     """Sem o Ludusavi a linha "Restaurar saves" some; o grupo do backup segue com as outras."""
     _p, pagina = montar()
-    assert pagina.visivel("linhaRestaurarSaves") and pagina.visivel("grupoBackupDaBiblioteca")
+    assert pagina.visivel("linhaRestaurarSaves") and pagina.visivel("grupoDaBibliotecaNoBackup")
     _p, pagina = montar(disponivel=False)
     assert not pagina.visivel("linhaRestaurarSaves")
-    assert pagina.visivel("grupoBackupDaBiblioteca") and pagina.visivel("linhaExportarBackup")
+    assert pagina.visivel("grupoDaBibliotecaNoBackup") and pagina.visivel("linhaExportarBackup")
 
 
 def test_grupo_some_quando_nenhuma_linha_aparece_e_volta_com_uma(app_qt):

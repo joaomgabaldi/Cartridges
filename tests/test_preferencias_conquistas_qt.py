@@ -250,10 +250,10 @@ def test_textos_de_exibicao(app):
     )
 
 
-def test_aba_conquistas_e_a_ultima(app):
+def test_aba_conquistas_abre_a_sua_pagina(app):
     _abrir(app, "conquistas")
     dialogo = app.achar("dialogoDePreferencias")
-    assert dialogo.property("rotulosDasAbas").toVariant()[-1] == "Conquistas"
+    assert "Conquistas" in dialogo.property("rotulosDasAbas").toVariant()
     assert app.achar("paginaDasConquistas").property("visible") is True
     assert app.achar("paginaGeral").property("visible") is False
 
@@ -422,7 +422,7 @@ def test_fechar_as_preferencias_fecha_o_grupo_das_contas(app_qt, monkeypatch):  
 
 def test_o_grupo_das_contas_aparece_na_pagina(app, monkeypatch):
     monkeypatch.setattr(epic_conta, "conectada", lambda: False)
-    _abrir(app, "conquistas")
+    _abrir(app, "contas")
     assert app.achar("grupoDasContas").property("visible") is True
     assert _esperar(lambda: app.achar("tituloDoGrupoDasContas").property("text") == "Contas")
     app.preferencias.fechar()
@@ -559,7 +559,7 @@ def test_janela_de_login_por_cima_das_preferencias(app, monkeypatch, flush_idle)
     monkeypatch.setattr(modulo_das_contas, "_abrir_navegador", lambda _url: None)  # `abrir` falso
     monkeypatch.setattr(epic_conta, "conectada", lambda: False)
     monkeypatch.setattr(ea_conta, "conectada", lambda: False)
-    _abrir(app, "conquistas")
+    _abrir(app, "contas")
     botao = app.achar("botaoDaConta_epic")
     botao.forceActiveFocus(Qt.FocusReason.TabFocusReason)
     QMetaObject.invokeMethod(botao, "click", Qt.ConnectionType.DirectConnection)

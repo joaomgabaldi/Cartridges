@@ -578,12 +578,10 @@ def test_teclado_setas_e_enter_expandem_e_tab_chega_ao_link(janela, feed):
     assert esperar(lambda: janela.janela.property("paginaAtual") == "todos")
 
 
-def test_grupo_barra_superior_e_o_primeiro_da_personalizacao(janela):
-    janela.preferencias.abrir("monitores")
+def test_botao_novidades_fica_no_grupo_interface_da_geral(janela):
+    janela.preferencias.abrir("geral")
     esperar()
-    grupo = janela.achar("grupoBarraSuperior")
-    assert grupo.property("titulo") == "Barra superior"
-    assert grupo.property("y") < janela.achar("grupoBiblioteca").property("y")
+    assert janela.achar("grupoInterface").property("titulo") == "Interface"
 
     interruptor = janela.achar("interruptor-show-news-button")
     assert interruptor.property("titulo") == "Mostrar o botão Novidades"

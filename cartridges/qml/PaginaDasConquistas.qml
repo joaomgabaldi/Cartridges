@@ -7,27 +7,10 @@ Column {
     width: parent ? parent.width : implicitWidth
     spacing: 24
 
-    component Interruptor: LinhaDeAlternancia {
-        property string chave
-        buscavel: true
-        objectName: "interruptor-" + chave
-        checked: preferencias.valores[chave] === true
-        onAlternado: preferencias.definir(chave, checked)
-    }
-
     TextMetrics {
         id: medidaDoCanto
         font { family: Tema.fonte; pixelSize: 14 }
         text: "Canto superior esquerdo"
-    }
-
-    // As contas existem só com as Preferências abertas; o `Loader` evita ler um `contas` nulo ao fechar.
-    Loader {
-        objectName: "carregadorDasContas"
-        width: parent.width
-        active: preferencias.contas !== null
-        visible: active
-        sourceComponent: GrupoDasContas { contas: preferencias.contas }
     }
 
     GrupoDePreferencias {
@@ -51,7 +34,7 @@ Column {
         objectName: "grupoExibicao"
         titulo: "Exibição"
 
-        Interruptor {
+        InterruptorDaPreferencia {
             chave: "conquistas-mostrar-ocultas"
             titulo: "Mostrar descrição das conquistas ocultas"
             subtitulo: "Exibe o nome e a descrição das conquistas ocultas ainda não desbloqueadas"
@@ -62,12 +45,12 @@ Column {
         objectName: "grupoDuranteOJogo"
         titulo: "Durante o jogo"
 
-        Interruptor {
+        InterruptorDaPreferencia {
             chave: "conquistas-aviso"
             titulo: "Mostrar aviso durante o jogo"
             subtitulo: "Exibe um aviso por cima do jogo ao desbloquear uma conquista. Nos jogos da Steam, aparece o aviso da própria Steam."
         }
-        Interruptor {
+        InterruptorDaPreferencia {
             chave: "conquistas-aviso-som"
             titulo: "Tocar som com o aviso"
             subtitulo: "Reproduz um som quando o aviso aparece"
@@ -95,7 +78,19 @@ Column {
             enabled: preferencias.estado.avisoAtivo === true
             onEscolhido: indice => preferencias.escolherPosicaoDoAviso(indice)
         }
-        Interruptor {
+        LinhaDeBotao {
+            buscavel: true
+            objectName: "linhaDoExemplo"
+            titulo: "Mostrar um aviso de exemplo"
+            onAcionada: preferencias.mostrarAvisoDeExemplo()
+        }
+    }
+
+    GrupoDePreferencias {
+        objectName: "grupoIluminacaoDasConquistas"
+        titulo: "Iluminação"
+
+        InterruptorDaPreferencia {
             chave: "conquistas-iluminacao"
             titulo: "Piscar a iluminação inteligente"
             subtitulo: "Os dispositivos piscam ao desbloquear uma conquista"
@@ -129,12 +124,6 @@ Column {
             titulo: "Testar o alerta"
             enabled: preferencias.estado.alertaAtivo === true
             onAcionada: preferencias.fitas.testarAlerta()
-        }
-        LinhaDeBotao {
-            buscavel: true
-            objectName: "linhaDoExemplo"
-            titulo: "Mostrar um aviso de exemplo"
-            onAcionada: preferencias.mostrarAvisoDeExemplo()
         }
     }
 }
