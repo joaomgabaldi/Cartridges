@@ -162,7 +162,7 @@ from types import SimpleNamespace
 from cartridges import app as modulo_app
 
 chamadas = []
-modulo_app.session_fita = SimpleNamespace(abrir=lambda: chamadas.append("abrir"), fechar=lambda: chamadas.append("fechar"))
+modulo_app.session_fita = SimpleNamespace(migrar_roxo_antigo=lambda: None, abrir=lambda: chamadas.append("abrir"), fechar=lambda: chamadas.append("fechar"))
 modulo_app.session_wallpaper = SimpleNamespace(restaurar_orfaos=lambda: None)
 
 
@@ -231,7 +231,7 @@ import gc, json, sys
 from types import SimpleNamespace
 from cartridges import app as modulo_app
 
-modulo_app.session_fita = SimpleNamespace(abrir=lambda: None, fechar=lambda: None)
+modulo_app.session_fita = SimpleNamespace(migrar_roxo_antigo=lambda: None, abrir=lambda: None, fechar=lambda: None)
 modulo_app.session_wallpaper = SimpleNamespace(restaurar_orfaos=lambda: None)
 
 
