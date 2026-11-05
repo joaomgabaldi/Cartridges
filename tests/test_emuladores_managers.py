@@ -71,3 +71,45 @@ def test_idiomas_steam_sobrevive_ao_so_o_que_falta():
     dados = {"idiomas_steam": ["german"], "name": "Outro"}
     resultado = _keep_user_edits(jogo, dados, {"only_missing": True})
     assert resultado["idiomas_steam"] == ["german"]
+
+
+def test_adocao_marca_a_ligacao_com_o_zerado(store, tmp_path):
+    exe = _montar(tmp_path) / "j.exe"
+    dados = {}
+    EmuladorManager().main(_jogo(exe), dados)
+    assert dados["ligar_zerado"] is True
+    dados = {"sem_ligacao": True}
+    EmuladorManager().main(_jogo(exe), dados)
+    assert "ligar_zerado" not in dados
+
+
+def test_steam_appid_do_atalho_pula_a_adocao(store, tmp_path):
+    jogo = _jogo(_montar(tmp_path) / "j.exe")
+    dados = {"steam_appid": "999"}
+    EmuladorManager().main(jogo, dados)
+    assert dados == {"steam_appid": "999"} and jogo.steam_appid is None and jogo.inis
+
+
+def test_pipeline_de_ponta_a_ponta(store, tmp_path, schema):
+    from cartridges.store.pipeline import Pipeline  # noqa: PLC0415
+
+    pasta = _montar(tmp_path)
+    schema.set_string("nome-do-jogador", "Ana")
+    jogo = _jogo(pasta / "j.exe")
+    dados = {}
+    steam = SteamAPIManager()  # o tipo exato conta no run_after
+    steam.main = lambda _j, d: setattr(steam, "visto", d.get("steam_appid"))
+    pipeline = Pipeline(jogo, dados, [EmuladorManager(), steam, AplicacaoDosInisManager()])
+    pipeline.advance()
+    import time  # noqa: PLC0415
+
+    from PySide6.QtCore import QCoreApplication  # noqa: PLC0415
+
+    for _ in range(200):
+        QCoreApplication.processEvents()
+        if pipeline.is_done:
+            break
+        time.sleep(0.02)
+    assert pipeline.is_done
+    assert steam.visto == "620" and dados["steam_appid"] == "620"
+    assert b"UserName=Ana" in (pasta / "steam_emu.ini").read_bytes()

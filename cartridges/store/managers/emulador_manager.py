@@ -43,6 +43,9 @@ class EmuladorManager(AsyncManager):
         except OSError as erro:
             logging.warning("Falha ao procurar os .ini de %s: %s", game.name, erro)
             return
-        if aplicacao.adotar_appid(game, appid):
+        # Um steam:// do atalho é a verdade: os .ini são achados, mas o AppID deles não é adotado.
+        if not additional_data.get("steam_appid") and aplicacao.adotar_appid(game, appid):
             additional_data["steam_appid"] = appid
-        game.save()
+            # Já adotado aqui, o Steam não veria mudança; a ligação com o zerado do mesmo AppID é marcada agora.
+            if not additional_data.get("sem_ligacao"):
+                additional_data["ligar_zerado"] = True
