@@ -55,3 +55,12 @@ def test_get_api_data_traz_idiomas(monkeypatch):
 
     del base["supported_languages"]
     assert "idiomas_steam" not in h.get_api_data("1", skip_genre=True)
+
+
+def test_texto_sem_nenhum_nome_conhecido_e_desconhecido(monkeypatch):
+    assert idiomas.do_appdetails("Malaio, Klingon") is None
+    base = {"type": "game", "name": "X", "supported_languages": "Malaio, Klingon"}
+    monkeypatch.setattr(steam, "get_capped", _resposta(base))
+    h = steam.SteamAPIHelper(contextlib.nullcontext())
+    monkeypatch.setattr(h, "get_review_summary", lambda _a: None)
+    assert "idiomas_steam" not in h.get_api_data("1", skip_genre=True)

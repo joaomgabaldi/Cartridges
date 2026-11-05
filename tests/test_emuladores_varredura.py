@@ -139,3 +139,43 @@ def test_varrer_nao_salva_jogo_que_saiu_da_store(store, tmp_path, monkeypatch, r
     fora = _jogo(_pasta(tmp_path) / "j.exe")  # nunca entrou na store
     varredura.varrer([fora]).join()
     assert fora.steam_appid == "620" and salvos == []
+
+
+def test_procurar_jogo_adota_appid_busca_idiomas_e_despacha(store, tmp_path, monkeypatch, refresh, schema):
+    chamadas, ligados = refresh
+    schema.set_string("idioma-do-jogador", "german")
+    pasta = _pasta(tmp_path)
+    jogo = _jogo(pasta / "j.exe", steam_appid="10")
+    store.add_game(jogo, {}, run_pipeline=False)
+    monkeypatch.setattr(varredura, "_buscar_idiomas", lambda j: setattr(j, "idiomas_steam", ["german"]))
+    assert varredura.procurar_jogo(jogo) == varredura.aplicacao.APLICADO
+    assert jogo.steam_appid == "620" and jogo.inis == [str(pasta / "steam_emu.ini")]
+    assert b"Language=german" in (pasta / "steam_emu.ini").read_bytes()
+    assert chamadas == [[jogo]] and ligados == [jogo]
+
+
+def test_abertura_busca_idiomas_que_faltam_e_reaplica(store, tmp_path, monkeypatch, schema):
+    schema.set_string("idioma-do-jogador", "german")
+    pa, pb = _pasta(tmp_path, "A"), _pasta(tmp_path, "B")
+    falta = _jogo(pa / "j.exe", steam_appid="620", inis=[str(pa / "steam_emu.ini")])
+    tem = _jogo(pb / "j.exe", "shortcuts_2", steam_appid="620", inis=[str(pb / "steam_emu.ini")], idiomas_steam=["french"])
+    sem_ini = _jogo(pb / "j.exe", "shortcuts_3", steam_appid="620", inis=[])
+    for j in (falta, tem, sem_ini):
+        store.add_game(j, {}, run_pipeline=False)
+    buscados = []
+    monkeypatch.setattr(varredura, "_buscar_idiomas", lambda j: buscados.append(j) or setattr(j, "idiomas_steam", ["german"]))
+    varredura.buscar_idiomas_que_faltam([falta, tem, sem_ini]).join()
+    assert buscados == [falta]
+    assert b"Language=german" in (pa / "steam_emu.ini").read_bytes()
+    assert b"Language=english" in (pb / "steam_emu.ini").read_bytes()
+
+
+@pytest.mark.parametrize("varridos", [False, True])
+def test_ligar_ao_app_varre_uma_vez_ou_busca_os_idiomas(store, monkeypatch, schema, varridos):
+    schema.set_boolean("inis-varridos", varridos)
+    monkeypatch.setattr(varredura, "_espera", None)
+    feitos = []
+    monkeypatch.setattr(varredura, "varrer", lambda j: feitos.append("varrer"))
+    monkeypatch.setattr(varredura, "buscar_idiomas_que_faltam", lambda j: feitos.append("idiomas"))
+    varredura.ligar_ao_app()
+    assert feitos == (["idiomas"] if varridos else ["varrer"])

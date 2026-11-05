@@ -53,7 +53,7 @@ def test_aplicar_grava_em_todos(schema, tmp_path):
     schema.set_string("nome-do-jogador", "Ana")
     schema.set_string("idioma-do-jogador", "german")
     a, b = _ini(tmp_path / "a"), _ini(tmp_path / "b", "codex.ini")
-    assert aplicacao.aplicar_no_jogo(_jogo(inis=[str(a), str(b)])) is True
+    assert aplicacao.aplicar_no_jogo(_jogo(inis=[str(a), str(b)])) == aplicacao.APLICADO
     for c in (a, b):
         assert b"UserName=Ana" in c.read_bytes() and b"Language=german" in c.read_bytes()
 
@@ -62,15 +62,18 @@ def test_aplicar_sem_busca_ou_com_arquivo_ausente_nao_grava(schema, tmp_path):
     schema.set_string("nome-do-jogador", "Ana")
     existente = _ini(tmp_path)
     antes = existente.read_bytes()
-    assert aplicacao.aplicar_no_jogo(_jogo()) is False
-    assert aplicacao.aplicar_no_jogo(_jogo(inis=[str(existente), str(tmp_path / "sumiu.ini")])) is False
+    assert aplicacao.aplicar_no_jogo(_jogo()) == aplicacao.FALTANDO
+    assert aplicacao.aplicar_no_jogo(_jogo(inis=[str(existente), str(tmp_path / "sumiu.ini")])) == aplicacao.FALTANDO
+    # configs.user.ini do GSE numa pasta steam_settings que sumiu também falta
+    gse = tmp_path / "sumiu" / "steam_settings" / "configs.user.ini"
+    assert aplicacao.aplicar_no_jogo(_jogo(inis=[str(existente), str(gse)])) == aplicacao.FALTANDO
     assert existente.read_bytes() == antes
 
 
 def test_aplicar_sem_valores_nao_toca_o_disco(schema, tmp_path):
     existente = _ini(tmp_path)
     antes, mtime = existente.read_bytes(), existente.stat().st_mtime_ns
-    assert aplicacao.aplicar_no_jogo(_jogo(inis=[str(existente)])) is True
+    assert aplicacao.aplicar_no_jogo(_jogo(inis=[str(existente)])) == aplicacao.APLICADO
     assert (existente.read_bytes(), existente.stat().st_mtime_ns) == (antes, mtime)
 
 
@@ -80,7 +83,7 @@ def test_aplicar_somente_leitura_nao_levanta(schema, tmp_path, caplog):
     original = bloqueado.read_bytes()
     os.chmod(bloqueado, stat.S_IREAD)
     try:
-        assert aplicacao.aplicar_no_jogo(_jogo(inis=[str(bloqueado), str(livre)])) is True
+        assert aplicacao.aplicar_no_jogo(_jogo(inis=[str(bloqueado), str(livre)])) == aplicacao.FALHOU
     finally:
         os.chmod(bloqueado, stat.S_IWRITE | stat.S_IREAD)
     assert b"UserName=Ana" in livre.read_bytes()
@@ -106,8 +109,28 @@ def test_atualizar_inis_grava_lista_e_devolve_appid(tmp_path):
     jogo = _jogo(executable=str(exe))
     assert aplicacao.atualizar_inis(jogo, []) == "620"
     assert jogo.inis == [str(ini_)]
+    jogo.executable = str(tmp_path / "Raiz" / "x.exe")  # pasta com outro jogo: recusada
+    (tmp_path / "Raiz").mkdir()
+    (tmp_path / "Raiz" / "x.exe").write_bytes(b"MZ")
+    (tmp_path / "Raiz" / "y.exe").write_bytes(b"MZ")
+    assert aplicacao.atualizar_inis(jogo, [str(tmp_path / "Raiz" / "y.exe")]) is None and jogo.inis == []
+
+
+def test_atualizar_inis_sem_a_pasta_do_jogo_mantem_a_lista(tmp_path):
+    """HD externo desligado: o exe some, mas os .ini achados antes continuam valendo."""
+    jogo = _jogo(executable=str(tmp_path / "Desligado" / "x.exe"), inis=["E:/Jogo/steam_emu.ini"])
+    assert aplicacao.atualizar_inis(jogo, []) is None
+    assert jogo.inis == ["E:/Jogo/steam_emu.ini"]
     jogo.executable = ""
-    assert aplicacao.atualizar_inis(jogo, []) is None and jogo.inis == []
+    assert aplicacao.atualizar_inis(jogo, []) is None and jogo.inis == ["E:/Jogo/steam_emu.ini"]
+
+
+def test_aplicar_cria_o_configs_user_ini_do_gse(schema, tmp_path):
+    schema.set_string("nome-do-jogador", "Ana")
+    gse = tmp_path / "steam_settings" / "configs.user.ini"
+    gse.parent.mkdir()
+    assert aplicacao.aplicar_no_jogo(_jogo(inis=[str(gse)])) == aplicacao.APLICADO
+    assert b"account_name=Ana" in gse.read_bytes()
 
 
 def test_adotar_appid(tmp_path):

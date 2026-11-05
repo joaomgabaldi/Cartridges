@@ -35,6 +35,7 @@ from cartridges.utils.game_folder import game_folder
 _PROFUNDIDADE = 8
 _LIMITE_DE_ENTRADAS = 50_000
 _CHANGER = "language.changer.ini"
+_GSE_USER = "configs.user.ini"
 _DO_APPID = frozenset({"steam_emu.ini", "codex.ini", "ali213.ini"})
 
 
@@ -143,6 +144,9 @@ def procurar(raiz: Path) -> list[Path]:
         for nome in nomes_de_arquivo:
             if nome.casefold() in ini.FORMATOS:
                 achados.add(pasta / nome)
+        # GSE sem configs.user.ini: o caminho entra mesmo inexistente, a aplicação o cria
+        if pasta.name.casefold() == "steam_settings" and not any(n.casefold() == _GSE_USER for n in nomes_de_arquivo):
+            achados.add(pasta / _GSE_USER)
         for nome in nomes_de_arquivo:
             if nome.casefold() == _CHANGER and (prefixo := _prefixo_do_changer(pasta / nome)):
                 achados.update(
@@ -151,6 +155,11 @@ def procurar(raiz: Path) -> list[Path]:
                     and n.casefold() != _CHANGER
                 )
     return sorted(achados)
+
+
+def gse_a_criar(caminho: Path) -> bool:
+    """O configs.user.ini do GSE que a busca listou sem existir: não conta como faltando enquanto a pasta existe."""
+    return caminho.name.casefold() == _GSE_USER and caminho.parent.name.casefold() == "steam_settings" and caminho.parent.is_dir()
 
 
 def formato_de(caminho: Path) -> str:

@@ -26,6 +26,7 @@ from typing import Iterable, Optional
 from cartridges import shared
 from cartridges.emuladores import busca, ini
 from cartridges.emuladores.idiomas import IDIOMAS
+from cartridges.utils.game_folder import game_folder
 
 
 def valores_para(jogo) -> tuple[Optional[str], Optional[str]]:
@@ -47,22 +48,27 @@ def _modelo_com_marcador(caminho: Path) -> bool:
     return "&" in (ini.ler(caminho, "steam_emu.ini").idioma or "")
 
 
-def aplicar_no_jogo(jogo) -> bool:
-    """`False` quando os .ini não foram procurados ou algum sumiu ("faltando"); nada é gravado nesse caso."""
+FALTANDO, APLICADO, FALHOU = "faltando", "aplicado", "falhou"
+
+
+def aplicar_no_jogo(jogo) -> str:
+    """`FALTANDO` quando os .ini não foram procurados ou algum sumiu (nada é gravado); `FALHOU` se algum arquivo não aceitou a gravação."""
     if jogo.inis is None:
-        return False
+        return FALTANDO
     caminhos = [Path(c) for c in jogo.inis]
-    if not all(c.exists() for c in caminhos):
-        return False
+    if not all(c.exists() or busca.gse_a_criar(c) for c in caminhos):
+        return FALTANDO
     nome, idioma = valores_para(jogo)
     if nome is None and idioma is None:
-        return True
+        return APLICADO
+    resultado = APLICADO
     for caminho in caminhos:
         try:
             ini.aplicar(caminho, nome, None if _modelo_com_marcador(caminho) else idioma, busca.formato_de(caminho))
         except OSError as erro:  # somente leitura ou aberto pelo jogo: não derruba o play
             logging.warning("Não foi possível gravar `%s`: %s", caminho, erro)
-    return True
+            resultado = FALHOU
+    return resultado
 
 
 def executaveis_dos_outros(jogo) -> list[str]:
@@ -73,7 +79,12 @@ def executaveis_dos_outros(jogo) -> list[str]:
 
 
 def atualizar_inis(jogo, executaveis_dos_outros: Iterable[str]) -> Optional[str]:
-    """Procura de novo os .ini do jogo, grava `jogo.inis` e devolve o AppID que eles dizem (ou None)."""
+    """Procura de novo os .ini do jogo, grava `jogo.inis` e devolve o AppID que eles dizem (ou None).
+
+    Sem a pasta do jogo (HD externo desligado, exe ausente) nada muda: os .ini de antes continuam valendo.
+    """
+    if not game_folder(jogo.executable or ""):
+        return None
     raiz = busca.raiz_do_jogo(jogo.executable, executaveis_dos_outros)
     achados = busca.procurar(raiz) if raiz else []
     jogo.inis = [str(c) for c in achados]

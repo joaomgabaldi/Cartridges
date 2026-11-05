@@ -318,8 +318,10 @@ class SteamAPIHelper:
             raise SteamNotAGameError()
 
         values = self.parse_app_data(app_data)
-        if isinstance(app_data.get("supported_languages"), str):
-            values["idiomas_steam"] = idiomas.do_appdetails(app_data["supported_languages"])
+        if isinstance(app_data.get("supported_languages"), str) and (
+            (codigos := idiomas.do_appdetails(app_data["supported_languages"])) is not None
+        ):
+            values["idiomas_steam"] = codigos
 
         # `skip_genre` deixa a chave de fora para o `update_values` não tocar no campo: cair no gênero amplo trocaria um "Metroidvania" por "Ação" quando a requisição de tags falhou.
         if not skip_genre and (genre := self.get_genre(appid, app_data, tag_ids)):

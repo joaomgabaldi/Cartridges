@@ -20,6 +20,7 @@
 """Idiomas aceitos pela Steam, com o nome que a loja em português usa."""
 
 import re
+from typing import Optional
 
 # "brazilian" primeiro (o idioma do app), depois por nome.
 IDIOMAS: dict[str, str] = {
@@ -55,6 +56,7 @@ IDIOMAS: dict[str, str] = {
     "vietnamese": "Vietnamita",
 }
 
+
 def para_qml() -> list[dict[str, str]]:
     """As opções das telas: ``{codigo, nome}`` na ordem de ``IDIOMAS``."""
     return [{"codigo": codigo, "nome": nome} for codigo, nome in IDIOMAS.items()]
@@ -63,11 +65,15 @@ def para_qml() -> list[dict[str, str]]:
 _POR_NOME = {nome: codigo for codigo, nome in IDIOMAS.items()}
 
 
-def do_appdetails(texto: str) -> list[str]:
-    """Os códigos dos idiomas em ``supported_languages`` (pedido com ``l=brazilian``), na ordem; nomes desconhecidos são ignorados."""
+def do_appdetails(texto: str) -> Optional[list[str]]:
+    """Os códigos dos idiomas em ``supported_languages`` (pedido com ``l=brazilian``), na ordem; nomes desconhecidos são ignorados.
+
+    ``None`` (desconhecido) quando há texto mas nenhum nome foi reconhecido: a loja mudou o formato, e uma lista vazia barraria todo idioma.
+    """
     if not isinstance(texto, str):
         return []
     # A nota final ("*idiomas com suporte total de áudio") vem depois do último <br>.
     lista = re.split(r"<br\s*/?>", texto, maxsplit=1)[0]
     nomes = (re.sub(r"<[^>]*>", "", parte).strip(" *") for parte in lista.split(","))
-    return [_POR_NOME[nome] for nome in nomes if nome in _POR_NOME]
+    codigos = [_POR_NOME[nome] for nome in nomes if nome in _POR_NOME]
+    return codigos if codigos or not texto.strip() else None

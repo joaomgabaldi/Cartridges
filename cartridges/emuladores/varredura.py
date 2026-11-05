@@ -49,42 +49,58 @@ def _buscar_idiomas(jogo: Jogo) -> None:
     jogo.idiomas_steam = dados.get("idiomas_steam")
 
 
-def _varrer_um(jogo: Jogo) -> bool:
-    """Devolve se o AppID do jogo mudou."""
+def _varrer_um(jogo: Jogo) -> tuple[bool, Optional[str]]:
+    """(o AppID do jogo mudou, o resultado de `aplicar_no_jogo` ou None se houve erro)."""
     antes = (jogo.inis, jogo.steam_appid, jogo.idiomas_steam)
     try:
         mudou = aplicacao.adotar_appid(jogo, aplicacao.atualizar_inis(jogo, aplicacao.executaveis_dos_outros(jogo)))
         if jogo.inis and jogo.steam_appid and jogo.idiomas_steam is None:
             _buscar_idiomas(jogo)
-        aplicacao.aplicar_no_jogo(jogo)
+        resultado = aplicacao.aplicar_no_jogo(jogo)
     except Exception:  # noqa: BLE001  (um jogo com problema não pode parar a varredura única)
         logging.exception("Falha ao varrer os .ini de %s", jogo.name)
-        return False
+        return False, None
     if (jogo.inis, jogo.steam_appid, jogo.idiomas_steam) != antes and _da_biblioteca(jogo):
         jogo.save()
-    return mudou
+    return mudou, resultado
+
+
+def _despachar(mudados: list[Jogo]) -> None:
+    """O Steam do refresh não veria mudança (o AppID já foi trocado): a ligação com o zerado é pedida aqui."""
+    if not mudados:
+        return
+    from cartridges.metadata_refresh import get_metadata_refresh  # noqa: PLC0415
+    from cartridges.utils import ligacao_zerado  # noqa: PLC0415
+
+    for jogo in mudados:
+        ligacao_zerado.agendar(jogo)
+    na_thread_principal(get_metadata_refresh().start, mudados)
+
+
+def procurar_jogo(jogo: Jogo) -> Optional[str]:
+    """Procura os .ini de um jogo fora da varredura (jogo novo, executável trocado, play), adota o AppID e aplica.
+
+    Roda numa thread de trabalho. Devolve o resultado de `aplicar_no_jogo` (None se houve erro).
+    """
+    mudou, resultado = _varrer_um(jogo)
+    if mudou:
+        _despachar([jogo])
+    return resultado
 
 
 def _rodar_varredura(jogos: list[Jogo]) -> None:
-    tarefa = tarefas.comecar("Procurando os arquivos de configuração dos jogos", len(jogos))
+    tarefa = tarefas.comecar(_("Arquivos de configuração"), len(jogos))
     mudados: list[Jogo] = []
     try:
         for feitos, jogo in enumerate(jogos, 1):
-            if _varrer_um(jogo):
+            if _varrer_um(jogo)[0]:
                 mudados.append(jogo)
             tarefa.atualizar(feitos)
     finally:
         tarefa.terminar()
         # Marcada mesmo com falha: tentar de novo a cada abertura prenderia o app numa varredura que não termina.
         shared.schema.set_boolean("inis-varridos", True)
-        if mudados:
-            from cartridges.metadata_refresh import get_metadata_refresh  # noqa: PLC0415
-            from cartridges.utils import ligacao_zerado  # noqa: PLC0415
-
-            # O Steam do refresh não veria mudança (o AppID já foi trocado): a ligação com o zerado é pedida aqui.
-            for jogo in mudados:
-                ligacao_zerado.agendar(jogo)
-            na_thread_principal(get_metadata_refresh().start, mudados)
+        _despachar(mudados)
 
 
 def _da_lista(jogos: Iterable[Jogo]) -> list[Jogo]:
@@ -106,7 +122,7 @@ def _reaplicar_um(jogo: Jogo) -> None:
 
 
 def _rodar_reaplicacao(jogos: list[Jogo], cancelar: threading.Event) -> None:
-    tarefa = tarefas.comecar("Aplicando o idioma e o nome do jogador", len(jogos))
+    tarefa = tarefas.comecar(_("Idioma e nome do jogador"), len(jogos))
     try:
         for feitos, jogo in enumerate(jogos, 1):
             if cancelar.is_set():
@@ -130,6 +146,25 @@ def reaplicar(jogos: Iterable[Jogo], campos: Iterable[str] = ("nome", "idioma"))
         _cancelar_reaplicacao.set()
     _cancelar_reaplicacao = cancelar = threading.Event()
     thread = threading.Thread(target=_rodar_reaplicacao, args=(alvos, cancelar), name="reaplicacao-dos-inis", daemon=True)
+    thread.start()
+    return thread
+
+
+def _buscar_idiomas_que_faltam(jogos: list[Jogo]) -> None:
+    """Na abertura: os idiomas da Steam que uma busca anterior não trouxe (sem rede); com eles, o idioma volta a ser aplicado."""
+    for jogo in jogos:
+        if not (jogo.inis and jogo.steam_appid and jogo.idiomas_steam is None):
+            continue
+        _buscar_idiomas(jogo)
+        if jogo.idiomas_steam is not None and _da_biblioteca(jogo):
+            jogo.save()
+            _reaplicar_um(jogo)
+
+
+def buscar_idiomas_que_faltam(jogos: Iterable[Jogo]) -> threading.Thread:
+    thread = threading.Thread(
+        target=_buscar_idiomas_que_faltam, args=(_da_lista(jogos),), name="idiomas-da-steam", daemon=True
+    )
     thread.start()
     return thread
 
@@ -165,3 +200,5 @@ def ligar_ao_app() -> None:
     shared.schema.connect("changed::idioma-do-jogador", lambda *_: mudou("idioma"))
     if not shared.schema.get_boolean("inis-varridos"):
         varrer(_jogos_da_biblioteca())
+    else:  # a varredura já busca os idiomas de cada jogo
+        buscar_idiomas_que_faltam(_jogos_da_biblioteca())

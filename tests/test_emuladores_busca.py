@@ -193,3 +193,9 @@ def test_appid_nivel_so_com_480_cai_para_o_proximo(tmp_path):
 def test_appid_modelo_nao_conta(tmp_path):
     m = _ini(tmp_path / "steam_emu_brazilian.ini", "999")
     assert busca.appid_dos([m]) is None
+
+
+def test_procurar_lista_configs_user_ini_do_gse_que_falta(tmp_path):
+    raiz = tmp_path / "Jogo"
+    txt = _arq(raiz / "steam_settings/steam_appid.txt", "620")
+    assert busca.procurar(raiz) == sorted([txt, raiz / "steam_settings/configs.user.ini"])

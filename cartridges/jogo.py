@@ -348,30 +348,34 @@ class Jogo(QObject):
         _rodada, jogar, cancelar = self._rodada
         self.procurando_inis.emit(jogar, cancelar)
 
-    def _fim_da_conferencia(self) -> None:
+    def _fim_da_conferencia(self, falhou: bool = False) -> None:
         self._conferindo = self._procurando = False
         self.inis_procurados.emit()
+        # Excluído ou removido durante a busca: não abre um jogo que já saiu da biblioteca.
+        if self.removed or (shared.store is not None and shared.store.get(self.game_id) is not self):
+            return
         self._rodada[1]()
+        if falhou:
+            self._avisar(_("Não foi possível aplicar o idioma e o nome do jogador em {}."))
 
     def _conferir_inis(self, ao_confirmar: Optional[Callable[[], Any]]) -> None:
         """Aplica o idioma e o nome numa thread (toca o disco) e relança na principal; nunca impede o jogo de abrir."""
-        from cartridges.emuladores import aplicacao, busca  # noqa: PLC0415
+        from cartridges.emuladores import aplicacao, busca, varredura  # noqa: PLC0415
 
         self._conferindo, self._procurando = True, False
         self._nova_rodada(ao_confirmar)
 
         def conferir() -> None:
+            resultado = None
             try:
-                if not aplicacao.aplicar_no_jogo(self) and busca.raiz_do_jogo(self.executable, []) is not None:
+                resultado = aplicacao.aplicar_no_jogo(self)
+                if resultado == aplicacao.FALTANDO and busca.raiz_do_jogo(self.executable, []) is not None:
                     na_thread_principal(self._mostrar_preparo)
-                    aplicacao.atualizar_inis(self, aplicacao.executaveis_dos_outros(self))
-                    aplicacao.aplicar_no_jogo(self)
-                    # Excluído durante a busca: gravar o ressuscitaria.
-                    if shared.store is not None and shared.store.get(self.game_id) is self:
-                        self.save()
+                    # Adota o AppID como a varredura; só grava o jogo se ele ainda está na biblioteca.
+                    resultado = varredura.procurar_jogo(self)
             except Exception:  # noqa: BLE001
                 logging.exception("Falha ao conferir os .ini de %s", self.name)
-            na_thread_principal(self._fim_da_conferencia)
+            na_thread_principal(self._fim_da_conferencia, resultado == aplicacao.FALHOU)
 
         threading.Thread(target=conferir, name="conferencia-dos-inis", daemon=True).start()
 

@@ -11,6 +11,7 @@ import pytest
 from PySide6.QtCore import Qt
 
 from cartridges import jogo as modulo
+from cartridges.emuladores import aplicacao, varredura
 from cartridges.jogo import Jogo
 from cartridges.ponte import Ponte
 
@@ -46,7 +47,7 @@ def play(monkeypatch, schema):
     monkeypatch.setattr(modulo, "threading", SimpleNamespace(Thread=_ThreadNaHora))
     monkeypatch.setattr(modulo, "na_thread_principal", lambda f, *a: fila.append((f, a)))
     monkeypatch.setattr(Jogo, "save", lambda self: None)
-    monkeypatch.setattr(modulo.shared, "store", None)  # uma store falsa que outro arquivo deixou não entra aqui
+    monkeypatch.setattr(varredura, "_despachar", lambda jogos: None)  # sem refresh de metadados nem ligação
 
     def soltar():
         while fila:
@@ -153,8 +154,6 @@ def test_sem_pasta_lanca_sem_dialogo(play, tmp_path):
 
 def test_erro_na_conferencia_nao_impede_o_jogo(play, tmp_path, monkeypatch):
     executados, fila, soltar = play
-    from cartridges.emuladores import aplicacao  # noqa: PLC0415
-
     monkeypatch.setattr(aplicacao, "aplicar_no_jogo", lambda j: 1 / 0)
     jogo = _jogo(_pasta(tmp_path))
     jogo.launch()
@@ -255,3 +254,61 @@ def test_ponte_ignora_o_preparo_de_outro_jogo(play, tmp_path, app_qt):
     assert [p[0] for p in pedidos] == ["Preparando Portal"]
     soltar()
     assert len(executados) == 2  # ninguém decidiu: os dois abrem no fim
+
+
+def test_procurando_adota_o_appid(play, tmp_path, monkeypatch):
+    executados, fila, soltar = play
+    despachados = []
+    monkeypatch.setattr(varredura, "_despachar", despachados.extend)
+    jogo = _jogo(_pasta(tmp_path), steam_appid="10")
+    jogo.launch()
+    soltar()
+    assert jogo.steam_appid == "620" and despachados == [jogo]
+    assert len(executados) == 1
+
+
+def test_falha_na_gravacao_avisa_depois_de_lancar(play, tmp_path, monkeypatch):
+    executados, fila, soltar = play
+    pasta = _pasta(tmp_path)
+    jogo = _jogo(pasta, inis=[str(pasta / "steam_emu.ini")])
+    avisos = _contar(jogo.aviso)
+    monkeypatch.setattr(aplicacao, "aplicar_no_jogo", lambda j: aplicacao.FALHOU)
+    jogo.launch()
+    soltar()
+    assert len(executados) == 1
+    assert avisos[-1] == ("Não foi possível aplicar o idioma e o nome do jogador em Portal.", "")  # depois do "iniciado"
+
+
+def test_jogo_que_saiu_da_biblioteca_nao_abre(play, tmp_path, store):
+    executados, fila, soltar = play
+    pasta = _pasta(tmp_path)
+    jogo = _jogo(pasta, inis=[str(pasta / "steam_emu.ini")])
+    store.add_game(jogo, {}, run_pipeline=False)
+    jogo.launch()
+    store.games_by_id.pop(jogo.game_id)  # excluído durante a conferência
+    soltar()
+    assert executados == []
+
+
+def test_jogo_removido_durante_a_conferencia_nao_abre(play, tmp_path):
+    executados, fila, soltar = play
+    pasta = _pasta(tmp_path)
+    jogo = _jogo(pasta, inis=[str(pasta / "steam_emu.ini")])
+    jogo.launch()
+    jogo.removed = True
+    soltar()
+    assert executados == []
+
+
+def test_gse_sem_configs_user_ini_abre_sem_dialogo_e_cria(play, tmp_path):
+    executados, fila, soltar = play
+    pasta = tmp_path / "Jogo"
+    (pasta / "steam_settings").mkdir(parents=True)
+    (pasta / "j.exe").write_bytes(b"")
+    gse = pasta / "steam_settings" / "configs.user.ini"
+    jogo = _jogo(pasta, inis=[str(gse)])
+    pedidos = _contar(jogo.procurando_inis)
+    jogo.launch()
+    soltar()
+    assert pedidos == [] and len(executados) == 1
+    assert b"account_name=Fulano" in gse.read_bytes()
