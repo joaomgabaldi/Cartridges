@@ -1447,12 +1447,16 @@ def test_nome_do_jogador_grava_e_o_invalido_nao(app):
     campo = app.achar("campoDoNomeDoJogador")
     assert _linha(app, "campoDoNomeDoJogador")[1] == "Até 32 caracteres, sem acentos."
     _digitar(campo, "Joao")
+    assert shared.schema.get_string("nome-do-jogador") == ""  # a cada tecla não grava
+    QMetaObject.invokeMethod(campo, "terminado", Qt.ConnectionType.DirectConnection)
     assert shared.schema.get_string("nome-do-jogador") == "Joao"
     _digitar(campo, "João")
+    QMetaObject.invokeMethod(campo, "terminado", Qt.ConnectionType.DirectConnection)
     assert shared.schema.get_string("nome-do-jogador") == "Joao"  # o inválido não é gravado
     assert campo.property("erro") is True
-    assert _linha(app, "campoDoNomeDoJogador")[1] == "Use até 32 caracteres, sem acentos."
+    assert _linha(app, "campoDoNomeDoJogador")[1] == "Use até 32 caracteres, sem acentos nem símbolos especiais."
     _digitar(campo, "")
+    QMetaObject.invokeMethod(campo, "terminado", Qt.ConnectionType.DirectConnection)
     assert shared.schema.get_string("nome-do-jogador") == ""
     assert campo.property("erro") is False
 

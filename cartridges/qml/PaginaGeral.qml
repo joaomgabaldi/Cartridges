@@ -204,11 +204,11 @@ Column {
             buscavel: true
             objectName: "campoDoNomeDoJogador"
             titulo: "Nome do jogador"
-            subtitulo: erro ? "Use até 32 caracteres, sem acentos." : "Até 32 caracteres, sem acentos."
+            subtitulo: erro ? "Use até 32 caracteres, sem acentos nem símbolos especiais." : "Até 32 caracteres, sem acentos."
             erro: !preferencias.nomeDoJogadorValido(text)
             // Lido uma vez: com a ligação, o espaço digitado sumiria antes da letra seguinte.
             Component.onCompleted: text = preferencias.valores["nome-do-jogador"] || ""
-            onEditado: preferencias.definirTexto("nome-do-jogador", text)
+            onTerminado: preferencias.definirTexto("nome-do-jogador", text)
         }
         LinhaDeEscolha {
             buscavel: true

@@ -593,7 +593,7 @@ MolduraDoDialogo {
                             erro: !edicao.nomeProprioValido
                             titulo: "Nome do jogador"
                             exemplo: "Padrão do Kyron"
-                            subtitulo: erro ? "Use até 32 caracteres, sem acentos." : "Até 32 caracteres, sem acentos."
+                            subtitulo: erro ? "Use até 32 caracteres, sem acentos nem símbolos especiais." : "Até 32 caracteres, sem acentos."
                             text: edicao.nomeProprio
                             onEditado: edicao.nomeProprio = text
                         }

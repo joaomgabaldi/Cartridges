@@ -14,6 +14,8 @@ LinhaDoGrupo {
 
     signal editado()
     signal confirmado()
+    // Fim da edição: Enter ou saída do campo (para quem grava o valor só ao terminar, não a cada tecla).
+    signal terminado()
 
     readonly property bool _rotuloEmCima: campo.activeFocus || campo.text !== ""
 
@@ -69,6 +71,7 @@ LinhaDoGrupo {
             onTextChanged: if (!activeFocus) cursorPosition = 0
             onTextEdited: linha.editado()
             onAccepted: linha.confirmado()
+            onEditingFinished: linha.terminado()
         }
         Text {
             id: dica

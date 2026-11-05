@@ -51,7 +51,7 @@ _CICLO = _PARADO + _DESLIZE + _SOZINHA + 2 * _TROCA
 _DESLOCAMENTO = 60  # px que o placeholder anda para a esquerda
 
 _DATA = Path(__file__).resolve().parent.parent / "data"
-PAGINAS = ("boas_vindas", "jogos", "capas", "conquistas", "iluminacao", "controle", "monitores", "pronto")
+PAGINAS = ("boas_vindas", "jogos", "idioma", "capas", "conquistas", "iluminacao", "controle", "monitores", "pronto")
 # Os interruptores das telas; nenhuma outra chave é gravada pelo `definir`.
 _INTERRUPTORES = ("big-picture-ao-conectar", "session-move-window", "session-wallpaper")
 
@@ -326,7 +326,7 @@ class Assistente(QObject):
 
     @Slot(str, result=bool)
     def nomeDoJogadorValido(self, texto: str) -> bool:  # noqa: N802
-        return not texto.strip() or ini.nome_valido(texto.strip())
+        return ini.nome_aceito(texto)
 
     @Slot(str)
     def definirNomeDoJogador(self, texto: str) -> None:  # noqa: N802

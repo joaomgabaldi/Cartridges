@@ -193,7 +193,9 @@ def test_subtitulo_de_contar_horas_sem_ludusavi(montar):
 def test_grupos_na_ordem_da_main(montar):
     _p, pagina = montar()
     titulos = [i.property("titulo") for i in pagina.item.childItems() if i.property("titulo")]
-    assert titulos == ["Comportamento", "Backup da sua biblioteca", "Atualizações", "Zona de perigo"]
+    assert titulos == [
+        "Comportamento", "Backup da sua biblioteca", "Atualizações", "Idioma e nome do jogador", "Zona de perigo"
+    ]
     assert pagina.achar("linhaRedefinir").property("titulo") == "Redefinir Kyron"
     assert pagina.achar("linhaRedefinir").property("destrutivo") is True
     for nome, titulo in (

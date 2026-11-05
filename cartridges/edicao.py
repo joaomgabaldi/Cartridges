@@ -437,7 +437,7 @@ def aplicar(form: Formulario, jogo: Optional[Jogo], appid_inicial: str) -> Resul
     if form.idioma_proprio == "" or form.idioma_proprio in idiomas.IDIOMAS:
         jogo.idioma_proprio = form.idioma_proprio
     # Nome fora da regra não é gravado; o resto da edição segue.
-    if form.nome_proprio.strip() == "" or ini.nome_valido(form.nome_proprio.strip()):
+    if ini.nome_aceito(form.nome_proprio):
         jogo.nome_proprio = form.nome_proprio.strip()
 
     capa_presa = False

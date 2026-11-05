@@ -136,3 +136,10 @@ def test_aplicar_recusa_valor_que_quebra_o_formato(tmp_path, valor):
 def test_nome_aceito():
     assert ini.nome_aceito("") and ini.nome_aceito("  ") and ini.nome_aceito(" Ana ")
     assert not ini.nome_aceito("Ação") and not ini.nome_aceito("x" * 33)
+
+
+def test_guarda_nome_ou_idioma_pelo_nome_do_arquivo():
+    assert ini.guarda_nome_ou_idioma("C:/j/steam_emu.ini")
+    assert ini.guarda_nome_ou_idioma("C:/j/steam_settings/configs.user.ini")
+    assert ini.guarda_nome_ou_idioma("C:/j/steam_emu_x.ini")  # modelo do language.changer
+    assert not ini.guarda_nome_ou_idioma("C:/j/steam_appid.txt")

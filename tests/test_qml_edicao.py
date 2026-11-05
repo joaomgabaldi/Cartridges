@@ -1854,14 +1854,19 @@ def test_idioma_e_nome_proprios_so_com_ini_e_aplicam_ao_salvar(app, monkeypatch)
     assert app.achar("linhaDoIdiomaProprio").property("aparece") is False
     assert app.achar("campoDoNomeProprio").property("aparece") is False
     app.edicao.cancelar()
-    shared.store.get("shortcuts_z1").inis = ["C:/x/steam_settings.ini"]
+    shared.store.get("shortcuts_z1").inis = ["C:/x/steam_appid.txt"]  # só o AppID: nada a escolher
+    app.edicao.abrir("shortcuts_z1")
+    assert app.achar("linhaDoIdiomaProprio").property("aparece") is False
+    app.edicao.cancelar()
+    shared.store.get("shortcuts_z1").inis = ["C:/x/steam_appid.txt", "C:/x/steam_emu.ini"]
     app.edicao.abrir("shortcuts_z1")
     assert app.achar("linhaDoIdiomaProprio").property("aparece") is True
     campo = app.achar("campoDoNomeProprio")
     assert campo.property("aparece") is True and campo.property("subtitulo") == "Até 32 caracteres, sem acentos."
     app.edicao.idiomaProprioIndice = 1
     app.edicao.nomeProprio = "João"
-    assert campo.property("erro") is True and campo.property("subtitulo") == "Use até 32 caracteres, sem acentos."
+    assert campo.property("erro") is True
+    assert campo.property("subtitulo") == "Use até 32 caracteres, sem acentos nem símbolos especiais."
     app.edicao.aplicar()
     jogo1 = shared.store.get("shortcuts_z1")
     assert jogo1.idioma_proprio == "brazilian" and jogo1.nome_proprio == ""  # nome inválido não grava; o resto sim

@@ -699,7 +699,7 @@ class Preferencias(QObject):
 
     @Slot(str, result=bool)
     def nomeDoJogadorValido(self, texto: str) -> bool:  # noqa: N802
-        return not texto.strip() or ini.nome_valido(texto.strip())
+        return ini.nome_aceito(texto)
 
     @Slot(str, str)
     def definirTexto(self, chave: str, texto: str) -> None:
@@ -710,7 +710,7 @@ class Preferencias(QObject):
         if chave != "sgdb-key":
             texto = texto.strip()
         # Nome fora da regra e idioma desconhecido não são gravados; vazio limpa o padrão.
-        if chave == "nome-do-jogador" and texto and not ini.nome_valido(texto):
+        if chave == "nome-do-jogador" and not ini.nome_aceito(texto):
             return
         if chave == "idioma-do-jogador" and texto and texto not in idiomas.IDIOMAS:
             return

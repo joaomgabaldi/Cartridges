@@ -197,6 +197,12 @@ def nome_valido(texto: str) -> bool:
     return re.fullmatch(r"[A-Za-z0-9_.\-\[\]()!@$&+~^ ]{1,32}", texto) is not None and texto == texto.strip()
 
 
+def guarda_nome_ou_idioma(caminho: str) -> bool:
+    """Pelo nome do arquivo, sem tocar o disco. Fora de FORMATOS só entram os modelos do language.changer, que têm os dois."""
+    fmt = FORMATOS.get(Path(caminho).name.casefold())
+    return fmt is None or bool(fmt[2] or fmt[3])
+
+
 def nome_aceito(texto: str) -> bool:
     """O que as telas aceitam no campo do nome: vazio (usa o padrão) ou um nome válido."""
     return not texto.strip() or nome_valido(texto.strip())

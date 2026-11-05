@@ -21,8 +21,8 @@ from PySide6.QtCore import Property, QCoreApplication, QEvent, QObject, QUrl, Si
 from PySide6.QtGui import QColor, QGuiApplication
 
 from cartridges import edicao, shared
-from cartridges.emuladores import idiomas, ini
 from cartridges.edicao import Escolha, Formulario
+from cartridges.emuladores import idiomas, ini
 from cartridges.jogo import STATUS_LABELS, Jogo
 from cartridges.modelos.ordem import _url_da_capa  # noqa: PLC2701
 from cartridges.modelos.seletores import (
@@ -181,8 +181,7 @@ class ModeloDaEdicao(QObject):
     @Property(bool, notify=nomeProprioChanged)
     def nomeProprioValido(self) -> bool:  # noqa: N802
         """Vazio (o padrão) ou dentro da regra; fora dela o campo avisa e o nome não é gravado."""
-        texto = self._form.nome_proprio.strip()
-        return texto == "" or ini.nome_valido(texto)
+        return ini.nome_aceito(self._form.nome_proprio)
 
     # "Padrão do Kyron" (""), depois os idiomas da Steam na ordem de `IDIOMAS`.
     opcoesDeIdioma = Property(  # noqa: N815
@@ -191,7 +190,8 @@ class ModeloDaEdicao(QObject):
 
     @Property(int, notify=idiomaProprioChanged)
     def idiomaProprioIndice(self) -> int:  # noqa: N802
-        return 1 + list(idiomas.IDIOMAS).index(self._form.idioma_proprio) if self._form.idioma_proprio in idiomas.IDIOMAS else 0
+        codigo = self._form.idioma_proprio
+        return 1 + list(idiomas.IDIOMAS).index(codigo) if codigo in idiomas.IDIOMAS else 0
 
     @idiomaProprioIndice.setter
     def idiomaProprioIndice(self, indice: int) -> None:  # noqa: N802
@@ -202,8 +202,8 @@ class ModeloDaEdicao(QObject):
 
     @Property(bool, notify=abertoChanged)
     def iniVisivel(self) -> bool:  # noqa: N802
-        """Só os jogos com .ini de emulador de Steam têm idioma e nome próprios."""
-        return bool(self._jogo and self._jogo.inis)
+        """Só os jogos com um .ini que guarda o nome ou o idioma têm idioma e nome próprios (o steam_appid.txt sozinho não conta)."""
+        return bool(self._jogo and self._jogo.inis and any(map(ini.guarda_nome_ou_idioma, self._jogo.inis)))
 
     @Property(int, notify=controleIndiceChanged)
     def controleIndice(self) -> int:  # noqa: N802
@@ -856,7 +856,8 @@ class ModeloDaEdicao(QObject):
             self.nomeChanged, self.desenvolvedoraChanged, self.publicadoraChanged, self.lancamentoChanged,
             self.generoChanged, self.executavelChanged, self.adminChanged, self.rastrearProcessoChanged,
             self.executavelDoProcessoChanged, self.notificarAtualizacoesChanged, self.conquistasChanged,
-            self.appidChanged, self.idiomaProprioChanged, self.nomeProprioChanged, self.notaChanged, self.controleIndiceChanged, self.statusIndiceChanged,
+            self.appidChanged, self.idiomaProprioChanged, self.nomeProprioChanged, self.notaChanged,
+            self.controleIndiceChanged, self.statusIndiceChanged,
             self.ludusaviChanged, self.ocupadoChanged, self.abertoChanged, self.capaChanged, self.imagensChanged,
             self.buscandoMetadadosChanged,
         ):  # fmt: skip

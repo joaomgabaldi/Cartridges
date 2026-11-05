@@ -209,6 +209,7 @@ def test_ponte_jogar_mesmo_assim_e_cancelar(play, tmp_path, app_qt):
     soltar()
     assert len(executados) == 1
 
+
 def test_cancelar_e_jogar_de_novo_reabre_o_preparo(play, tmp_path):
     executados, fila, soltar = play
     jogo = _jogo(_pasta(tmp_path))

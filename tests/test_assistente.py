@@ -335,7 +335,7 @@ def test_monitores_gravam_a_escolha_ao_montar(schema, monkeypatch):
 
 def test_navegacao_e_rodape():
     assistente, _, _ = _assistente()
-    assert len(assistente.paginas) == 7
+    assert len(assistente.paginas) == 8
     assert not assistente.rodapeVisivel
     assistente.avancar()
     assert assistente.rodapeVisivel
@@ -435,7 +435,7 @@ def test_sem_3d_a_tela_do_controle_some(monkeypatch):
 def test_paginas_ocupam_a_largura_do_carrossel(janela):
     carrossel = janela.achar("carrossel")
     assert carrossel.width() == 640
-    for nome in ("boas_vindas", "jogos", "capas", "conquistas", "iluminacao", "controle", "monitores", "pronto"):
+    for nome in ("boas_vindas", "jogos", "idioma", "capas", "conquistas", "iluminacao", "controle", "monitores", "pronto"):
         assert janela.achar(f"pagina_{nome}").width() == carrossel.width(), nome
 
 
@@ -947,16 +947,20 @@ def test_barra_com_titulo_texto_no_clamp_de_600_e_botao_escolher_com_fundo(janel
     assert botao.property("height") == 34 and botao.property("radius") == 9
 
 
-def test_idioma_e_nome_do_jogador_gravam_na_hora(janela, schema):
-    janela.ir_para("jogos")
+def test_idioma_e_nome_do_jogador_na_etapa_propria(janela, schema):
+    janela.ir_para("idioma")
+    assert janela.modelo.paginas.index("idioma") == janela.modelo.paginas.index("jogos") + 1
+    assert janela.achar("titulo_idioma").property("text") == "Idioma e nome do jogador"
     campo, linha = janela.achar("campoDoNomeDoJogadorNoAssistente"), janela.achar("linhaDoIdiomaNoAssistente")
     campo.setProperty("text", "Joao")
     QMetaObject.invokeMethod(campo, "editado", Qt.ConnectionType.DirectConnection)
+    assert schema.get_string("nome-do-jogador") == ""  # a cada tecla não grava
+    QMetaObject.invokeMethod(campo, "terminado", Qt.ConnectionType.DirectConnection)
     assert schema.get_string("nome-do-jogador") == "Joao"
     campo.setProperty("text", "João")
-    QMetaObject.invokeMethod(campo, "editado", Qt.ConnectionType.DirectConnection)
+    QMetaObject.invokeMethod(campo, "terminado", Qt.ConnectionType.DirectConnection)
     assert schema.get_string("nome-do-jogador") == "Joao"
-    assert campo.property("erro") is True and campo.property("subtitulo") == "Use até 32 caracteres, sem acentos."
+    assert campo.property("erro") is True
+    assert campo.property("subtitulo") == "Use até 32 caracteres, sem acentos nem símbolos especiais."
     QMetaObject.invokeMethod(linha, "escolhido", Qt.ConnectionType.DirectConnection, Q_ARG(int, 1))
     assert schema.get_string("idioma-do-jogador") == "brazilian"
-    assert janela.achar("grupoIdiomaENome").property("titulo") == "Idioma e nome do jogador"
