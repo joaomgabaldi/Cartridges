@@ -223,7 +223,7 @@ def test_aplicar_corrige_o_appid_apaga_e_varre(store, varridos):
 
 
 def test_conta_com_fonte_invalida_apaga_como_a_main(store, varridos):
-    """Fonte guardada ilegível (`xbox:`): a `main` apaga, como com a Steam; só a fonte de conta válida mantém."""
+    """Fonte guardada ilegível (`xbox:`): apaga-se, como com a Steam; só a fonte de conta válida mantém."""
     game = jogo(store, 46, executable="x.exe", steam_appid="10")
     historico.registrar(game.game_id, [Desbloqueio("A", 1)], fonte="xbox:", conta="111")
     _aplicar(store, game, appid_buscado="20")

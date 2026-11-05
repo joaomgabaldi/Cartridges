@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""O cartão da página do jogo e a lista de conquistas, sem tela: as puras e o `ConquistasDoJogo` (D58, D62)."""
+"""O cartão da página do jogo e a lista de conquistas, sem tela: as puras e o `ConquistasDoJogo`."""
 
 import gc
 import logging
@@ -184,7 +184,7 @@ def test_lista_em_duas_secoes(tela):
 def test_ocultas_reveladas_pela_preferencia(tela, schema):
     tela.modelo.abrir(tela.jogo.game_id)
     schema.set_boolean("conquistas-mostrar-ocultas", True)
-    # D14: a lista aberta é o retrato de quando abriu; a preferência vale na abertura seguinte.
+    # A lista aberta é o retrato de quando abriu; a preferência vale na abertura seguinte.
     assert _titulos(tela.modelo.bloqueadas) == ["Conquista oculta"]
     assert tela.modelo.bloqueadas[0]["icone"]["oculta"] is True
     tela.modelo.fechar()
@@ -443,7 +443,7 @@ def test_mudou_de_outra_thread_chega_na_principal(tela, flush_idle):
 
 
 def test_desconectar_avisa_uma_vez_e_some_o_cartao_aberto(avisos, flush_idle, monkeypatch):
-    """Review Focus 2: a conta Microsoft recusada com a página, a lista e a tela da sessão do jogo abertas."""
+    """A conta Microsoft recusada com a página, a lista e a tela da sessão do jogo abertas."""
     jogo = _jogo()
     catalogo.guardar("xbox-7", CAT)
     com_fonte(jogo, "xbox:7")
@@ -466,7 +466,7 @@ def test_desconectar_avisa_uma_vez_e_some_o_cartao_aberto(avisos, flush_idle, mo
 
     assert avisos.textos == ["A conta Microsoft foi desconectada. Entre novamente nas Preferências."]
     assert modelo.pagina["visivel"] is False
-    assert modelo.aberto is True  # D13: a lista aberta segue como estava (o retrato de quando abriu)
+    assert modelo.aberto is True  # a lista aberta segue como estava (o retrato de quando abriu)
     assert modelo.sessao["visivel"] is False
 
 
@@ -497,5 +497,5 @@ def test_falha_ao_montar_esconde_a_vista(tela, monkeypatch, caplog):
         tela.modelo.mudou(None)
 
     assert tela.modelo.pagina["visivel"] is False
-    assert tela.modelo.aberto is True  # D13: a lista aberta não é refeita, então não falha nem fecha
+    assert tela.modelo.aberto is True  # a lista aberta não é refeita, então não falha nem fecha
     assert caplog.text.count("Falha ao montar as conquistas") == 1

@@ -10,10 +10,8 @@ from cartridges.conquistas import arquivos, historico
 
 
 def kv_bytes(itens: dict) -> bytes:
-    """KeyValues binário, do jeito que a Steam grava em `appcache\\stats` (só para teste).
+    """KeyValues binário, do jeito que a Steam grava em `appcache\\stats` (dict vira seção, str texto, int int32, float float32)."""
 
-    dict vira seção, str vira texto, int vira int32 e float vira float32.
-    """
     saida = bytearray()
     for chave, valor in itens.items():
         nome = chave.encode("utf-8") + b"\0"
@@ -52,10 +50,7 @@ def criar(caminho: Path, texto: str = "x") -> Path:
 
 
 def com_fonte(game, texto: str) -> None:
-    """Grava no histórico de ``game`` a fonte das conquistas (``"steam:570"``).
-
-    Sem fonte gravada o cartão fica oculto; é o que a varredura faz de verdade.
-    """
+    """Grava no histórico de ``game`` a fonte das conquistas (``"steam:570"``); sem ela o cartão fica oculto."""
     historico.registrar(game.game_id, [], fonte=texto)
 
 
@@ -73,8 +68,6 @@ def pastas(tmp_path, monkeypatch):
     monkeypatch.setattr(arquivos, "pasta_da_steam", lambda: None)
     return falsas
 
-
-# -- Ubisoft Connect --------------------------------------------------------------
 
 # O `.spool` real do AC Black Flag Resynced (productId 65043), lido em 05/10/2026:
 # conquistas 23 (1785102639) e 12 (1791243494). Só varints: nenhum dado pessoal.

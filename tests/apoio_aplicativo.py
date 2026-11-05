@@ -4,7 +4,7 @@
 
 """O `Aplicativo` dos testes do domínio: anota o que o app mostraria (avisos, diálogos, perguntas, reinícios).
 
-Não importa o `conftest` nem outro teste: as cópias abaixo são deliberadas (Pré-voo 8 do plano 8a).
+Não importa o `conftest` nem outro teste: as cópias abaixo são deliberadas.
 """
 
 from collections.abc import Callable

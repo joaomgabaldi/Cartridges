@@ -2,7 +2,8 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Ajudantes dos testes das Novidades (D83). Não importa o `conftest` nem outro teste.
+"""Ajudantes dos testes das Novidades. Não importa
+ o `conftest` nem outro teste.
 
 Nada de rede: o feed é o `fetch_news` trocado por quem usa; o checker falso não tem thread nem relógio.
 """

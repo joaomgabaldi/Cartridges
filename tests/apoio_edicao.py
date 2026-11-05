@@ -5,7 +5,7 @@
 """Apoio dos testes da edição (`cartridges.edicao`) e da ligação de zerados.
 
 Módulo à parte, e não um teste: importar `tests.conftest` ou um `test_*.py` de
-outro arquivo roda a coleta de novo (ver a armadilha da Task 4 do plano 3).
+outro arquivo roda a coleta de novo.
 """
 
 import time
@@ -14,7 +14,7 @@ from PySide6.QtCore import QEventLoop, QTimer
 
 
 def jogo(store, numero, **campos):
-    """Um `Jogo` de verdade, já registrado na store (sem pipeline)."""
+    """Um `Jogo` de verdade, já registrado na store."""
     from cartridges.jogo import Jogo  # noqa: PLC0415
 
     game = Jogo(
@@ -63,7 +63,7 @@ def stub_sgdb(store, erros=()):
 
 
 def girar(limite=0.1):
-    """Gira o laço de eventos: o que foi enfileirado para a thread principal chega."""
+    """Gira o laço de eventos para o que foi enfileirado chegar."""
     fim = time.monotonic() + limite
     while time.monotonic() < fim:
         laco = QEventLoop()

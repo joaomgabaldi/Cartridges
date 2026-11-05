@@ -2,10 +2,8 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Regressões da auditoria de 18/09/2026 sobre as fitas na sessão (trazidas de ``test_auditoria_0918_fitas.py``).
+"""Regressões da auditoria de 18/09/2026 sobre as fitas na sessão. Cada teste falha sem o conserto do achado."""
 
-Cada teste falha sem o conserto do achado cujo id está no nome.
-"""
 
 import json
 import threading

@@ -2,8 +2,8 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""A abertura em etapas (D74): redefinição antes do log, restauração agendada com a janela própria, os avisos depois
-da janela, a segunda abertura durante a restauração e o reinício pedido pelo app (D75)."""
+"""A abertura em etapas: redefinição antes do log, restauração agendada com a janela própria, os avisos depois
+da janela, a segunda abertura durante a restauração e o reinício pedido pelo app."""
 
 import json
 import logging
@@ -66,7 +66,7 @@ def test_backup_agendado_e_aplicado_antes_da_biblioteca(tmp_path):
     zip_ = tmp_path / "origem.zip"
     backup.exportar(zip_, backup.ler_configuracoes())
     dados = tmp_path / "dados"
-    _ficha(dados / "games", "imported_9", "Antes")  # a biblioteca de antes não sobra
+    _ficha(dados / "games", "imported_9", "Antes")
     shutil.copyfile(zip_, dados / "restaurar.zip")
 
     resultado = _rodar(["-m", "cartridges", "--sair-apos-carregar"], dados)
@@ -96,7 +96,7 @@ def _fechar_restauracao(abertura):
 
 
 def test_restauracao_que_falha_abre_o_app_com_o_aviso(app_qt, monkeypatch):  # noqa: ARG001
-    """Review Focus 2: um zip corrompido não leva nada; os dados de antes ficam e o primeiro aviso é o da falha."""
+    """Um zip corrompido não leva nada; os dados de antes ficam e o primeiro aviso é o da falha."""
     _ficha(shared.games_dir, "imported_9", "Antes")
     (shared.app_dir / "restaurar.zip").write_bytes(b"isto nao e um zip")
     monkeypatch.setattr(backup, "pasta_dos_saves_desfeita", None)
@@ -119,7 +119,7 @@ def test_restauracao_que_falha_abre_o_app_com_o_aviso(app_qt, monkeypatch):  # n
 
 
 def test_abertura_quebrada_depois_da_restauracao_fecha_a_janela(app_qt, monkeypatch, caplog):  # noqa: ARG001
-    """Review Focus 2: uma janela sem fechar, presa em 100%, só sairia pelo Gerenciador de Tarefas."""
+    """Uma janela presa em 100% só sairia pelo Gerenciador de Tarefas."""
     saidas = []
     monkeypatch.setattr(modulo_app.QGuiApplication, "exit", staticmethod(saidas.append))
 
@@ -166,7 +166,7 @@ def test_principal_aparece_antes_de_a_restauracao_fechar(app_qt, monkeypatch):  
 
 
 def test_segunda_abertura_durante_a_restauracao_traz_a_janela(app_qt):  # noqa: ARG001
-    """Review Focus 5: sem principal ainda, o segundo clique no atalho traz a janela da restauração."""
+    """Sem principal ainda, o segundo clique no atalho traz a janela da restauração."""
     abertura = modulo_app._Abertura()  # noqa: SLF001
     abertura.restauracao = modulo_app._janela_da_restauracao()  # noqa: SLF001
     janela = abertura.restauracao.rootObjects()[0]
@@ -186,7 +186,7 @@ def test_segunda_abertura_durante_a_restauracao_traz_a_janela(app_qt):  # noqa: 
 
 
 def test_main_avisa_da_pasta_dos_saves_logo_depois_do_aviso_de_falha(app_qt, monkeypatch):  # noqa: ARG001
-    """A ordem da fila da D72: o segundo diálogo espera o primeiro fechar."""
+    """O segundo diálogo espera o primeiro fechar."""
     monkeypatch.setattr(backup, "pasta_dos_saves_desfeita", "D:/Saves & Cia")
     monkeypatch.setattr(redefinir, "falha", OSError("preso"))
     aplicativo = Aplicativo()
@@ -202,7 +202,7 @@ def test_main_avisa_da_pasta_dos_saves_logo_depois_do_aviso_de_falha(app_qt, mon
         "Para voltar a usar D:\\Saves & Cia, escolha-a novamente em Preferências.",
     )
     redefinir_ = ("Não foi possível redefinir", "Não foi possível concluir a redefinição do Kyron. Tente novamente.")
-    # Em pilha, como a `main`: o último a abrir é o que se vê; cada um que fecha devolve a tela ao anterior.
+    # Em pilha: o último a abrir é o que se vê; cada um que fecha devolve a tela ao anterior.
     assert pedidos == [restaurar, pasta, redefinir_]
     aplicativo.dialogoFechado()
     assert pedidos[3] == pasta
@@ -292,7 +292,7 @@ def test_fechar_durante_a_restauracao_pula_o_que_ainda_nao_existe(monkeypatch, c
     assert "Falha ao encerrar" not in caplog.text
 
 
-# -- o assistente da primeira abertura (D86) -------------------------------------------------------------------------
+# -- o assistente da primeira abertura -------------------------------------------------------------------------
 
 
 def _assistente(app_qt, monkeypatch, eventos, restaurar=None):
@@ -331,7 +331,7 @@ def test_primeira_abertura_mostra_o_assistente_e_nao_abre(app_qt, monkeypatch):
     abertura, janela, modelo = _assistente(app_qt, monkeypatch, eventos)
     try:
         assert janela.isVisible() and eventos == []
-        assert shared.store is not None and list(shared.store) == []  # a store vazia das contas (Pré-voo 9)
+        assert shared.store is not None and list(shared.store) == []
         modelo.concluir()
         assert eventos == ["abrir", "avisos"]
         assert _esperar(lambda: not janela.isVisible())
@@ -340,7 +340,7 @@ def test_primeira_abertura_mostra_o_assistente_e_nao_abre(app_qt, monkeypatch):
 
 
 def test_segunda_ativacao_com_o_assistente_traz_o_assistente(app_qt, monkeypatch):
-    """D76: o segundo clique no atalho com o assistente à vista traz o assistente."""
+    """O segundo clique no atalho com o assistente à vista traz o assistente."""
     eventos = []
     abertura, janela, _modelo = _assistente(app_qt, monkeypatch, eventos)
     try:
@@ -399,7 +399,7 @@ def test_sem_backup_agendado_abre_na_hora(monkeypatch):
 
 
 def test_sair_apos_carregar_nao_mostra_o_assistente(tmp_path):
-    """Pré-voo 8: o modo de teste da carga, sem tela, sobre uma pasta de dados vazia (a primeira abertura)."""
+    """O modo de teste da carga, sem tela, sobre uma pasta de dados vazia (a primeira abertura)."""
     resultado = _rodar(["-m", "cartridges", "--sair-apos-carregar"], tmp_path / "dados")
     assert resultado.returncode == 0, resultado.stderr
     assert "jogos carregados: 0" in resultado.stdout
@@ -455,7 +455,7 @@ def test_fechar_o_assistente_pelo_x_encerra_o_app_sem_abrir_a_biblioteca(tmp_pat
 
 # -- o reinício ------------------------------------------------------------------------------------------------------
 
-# Com a principal à vista e saves em andamento, o X seria recusado (D78); o `quit()` do reinício não pode ser.
+# Com a principal à vista e saves em andamento, o X seria recusado; o `quit()` do reinício não pode ser.
 _REINICIO = r"""
 import json
 from PySide6.QtCore import QTimer

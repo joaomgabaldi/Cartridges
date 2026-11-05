@@ -202,7 +202,7 @@ def test_cancelar_duas_vezes_termina_uma(navegador, flush_idle):
 
 
 def test_cancelar_pendente_fecha_a_porta_sem_o_laco_de_eventos(navegador, flush_idle):
-    """M1 da revisão final do plano 6: no `aboutToQuit` o laço já acabou e a entrega na principal não roda."""
+    """No `aboutToQuit` o laço já acabou e a entrega na principal não roda."""
     resultados = []
     pedido = login.entrar(resultados.append, abrir=navegador.append)
     login.cancelar_pendente()  # sem `flush_idle`: como no fechamento do app

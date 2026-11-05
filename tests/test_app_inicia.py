@@ -201,11 +201,11 @@ print(json.dumps({"codigo": codigo, "fitas": fitas, "receptores": receptores, "a
 
 
 def test_qml_que_nao_carrega_nao_deixa_as_fitas_acesas_e_o_saindo_encerra_a_sessao(tmp_path):
-    """Sem janela o `app.exec()` não roda e o `aboutToQuit` (que fecha as fitas) nunca vem. As fitas acendem antes do
-    QML (com a janela, não um segundo depois dela), então o `_abrir` que não carregou as devolve.
+    """Sem janela o `app.exec()` não roda e o `aboutToQuit` (que fecha as fitas) nunca vem: o `_abrir` que não
+    carregou devolve as fitas acesas.
 
-    No mesmo `main()` de verdade (R2): o `saindo` tem um receptor só, o `encerrar()` da sessão, que não espera fita
-    nem parede (R1: elas ficam para o `aboutToQuit`).
+    Também: o `saindo` tem um receptor só, o `encerrar()` da sessão, que não espera fita nem parede (elas ficam para o
+    `aboutToQuit`).
     """
     ambiente = {
         **os.environ,

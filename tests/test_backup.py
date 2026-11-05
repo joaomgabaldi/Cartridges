@@ -35,12 +35,9 @@ _PASTAS_DO_APP = (
 def _app_isolado(tmp_path, monkeypatch, app_dirs):
     """A pasta do app dentro de ``tmp_path/app``, com as configurações de verdade.
 
-    O conftest põe ``app_dir`` no próprio ``tmp_path``, e a restauração cria
-    irmãs dele (``.anterior``, ``.restaurando``, ``.lixo``) em ``tmp_path.parent``:
-    a pasta de base do pytest, compartilhada por todos os testes da sessão.
-    Um nível a mais e as irmãs ficam na pasta deste teste, só dele; e a troca
-    deixa de varrer junto o que o teste guarda ao lado (o backup exportado, os
-    schemas).
+    O conftest põe ``app_dir`` no próprio ``tmp_path``, e a restauração cria irmãs dele (``.anterior``,
+    ``.restaurando``, ``.lixo``) em ``tmp_path.parent``, compartilhada por todos os testes da sessão. Um nível a mais
+    e as irmãs ficam na pasta deste teste, sem varrer o que ele guarda ao lado (o backup exportado, os schemas).
     """
     raiz = tmp_path / "app"
     for nome in _PASTAS_DO_APP:
@@ -52,9 +49,7 @@ def _app_isolado(tmp_path, monkeypatch, app_dirs):
         (tmp_path / pasta.name).rmdir()
 
 
-# --------------------------------------------------------------------------
 # Backup completo (.zip)
-# --------------------------------------------------------------------------
 
 
 def test_an_old_json_backup_is_not_a_full_backup(tmp_path) -> None:
@@ -96,16 +91,12 @@ def test_a_setting_removed_from_the_schema_is_ignored(schema) -> None:
     assert main.get_boolean("sgdb") is True
 
 
-# --------------------------------------------------------------------------
 # Exportar e validar
-# --------------------------------------------------------------------------
 
 
 def _sobrou(pasta):
-    """Se ``pasta`` ainda guarda alguma coisa. No Windows, o antivírus ou o
-    indexador seguram uma pasta ou um arquivo recém-gravado por alguns
-    milissegundos, e a remoção deixa para trás a pasta, já vazia: o que importa
-    à restauração é que não sobre dado nela (a abertura seguinte a descarta)."""
+    """Se ``pasta`` ainda guarda alguma coisa. No Windows, o antivírus ou o indexador seguram uma pasta recém-gravada
+    por alguns milissegundos e a remoção deixa a pasta já vazia: o que importa é que não sobre dado nela."""
     return pasta.exists() and any(pasta.iterdir())
 
 
@@ -187,8 +178,7 @@ def test_backup_leva_as_copias(tmp_path):
         nomes = arquivo.namelist()
     assert "cache/capas_animadas/g1_200x300.webp" in nomes
     assert not any(nome.endswith(".tmp") for nome in nomes)
-    # E o que `exportar` grava, `validar` aceita: uma pasta aninhada não pode
-    # tornar o próprio backup inválido.
+    # Uma pasta aninhada não pode tornar o próprio backup inválido.
     assert backup.validar(destino)["version"] == backup.VERSAO
 
 
@@ -265,9 +255,7 @@ def test_validar_aceita_o_que_exportar_grava(tmp_path):
     assert backup.validar(_exportar(tmp_path))["version"] == backup.VERSAO
 
 
-# --------------------------------------------------------------------------
 # Os saves no backup
-# --------------------------------------------------------------------------
 
 
 def _guardar_saves(raiz, jogo="X", mapping="mapping", backup_1="save"):
@@ -1003,9 +991,7 @@ def test_pasta_ludusavi_fica(tmp_path, monkeypatch):
     assert (shared.app_dir / "ludusavi" / "config.yaml").read_text("utf-8") == "config"
 
 
-# --------------------------------------------------------------------------
 # Restaurar
-# --------------------------------------------------------------------------
 
 
 def test_agendar_copia_para_a_pasta_do_app(tmp_path):
@@ -1250,9 +1236,7 @@ def test_restauracao_concluida_nao_e_desfeita_se_a_pasta_antiga_nao_sai(tmp_path
     assert not _sobrou(shared.app_dir.with_name(shared.app_dir.name + ".anterior"))
 
 
-# --------------------------------------------------------------------------
 # A restauração na abertura: uma passada pelo zip, com progresso
-# --------------------------------------------------------------------------
 
 
 def test_ha_pendente(tmp_path, monkeypatch):
@@ -1353,13 +1337,11 @@ def test_sobra_de_restaurando_que_resiste_uma_vez_nao_impede(tmp_path, monkeypat
     assert not (shared.games_dir / "velho.json").exists()
 
 
-# --------------------------------------------------------------------------
 # Sem gi, e o que o `Configuracoes.aceita` recusa
-# --------------------------------------------------------------------------
 
 
 def test_b7_exportar_por_cima_nao_trunca_o_backup_antigo(monkeypatch, store, make_game, tmp_path):
-    """Hoje o backup é o .zip de `utils/backup.py`; a garantia é a mesma."""
+    """Uma falha no meio de exportar por cima deixa o backup antigo intacto e sem `.tmp`."""
     destino = tmp_path / "backup.zip"
     destino.write_bytes(b"backup antigo")
     store.add_game(make_game(game_id="a"), {})

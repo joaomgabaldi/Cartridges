@@ -22,9 +22,7 @@ from cartridges.saves import conferencia
 from cartridges.saves.ludusavi import Previa
 from cartridges.utils import game_logo, session_wallpaper
 
-# ---------------------------------------------------------------------------
 # cmd_safe: `%` expande variáveis mesmo entre aspas
-# ---------------------------------------------------------------------------
 
 _EPIC = (
     "com.epicgames.launcher://apps/fn%3A4fe75bbc5a674f4f9b356b5c90567da5"
@@ -61,8 +59,7 @@ def test_cmd_safe_recusa_expansao_de_variavel(url):
 
 @pytest.mark.skipif(sys.platform != "win32", reason="precisa do cmd.exe real")
 def test_cmd_real_so_injeta_o_que_cmd_safe_recusa(tmp_path):
-    """No cmd.exe de verdade, com as aspas do comando que o importador monta
-    (`echo` no lugar de `start`, para não abrir nada)."""
+    """No cmd.exe de verdade, com as aspas do comando que o importador monta (`echo` no lugar de `start`)."""
     marca = str(tmp_path / "marca.txt")
     eco = f'echo x> "{marca}"'
 
@@ -78,9 +75,7 @@ def test_cmd_real_so_injeta_o_que_cmd_safe_recusa(tmp_path):
     assert ss.cmd_safe(aceita) and not injeta(aceita)
 
 
-# ---------------------------------------------------------------------------
 # .lnk com alvo UNC: a varredura não olha o caminho de rede
-# ---------------------------------------------------------------------------
 
 
 def test_alvo_unc_nao_e_consultado_na_varredura(tmp_path, schema, monkeypatch):
@@ -110,9 +105,7 @@ def test_alvo_unc_nao_e_consultado_na_varredura(tmp_path, schema, monkeypatch):
     assert jogo.executable == f'start "" "{alvo}"'
 
 
-# ---------------------------------------------------------------------------
 # Restauração de saves não grava na pasta do app
-# ---------------------------------------------------------------------------
 
 
 def test_restauracao_de_saves_recusa_a_pasta_do_app(tmp_path):
@@ -133,9 +126,7 @@ def test_restauracao_de_saves_recusa_a_pasta_do_app(tmp_path):
     assert conferencia.recusado(Previa((str(local / "Jogo" / "x.sav"),), ()), limites) is None
 
 
-# ---------------------------------------------------------------------------
 # Sidecars: `file` só pode ser um nome solto
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize(
@@ -154,19 +145,13 @@ def test_sidecar_com_nome_solto_continua_valendo(app_dirs):
     assert session_wallpaper._arquivo_do_sidecar({"file": "g.jpg"}) == shared.wallpapers_dir / "g.jpg"
 
 
-# ---------------------------------------------------------------------------
 # game_id vira nome de arquivo: só o formato que o app gera é carregado
-# ---------------------------------------------------------------------------
 
 
-# ---------------------------------------------------------------------------
 # Seletores: o id da API nunca vira nome de arquivo
-# ---------------------------------------------------------------------------
 
 
-# ---------------------------------------------------------------------------
 # Backup restaurado: o primeiro lançamento mostra o comando
-# ---------------------------------------------------------------------------
 
 
 def test_restauracao_marca_os_comandos_a_conferir(app_dirs):
@@ -186,9 +171,7 @@ def test_restauracao_marca_os_comandos_a_conferir(app_dirs):
     assert "comando_a_conferir" not in ler("zerado")
 
 
-# ---------------------------------------------------------------------------
 # Caminho de rede: nem a varredura de tamanho, nem a pasta de atalhos do backup
-# ---------------------------------------------------------------------------
 
 
 def test_comando_com_caminho_unc_nao_e_vigiado(monkeypatch):

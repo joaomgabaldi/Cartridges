@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Q2: um zerado é ligado ao jogo da biblioteca que ganha o mesmo appID."""
+"""Um zerado é ligado ao jogo da biblioteca que ganha o mesmo appID."""
 
 from types import SimpleNamespace
 
@@ -114,11 +114,10 @@ def test_a_capa_do_zerado_leva_embora_as_copias_da_capa_anterior(
     copias_animadas.pedir(capa_velha, copias[0], copias_animadas.tamanhos()[0], recebidos.append)
 
     assert ligar(vivo) is True
-    girar()  # a troca das cópias vai pela fila da thread principal (`_refazer_copias`)
+    girar()  # a troca das cópias vai pela fila da thread principal
     assert [c for c in copias if c.exists()] == []
 
-    # O pedido da capa velha, invalidado, não entrega nada. (As cópias da capa
-    # nova, que a troca pede de novo com o mesmo nome, podem ser geradas.)
+    # O pedido da capa velha, invalidado, não entrega nada.
     while fila_das_copias.fila:
         fila_das_copias.fila.pop(0)()
     girar()
@@ -147,12 +146,8 @@ def test_dois_vivos_nao_liga(store, ligar):
 
 
 def test_rotina_da_steam_so_marca_a_ligacao(store, monkeypatch):
-    """`SteamAPIManager.main` não liga na hora: só marca `additional_data`.
-
-    Quem liga de fato, e só depois que o pipeline inteiro termina (SGDB
-    incluído), é `Store._ao_avancar_pipeline` — ver
-    `test_ligacao_so_roda_depois_do_pipeline_inteiro` abaixo.
-    """
+    """`SteamAPIManager.main` não liga na hora: só marca `additional_data`; quem liga, depois do pipeline inteiro, é
+    `Store._ao_avancar_pipeline`."""
     from cartridges.store.managers import steam_api_manager  # noqa: PLC0415
 
     gerente = steam_api_manager.SteamAPIManager()
@@ -172,10 +167,8 @@ def test_rotina_da_steam_so_marca_a_ligacao(store, monkeypatch):
 def test_ligacao_so_roda_depois_do_pipeline_inteiro(store):
     """A ligação espera o pipeline do jogo terminar por inteiro.
 
-    Um manager parecido com o SteamAPIManager marca `ligar_zerado` e termina
-    na hora; um segundo, parecido com o SGDB (`run_after` do primeiro), só
-    termina quando o teste manda. Enquanto ele não termina, a fusão não pode
-    ter acontecido. Usa o `Store.add_game` e o `Pipeline` de verdade.
+    Um manager parecido com o SteamAPIManager marca `ligar_zerado` e termina na hora; um parecido com o SGDB
+    (`run_after` do primeiro) só termina quando o teste manda. Usa o `Store.add_game` e o `Pipeline` de verdade.
     """
     from cartridges.jogo import Jogo  # noqa: PLC0415
     from cartridges.store.managers.manager import Manager  # noqa: PLC0415
@@ -220,8 +213,7 @@ def test_ligacao_so_roda_depois_do_pipeline_inteiro(store):
     pipeline = store.add_game(vivo, {})
     assert pipeline is not None
 
-    # O manager que marcou a ligação já terminou, mas o "SGDB" ainda está
-    # rodando: a fusão não pode ter acontecido ainda.
+    # O "SGDB" ainda está rodando: a fusão não pode ter acontecido.
     girar()
     assert store.get(zerado.game_id) is not None
 
@@ -233,9 +225,8 @@ def test_ligacao_so_roda_depois_do_pipeline_inteiro(store):
 
 
 def test_nao_sobrescreve_escolha_travada_do_jogo(store, ligar, tmp_path):
-    """"Escolha própria" é qualquer decisão travada do jogo, não só um
-    arquivo manual: "usar o título" no logo e "não trocar" na parede também
-    são decisões do jogo, e a ligação não pode desfazê-las."""
+    """"Escolha própria" é qualquer decisão travada do jogo, não só um arquivo manual: "usar o título" no logo e
+    "não trocar" na parede também são, e a ligação não pode desfazê-las."""
     from cartridges.utils import game_logo, session_wallpaper  # noqa: PLC0415
 
     zerado = jogo(store, 23, removed=True, status="beaten", steam_appid="900")
@@ -289,11 +280,8 @@ def _detalhes_de(store, jogo_mostrado):
 
 
 def test_fecha_a_tela_de_detalhes_do_zerado_fundido(store, ligar):
-    """Se a página de detalhes do zerado fundido estiver aberta, ela sai.
-
-    Sem isso, ela seguiria um jogo que não existe mais na store, e qualquer
-    ação nela (mudar status, editar) reviveria o arquivo apagado, contando o
-    tempo em dobro numa próxima ligação."""
+    """Se a página de detalhes do zerado fundido estiver aberta, ela sai: senão qualquer ação nela reviveria o
+    arquivo apagado e contaria o tempo em dobro."""
     zerado = jogo(store, 27, removed=True, status="beaten", steam_appid="960")
     vivo = jogo(store, 28, steam_appid="960")
     detalhes = _detalhes_de(store, zerado)

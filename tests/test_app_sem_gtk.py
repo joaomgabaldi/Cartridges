@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""O app Qt sobe sem o GTK: o `gi` bloqueado e o GTK morto fora do `sys.modules` (D90)."""
+"""O app Qt sobe sem o GTK: o `gi` bloqueado e o GTK morto fora do `sys.modules`."""
 
 import ast
 import os
@@ -57,8 +57,8 @@ def test_app_qt_nao_importa_o_gtk():
     assert "GI=\n" in resultado.stdout + "\n", resultado.stdout
 
 
-# Os módulos GTK que a D93 apagou (nomes pontuados completos). `utils.caixa_redimensionavel` e
-# `logging.color_log_formatter` ficam: o app Qt os usa (o segundo, por texto, no `dictConfig`).
+# Módulos GTK apagados. `utils.caixa_redimensionavel` e `logging.color_log_formatter` ficam: o app Qt os usa (o
+# segundo, por texto, no `dictConfig`).
 _APAGADOS = (
     "cartridges.main", "cartridges.window", "cartridges.details_dialog", "cartridges.big_picture",
     "cartridges.gamepad", "cartridges.game_cover", "cartridges.logo_picker",

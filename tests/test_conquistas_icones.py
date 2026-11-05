@@ -175,7 +175,7 @@ def test_arquivo_local_ilegivel_nao_e_apagado(tmp_path, carregar_e_esperar):
 
 @pytest.mark.parametrize("largura, altura", [(208, 117), (208, 208), (117, 208)])
 def test_icone_nao_quadrado_e_entregue_inteiro(tmp_path, carregar_e_esperar, largura, altura):
-    # O corte no quadrado central é do QML (D60): o domínio entrega o arquivo como veio.
+    # O corte no quadrado central é do QML: o domínio entrega o arquivo como veio.
     arquivo = _png(tmp_path / "i.png", largura, altura)
     assert carregar_e_esperar(str(arquivo)) == [arquivo]
     assert QImage(str(arquivo)).width() == largura

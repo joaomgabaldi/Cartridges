@@ -150,7 +150,7 @@ def test_abertura_vibra_antes_de_sair_da_frente(monkeypatch, schema):
 
 
 def test_sessao_bloqueia_a_entrada_automatica(app_qt, monkeypatch):
-    """Um controle conectado com a sessão à vista não abre o Big Picture por baixo dela, como na `main`."""
+    """Um controle conectado com a sessão à vista não abre o Big Picture por baixo dela."""
     from cartridges.modelos import big_picture as modulo_bp  # noqa: PLC0415
     from tests.apoio_qml_biblioteca import _App, _esperar, _jogos  # noqa: PLC0415
 

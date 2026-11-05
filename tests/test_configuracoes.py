@@ -100,7 +100,7 @@ def test_string(conf, subchave):
     ["abc", r"C:\Users\ana\Atalhos", "it's", 'diz "oi"', '{"a": 1, "b": "x"}', "ação ñ", "quebra\nlinha", "'abc'", ""],
 )
 def test_texto_gravado_pela_glib_volta_igual(conf, subchave, texto):
-    # Guarda da D99: o registro guarda o texto cru (REG_SZ), sem aspas de GVariant.
+    # O registro guarda o texto cru (REG_SZ), sem aspas de GVariant.
     _gravar(subchave, "sgdb-key", texto, winreg.REG_SZ)
     assert conf.get_string("sgdb-key") == texto
     conf.set_string("sgdb-key", texto)

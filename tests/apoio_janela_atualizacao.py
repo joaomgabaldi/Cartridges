@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""O `Aplicativo.qml` inteiro com um `AppUpdater` no contexto, para os testes das atualizações (D82).
+"""O `Aplicativo.qml` inteiro com um `AppUpdater` no contexto, para os testes das atualizações.
 
 Não importa o `conftest` nem outro teste. Nada de verdade: o atualizador não busca nem baixa (quem o exercita troca
 `_buscar_release`/`download_installer`), e `_abrir_instalador` é o guarda `sem_instalador_de_verdade`.

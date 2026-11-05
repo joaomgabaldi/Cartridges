@@ -2,10 +2,8 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Regressões da auditoria de 18/09/2026 que não dependem do `gi`: as varreduras de fundo.
+"""Regressões da auditoria de 18/09/2026: as varreduras de fundo. Cada teste falha sem o conserto do achado."""
 
-Saíram de `test_auditoria_0918_fitas.py` (b11, b12 e b16), apagado no plano 8a. Cada teste falha sem o conserto do achado cujo id está no nome.
-"""
 
 import threading
 from types import SimpleNamespace

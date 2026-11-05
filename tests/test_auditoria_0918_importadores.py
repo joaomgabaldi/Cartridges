@@ -4,10 +4,8 @@
 
 """Regressões da auditoria de 18/09/2026, grupo dos importadores.
 
-Um teste (ou um grupo parametrizado) por achado, com o ID no nome. Nenhum
-toca a rede: as respostas HTTP são ``requests.Response`` de verdade montadas
-sobre bytes, para o teto de ``download.get_capped`` ler o corpo como leria do
-soquete.
+Nenhum toca a rede: as respostas HTTP são ``requests.Response`` de verdade montadas sobre bytes, para o teto de
+``download.get_capped`` ler o corpo como leria do soquete.
 """
 
 import io
@@ -77,9 +75,7 @@ def scan(tmp_path, schema, monkeypatch):
     return runner
 
 
-# ---------------------------------------------------------------------------
-# A1 — drive desligado não troca a identidade nem empobrece o comando
-# ---------------------------------------------------------------------------
+# drive desligado não troca a identidade nem empobrece o comando
 
 
 def test_a1_alvo_ausente_mantem_identidade_e_comando(scan, tmp_path):
@@ -111,9 +107,7 @@ def test_a1_alvo_com_esquema_continua_uri(scan):
     assert jogo.executable == 'start "" "com.epicgames.launcher://apps/x"'
 
 
-# ---------------------------------------------------------------------------
-# M11 — args_safe acompanha as aspas
-# ---------------------------------------------------------------------------
+# args_safe acompanha as aspas
 
 LEGITIMOS = [
     '/command=runGame /gameId=1207658924 /path="D:\\GOG Games\\X"',
@@ -169,9 +163,8 @@ def test_m11_atalho_do_gog_e_importado(scan, tmp_path):
 def test_m11_cmd_real_nao_executa_o_que_foi_aceito(scan, tmp_path):
     """Prova no cmd.exe de verdade, com o comando que o importador monta.
 
-    Cada carga tenta um ``echo`` para um arquivo-marca. As aceitas por
-    ``args_safe`` não podem criar a marca; as recusadas criam — o que prova
-    que o arnês detectaria uma injeção e que a recusa era necessária.
+    Cada carga tenta um ``echo`` para um arquivo-marca. As aceitas por ``args_safe`` não podem criar a marca; as
+    recusadas criam, o que prova que o arnês detectaria uma injeção.
     """
     alvo = os.path.join(os.environ["SystemRoot"], "System32", "hostname.exe")
     marca = str(tmp_path / "marca.txt").replace("/", "\\")
@@ -214,9 +207,7 @@ def test_m11_cmd_real_nao_executa_o_que_foi_aceito(scan, tmp_path):
         assert roda(args), f"o arnês não viu a injeção: {args}"
 
 
-# ---------------------------------------------------------------------------
-# M12 — sem a lista de apps da Steam
-# ---------------------------------------------------------------------------
+# sem a lista de apps da Steam
 
 
 def test_m12_busca_sem_confianca_faz_so_a_busca_da_loja(http):
@@ -226,8 +217,7 @@ def test_m12_busca_sem_confianca_faz_so_a_busca_da_loja(http):
     with pytest.raises(SteamGameNotFoundError):
         SteamAPIHelper(_nullcontext()).resolve("Halo Infinite")
 
-    # Antes, sem candidato confiável, `find_candidates` ia à lista de apps
-    # (endpoint que hoje dá 404) e entrava no backoff.
+    # Sem candidato confiável, `find_candidates` não vai à lista de apps (endpoint que dá 404).
     assert len(calls) == 1 and "storesearch" in calls[0][0]
 
 
@@ -237,9 +227,7 @@ def _nullcontext():
     return contextlib.nullcontext()
 
 
-# ---------------------------------------------------------------------------
-# A2 — capa .webp escolhida à mão conta como capa
-# ---------------------------------------------------------------------------
+# capa .webp escolhida à mão conta como capa
 
 
 def test_a2_webp_existente_nao_e_sobrescrita(make_game, schema, monkeypatch):
@@ -257,9 +245,7 @@ def test_a2_webp_existente_nao_e_sobrescrita(make_game, schema, monkeypatch):
     assert webp.read_bytes() == b"RIFF"
 
 
-# ---------------------------------------------------------------------------
-# B7 — sidecar do logo por temporário + replace
-# ---------------------------------------------------------------------------
+# sidecar do logo por temporário + replace
 
 
 def test_b7_escrita_que_falha_nao_estraga_o_sidecar(monkeypatch):
@@ -278,9 +264,7 @@ def test_b7_escrita_que_falha_nao_estraga_o_sidecar(monkeypatch):
     assert sorted(p.name for p in shared.logos_dir.iterdir()) == ["shortcuts_1.json"]
 
 
-# ---------------------------------------------------------------------------
-# B18 — elevado com as aspas externas
-# ---------------------------------------------------------------------------
+# elevado com as aspas externas
 
 
 def test_b18_elevado_passa_o_comando_entre_aspas(monkeypatch):
@@ -295,9 +279,7 @@ def test_b18_elevado_passa_o_comando_entre_aspas(monkeypatch):
     assert chamadas[0][1] == f'/c "{comando}"'
 
 
-# ---------------------------------------------------------------------------
-# B19 — junção NTFS não repete atalhos
-# ---------------------------------------------------------------------------
+# junção NTFS não repete atalhos
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="junção é NTFS")
@@ -322,9 +304,7 @@ def test_b19_juncao_em_laco_nao_repete_atalhos(scan, tmp_path):
     assert nomes == ["Halo", "Outro"]
 
 
-# ---------------------------------------------------------------------------
-# B21 — appid nulo ou ausente não mata a thread
-# ---------------------------------------------------------------------------
+# appid nulo ou ausente não mata a thread
 
 
 def test_b21_itens_sem_appid_viram_nao_encontrado(http):
@@ -335,9 +315,7 @@ def test_b21_itens_sem_appid_viram_nao_encontrado(http):
         SteamAPIHelper(_nullcontext()).resolve("Halo")
 
 
-# ---------------------------------------------------------------------------
-# B22 — SGDB escolhe pelo título, não pelo primeiro resultado
-# ---------------------------------------------------------------------------
+# SGDB escolhe pelo título, não pelo primeiro resultado
 
 
 def test_b22_titulo_com_dois_pontos_acha_o_jogo_certo(http, make_game, schema):
@@ -357,9 +335,7 @@ def test_b22_titulo_com_dois_pontos_acha_o_jogo_certo(http, make_game, schema):
     assert steamgriddb.SgdbHelper().get_game_id(game) == 2
 
 
-# ---------------------------------------------------------------------------
-# B23 — .url em ANSI
-# ---------------------------------------------------------------------------
+# .url em ANSI
 
 
 def test_b23_url_em_cp1252_e_importado(scan):
@@ -371,9 +347,7 @@ def test_b23_url_em_cp1252_e_importado(scan):
     assert extra["steam_appid"] == "440"
 
 
-# ---------------------------------------------------------------------------
-# B24 — filtro de não-jogo
-# ---------------------------------------------------------------------------
+# filtro de não-jogo
 
 
 @pytest.mark.parametrize(
@@ -393,9 +367,7 @@ def test_b24_filtro_so_derruba_o_que_nao_e_jogo(scan, tmp_path, nome, importa):
     assert bool(results) is importa
 
 
-# ---------------------------------------------------------------------------
-# B25 — corpos HTTP com teto
-# ---------------------------------------------------------------------------
+# corpos HTTP com teto
 
 
 def _grande():

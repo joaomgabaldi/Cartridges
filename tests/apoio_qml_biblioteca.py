@@ -39,7 +39,7 @@ from cartridges.utils.caixa_redimensionavel import CaixaDaAnotacao
 from cartridges.utils.news_checker import NewsChecker
 
 QML = Path(__file__).resolve().parent.parent / "cartridges" / "qml"
-QQuickStyle.setStyle("Basic")  # o estilo do app (`cartridges/app.py`); quem importa o apoio ganha o mesmo
+QQuickStyle.setStyle("Basic")  # o estilo do app
 
 
 def _esperar(ate=None, limite=3.0):
@@ -133,13 +133,12 @@ class _App:
         self.aplicativo = Aplicativo(self.ponte.fila)
         self.edicao = ModeloDaEdicao(self.aplicativo)
         self.historico = HistoricoDeSessoes(self.loja)
-        # O `SavesDoJogo` liga o `jogo_excluido` da store (a fixture `_store_limpa` de `test_qml_biblioteca.py` restaura); uma store de verdade, posta por
-        # quem importa o `_App` (test_qml_edicao), fica.
+        # O `SavesDoJogo` liga o `jogo_excluido` da store; uma store de verdade, posta por quem importa o `_App`, fica.
         if not hasattr(shared.store, "jogo_excluido"):
             shared.store = self.loja
         self.saves = SavesDoJogo(self.aplicativo)
         self.preferencias = shared.preferencias = Preferencias(self.ponte.fila, lambda: True)
-        # Sem `cortina`, a fábrica não cria nenhuma: a troca é direta (o offscreen tem HWND falso).
+        # Sem `cortina`, a troca é direta (o offscreen tem HWND falso).
         self.big_picture = BigPicture(
             self.modelo, fabrica_da_cortina=cortina or (lambda _hwnd: None), animacoes_do_sistema=animacoes
         )

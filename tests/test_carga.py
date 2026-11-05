@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""A carga da biblioteca do disco (`carga`), copiada do `main.py` da versão GTK."""
+"""A carga da biblioteca do disco (`carga`)."""
 
 import json
 
@@ -12,7 +12,7 @@ from cartridges.jogo import Jogo
 
 
 class _StoreDeMentira:
-    """Só o `add_game` que a carga chama (a `Store` real ainda depende do gi)."""
+    """Só o `add_game` que a carga chama."""
 
     def __init__(self) -> None:
         self.recebidos: list[tuple[Jogo, dict]] = []
@@ -115,11 +115,9 @@ def test_sem_pasta_de_jogos_nao_carrega_nada(app_dirs, monkeypatch):
     assert carregar_jogos_do_disco(_StoreDeMentira()) == 0
 
 
-# -- Vindos de tests/test_ui_logic.py -----------------------------------------
-
-
 def test_wrong_typed_numeric_fields_are_dropped_on_load():
-    """B4: `"playtime": "5h"` num registro editado à mão passava e estourava
+    """`"playtime": "5h"` num registro
+ editado à mão passava e estourava
     TypeError na tela de detalhes e na ordenação. Cai o campo, não o jogo."""
     data = {
         "name": "Probe",

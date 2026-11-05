@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""As animações do Windows relidas no `WM_SETTINGCHANGE` (D88). Nenhum filtro é instalado no app dos testes."""
+"""As animações do Windows relidas no `WM_SETTINGCHANGE`. Nenhum filtro é instalado no app dos testes."""
 
 import ctypes
 import os
@@ -25,8 +25,8 @@ _WM_SETTINGCHANGE = 0x001A
 _GENERICA = b"windows_generic_MSG"
 RAIZ = Path(__file__).resolve().parent.parent
 
-# Plataforma `windows` (a offscreen não tem procedimento de janela): uma `QWindow` criada aqui e nunca mostrada
-# recebe um `WM_SETTINGCHANGE` só dela, por `SendMessageW` direto ao HWND (nunca `HWND_BROADCAST`).
+# Plataforma `windows` (a offscreen não tem procedimento de janela): o `WM_SETTINGCHANGE` vai direto ao HWND de uma
+# `QWindow` nunca mostrada, nunca por `HWND_BROADCAST`.
 _FILTRO_NUMA_JANELA_NATIVA = textwrap.dedent("""
     import ctypes
     from PySide6.QtGui import QGuiApplication, QWindow
@@ -63,7 +63,7 @@ def test_outra_mensagem_nao_e():
     msg, endereco = _msg(0x0005)  # WM_SIZE
     assert e_mudanca_de_ajuste(_GENERICA, endereco) is False
     assert e_mudanca_de_ajuste(b"windows_dispatcher_MSG", endereco) is False
-    assert e_mudanca_de_ajuste(_GENERICA, shiboken6.VoidPtr(0)) is False  # sem mensagem: não lê o endereço zero
+    assert e_mudanca_de_ajuste(_GENERICA, shiboken6.VoidPtr(0)) is False  # não lê o endereço zero
     del msg
 
 
@@ -128,7 +128,7 @@ def test_big_picture_segue_as_animacoes_relidas(app_qt, monkeypatch, schema):  #
 
     ligadas[0] = False
     aplicativo.reler_animacoes()
-    assert not big_picture.animacoes and big_picture.animarCentral  # a capa central só depende de `cover-autoplay` (BP-15)
+    assert not big_picture.animacoes and big_picture.animarCentral  # a capa central só depende de `cover-autoplay`
     assert mudou == []
 
     ligadas[0] = True

@@ -45,11 +45,8 @@ def assistente(app_qt, tmp_path, monkeypatch, schema):  # noqa: ARG001
     janela = AssistenteDeCalibracao(session_fita.fitas())
     janela.previas = previas
     yield janela
-    # O assistente que sobra deixa o temporizador do teste vivo: ele
-    # dispararia nos testes seguintes, já sem a prévia espionada, e a prévia
-    # de verdade ficaria "em andamento" no estado global do session_fita.
-    # Encerrar aqui, com a espionagem ainda no lugar, para o temporizador e
-    # manda a última prévia para o espião.
+    # O assistente que sobra deixa o temporizador vivo: ele dispararia nos testes seguintes, já sem a espionagem, e a
+    # prévia de verdade ficaria "em andamento" no estado global do session_fita. Encerrar aqui, com o espião no lugar.
     janela._encerrar()
 
 

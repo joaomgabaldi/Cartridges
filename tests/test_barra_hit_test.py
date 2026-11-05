@@ -2,7 +2,8 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""J05 de verdade: o que o QWindowKit responde ao WM_NCHITTEST do Windows, numa janela real, com e sem modal.
+"""O que o QWindowKit
+ responde ao WM_NCHITTEST do Windows, numa janela real, com e sem modal.
 
 O arrasto, os botões do sistema e o Snap Layouts (HTMAXBUTTON) nascem desta resposta, antes de qualquer evento do Qt:
 um modal desenhado por cima da barra não basta. Roda em outro processo porque o resto dos testes é offscreen.

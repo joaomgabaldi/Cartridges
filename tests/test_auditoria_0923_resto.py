@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Auditoria de 23/09: M6, M9, B17, B29, B24 (B26 está no `test_metadata_refresh.py`; B23, no `test_seletores_steam_ludusavi.py`)."""
+"""Regressões da auditoria de 23/09."""
 
 from cartridges import shared
 

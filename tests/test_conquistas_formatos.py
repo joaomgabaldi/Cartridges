@@ -212,7 +212,7 @@ def test_hora_gigante_no_json_nao_levanta(tmp_path):
     assert formatos.ler(caminho, formatos.GOLDBERG) == [Desbloqueio("ACH_A", 0)]
 
 
-# Os três estados reais da prova de 02/10/2026 (100% Orange Juice, appID 282800):
+# Os três estados reais (100% Orange Juice, appID 282800):
 # antes de marcar, marcado e pendente de envio, e marcado e confirmado.
 STEAM_ANTES = bytes.fromhex(
     "006361636865000263726300000000000250656e64696e674368616e67657300000000000808"

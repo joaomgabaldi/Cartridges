@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""O controle do Xbox nos diálogos e menus: o direcional anda por todos os controles (`scope.child_focus` da `main`).
+"""O controle do Xbox nos diálogos e menus: o direcional anda por todos os controles (`scope.child_focus`).
 
 O leitor é falso (não há controle físico neste PC): os testes entram pelo sinal `mover`/`ativar` do `ControleDaGrade`,
 que é o que o `_ler` emite para o direcional e para o botão A. O hardware real não foi verificado.
@@ -49,7 +49,7 @@ def _com_foco_em(app, nome):
 
 
 def test_alerta_o_direcional_chega_ao_botao_secundario(app):
-    # C-08: o botão secundário só era alcançável pelo Tab.
+    # O botão secundário só era alcançável pelo Tab.
     app.aplicativo.pedir_confirmacao("Excluir?", "Corpo", "Excluir", lambda _c: None, destrutivo=True)
     assert _esperar(lambda: app.achar("confirmacaoDoApp").property("visible") is True)
     cancelar = app.achar("botaoCancelarDoDialogo")
@@ -63,7 +63,7 @@ def test_alerta_o_direcional_chega_ao_botao_secundario(app):
 
 
 def test_editor_o_direcional_sai_do_campo_de_texto_e_vibra_na_parede(app):
-    # C-01: a raiz do editor engolia as setas e, num campo, elas só moviam o cursor.
+    # A raiz do editor engolia as setas e, num campo, elas só moviam o cursor.
     app.edicao.abrir("shortcuts_z1")
     assert _esperar(lambda: app.achar("dialogoDeEdicao").property("visible") is True)
     _com_foco_em(app, "campoNome")
@@ -78,7 +78,7 @@ def test_editor_o_direcional_sai_do_campo_de_texto_e_vibra_na_parede(app):
 
 
 def test_editor_o_direcional_nao_muda_o_valor_de_uma_escolha(app):
-    # C-02: ↑/↓ numa linha de escolha não alteram o valor; só movem o foco.
+    # ↑/↓ numa linha de escolha não alteram o valor; só movem o foco.
     app.edicao.abrir("shortcuts_z1")
     assert _esperar(lambda: app.achar("dialogoDeEdicao").property("visible") is True)
     escolha = app.achar("escolhaDeStatus")
@@ -93,7 +93,7 @@ def test_editor_o_direcional_nao_muda_o_valor_de_uma_escolha(app):
 
 
 def test_a_abre_a_lista_de_escolha(app):
-    # C-03: o `ComboBox` fechado não abre com o Return que o A envia.
+    # O `ComboBox` fechado não abre com o Return que o A envia.
     app.edicao.abrir("shortcuts_z1")
     assert _esperar(lambda: app.achar("dialogoDeEdicao").property("visible") is True)
     caixa = app.achar("escolhaDeStatusCaixa")
@@ -104,7 +104,7 @@ def test_a_abre_a_lista_de_escolha(app):
 
 
 def test_sobre_o_direcional_alcanca_as_linhas(app):
-    # C-06: da página principal só uma linha era alcançável; a raiz engolia as setas.
+    # Da página principal só uma linha era alcançável; a raiz engolia as setas.
     app.sobre.abrir()
     assert _esperar(lambda: app.achar("dialogoSobre").property("visible") is True)
     _com_foco_em(app, "linhaProblemas")
@@ -116,7 +116,7 @@ def test_sobre_o_direcional_alcanca_as_linhas(app):
 
 
 def test_preferencias_o_direcional_anda_entre_as_linhas_sem_mudar_valor(app):
-    # C-02: em Preferências, o direcional anda entre as linhas e nunca muda valor (↑/↓ num `SpinBox` mudariam).
+    # Em Preferências, o direcional anda entre as linhas e nunca muda valor (↑/↓ num `SpinBox` mudariam).
     _abrir(app, "general")
     caixa = app.achar("linhaDaEsperaCaixa")
     caixa.forceActiveFocus(Qt.FocusReason.TabFocusReason)
@@ -131,7 +131,7 @@ def test_preferencias_o_direcional_anda_entre_as_linhas_sem_mudar_valor(app):
 
 
 def test_lista_de_escolha_aberta_o_direcional_e_o_a_escolhem(app):
-    # C-03 até o fim: aberta pelo A, a lista anda com o direcional e o A escolhe o realçado.
+    # Aberta pelo A, a lista anda com o direcional e o A escolhe o realçado.
     app.edicao.abrir("shortcuts_z1")
     assert _esperar(lambda: app.achar("dialogoDeEdicao").property("visible") is True)
     escolha = app.achar("escolhaDeStatus")
@@ -149,7 +149,7 @@ def test_lista_de_escolha_aberta_o_direcional_e_o_a_escolhem(app):
 
 
 def test_lista_de_escolha_aberta_passo_que_anda_vibra_o_tique_e_a_ponta_o_toque(app):
-    # C-10: na lista aberta o passo que move o realce é MOVE; só a ponta é EDGE.
+    # Na lista aberta o passo que move o realce é MOVE; só a ponta é EDGE.
     app.edicao.abrir("shortcuts_z1")
     assert _esperar(lambda: app.achar("dialogoDeEdicao").property("visible") is True)
     caixa = app.achar("escolhaDeStatusCaixa")
@@ -165,7 +165,7 @@ def test_lista_de_escolha_aberta_passo_que_anda_vibra_o_tique_e_a_ponta_o_toque(
 
 
 def test_passo_lateral_sem_vizinho_na_mesma_altura_nao_move_o_foco(app):
-    # I1: ← e → só alcançam controles que se cruzam com o foco na vertical (`focus_sort` do GTK).
+    # ← e → só alcançam controles que se cruzam com o foco na vertical.
     app.sobre.abrir()
     assert _esperar(lambda: app.achar("dialogoSobre").property("visible") is True)
     _com_foco_em(app, "linhaProblemas")
@@ -184,7 +184,7 @@ def test_esquerda_no_campo_nome_nao_vai_ao_cancelar(app):
 
 
 def test_menu_cada_passo_vibra_e_a_ponta_vibra_o_toque(app):
-    # C-10: em menus cada passo vibra, o tique se o realce andou e o toque firme se bateu.
+    # Em menus cada passo vibra, o tique se o realce andou e o toque firme se bateu.
     menu = app.achar("menuPrincipal")
     menu.open()
     assert _esperar(lambda: menu.property("opened") is True)
@@ -199,7 +199,7 @@ def test_menu_cada_passo_vibra_e_a_ponta_vibra_o_toque(app):
 
 
 def test_balao_a_nao_quebra_linha_e_o_direcional_sai_do_texto(app):
-    # C-09: o A num `TextView` não faz nada (o Return seria uma quebra de linha); o direcional não é do cursor.
+    # O A num `TextView` não faz nada (o Return seria uma quebra de linha); o direcional não é do cursor.
     app.janela.abrirDetalhes("shortcuts_z1")
     assert _esperar(lambda: app.janela.property("paginaAtual") == "jogo")
     QMetaObject.invokeMethod(app.achar("botaoAnotacao"), "click", Qt.ConnectionType.DirectConnection)

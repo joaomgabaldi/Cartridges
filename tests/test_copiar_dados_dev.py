@@ -129,7 +129,7 @@ def test_isolar_dev_forca_so_os_tres_valores(chaves, tmp_path):
 
 
 def test_copia_dev_nao_leva_fitas_nem_conta_tuya(chaves, tmp_path):
-    """As chaves locais das fitas reais ficam fora: o app -dev acende fitas ao abrir (D53)."""
+    """As chaves locais das fitas reais ficam fora: o app -dev acende fitas ao abrir."""
     origem, destino = chaves
     pasta = tmp_path / "origem"
     pasta.mkdir()
@@ -142,7 +142,7 @@ def test_copia_dev_nao_leva_fitas_nem_conta_tuya(chaves, tmp_path):
 
 
 def test_copia_dev_nao_leva_contas_nem_chave_da_steam(chaves, tmp_path):
-    """As contas das lojas (D57) e a chave da Steam ficam só nos dados reais: a -dev não as herda."""
+    """As contas das lojas e a chave da Steam ficam só nos dados reais: a -dev não as herda."""
     origem, destino = chaves
     with winreg.OpenKeyEx(cd.RAIZ, origem, 0, winreg.KEY_WRITE) as k:
         winreg.SetValueEx(k, "conquistas-chave-steam", 0, winreg.REG_SZ, "valor-de-teste")

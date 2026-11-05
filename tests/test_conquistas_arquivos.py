@@ -337,7 +337,7 @@ def test_sem_conta_ativa_nem_guardada_vale_todas(tmp_path, monkeypatch, state_sc
 
 def test_loginusers_nunca_e_aberto(tmp_path, monkeypatch, state_schema):
     """Abrir o ``config\\loginusers.vdf`` é o que ladrão de conta Steam faz: o
-    Kaspersky derrubava o app por isso (PDM:Trojan.Win32.Generic, 19/10/2026)."""
+    Kaspersky derrubava o app por isso."""
     import builtins  # noqa: PLC0415
     import io  # noqa: PLC0415
     import os  # noqa: PLC0415

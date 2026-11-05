@@ -259,8 +259,8 @@ def test_presente_ao_achar_o_controle():
 
 
 def test_repeticao_na_grade_segue_a_agenda_absoluta(m):
-    # Como a `main` (`gamepad.py:645-648`): o passo n vence em atraso + n · 120 ms desde o aperto, sem esperar mais 120 ms do
-    # passo anterior; leitura de 33 ms não deixa a repetição 10% mais lenta (C-19). Um tique, no máximo um passo.
+    # O passo n vence em atraso + n · 120 ms desde o aperto, sem esperar mais 120 ms do
+    # passo anterior; leitura de 33 ms não deixa a repetição 10% mais lenta. Um tique, no máximo um passo.
     ms = 1000
     m.leitor.botoes = XINPUT_DPAD_RIGHT
     m.tique()  # aperto em 0 ms
@@ -290,7 +290,7 @@ class _JanelaFalsa(QObject):
 
 
 def test_so_a_janela_principal_ativa_da_o_controle():
-    # C-24: com Tarefas, Login ou o assistente em foco o app segue "ativo" no Qt, mas a principal não: o controle para.
+    # Com Tarefas, Login ou o assistente em foco o app segue "ativo" no Qt, mas a principal não: o controle para.
     montagem = Montagem()
     janela = _JanelaFalsa(ativa=False)
     montagem.controle.definir_janela(janela)
@@ -304,7 +304,7 @@ def test_so_a_janela_principal_ativa_da_o_controle():
 
 
 def test_encerrar_para_a_leitura_e_os_motores(m):
-    # C-25: o app fecha no meio de uma vibração; os motores não ficam ligados.
+    # O app fecha no meio de uma vibração; os motores não ficam ligados.
     shared.schema.set_boolean("gamepad-rumble", True)
     m.controle.bater()
     m.leitor.vibracoes.clear()
@@ -314,7 +314,7 @@ def test_encerrar_para_a_leitura_e_os_motores(m):
 
 
 def test_no_big_picture_outro_botao_junto_nao_anula_o_salto(m):
-    # C-26: só A, B e os ombros valem; Start junto com LB não toma o lugar do salto.
+    # Só A, B e os ombros valem; Start junto com LB não toma o lugar do salto.
     m.controle.modoBigPicture = True
     pulos = []
     m.controle.pular.connect(pulos.append)

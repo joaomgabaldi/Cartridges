@@ -2,9 +2,9 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""O `app.main()` de verdade sobre um `AplicacaoQt` falso: a ordem das etapas (D74) sem janela nem laço de eventos.
+"""O `app.main()` de verdade sobre um `AplicacaoQt` falso: a ordem das etapas sem janela nem laço de eventos.
 
-Não importa o `conftest` nem outro teste (Pré-voo 8 do plano 8a).
+Não importa o `conftest` nem outro teste.
 """
 
 from types import SimpleNamespace
@@ -19,7 +19,7 @@ class _Sinal:
 
 
 class AppFalso:
-    """O bastante do `AplicacaoQt` para o `main()`: o `exec()` volta na hora."""
+    """O bastante do `AplicacaoQt` para o `main()`."""
 
     def __init__(self, *_argumentos) -> None:
         self.aboutToQuit = _Sinal()  # noqa: N815
@@ -57,5 +57,5 @@ def preparar_main(monkeypatch, abrir, eventos: list) -> None:
     monkeypatch.setattr(modulo_app.backup, "ha_pendente", lambda: False)
     monkeypatch.setattr(modulo_app.backup, "aplicar_pendente", lambda progresso=None: None)  # noqa: ARG005
     monkeypatch.setattr(modulo_app.redefinir, "aplicar_pendente", lambda: None)
-    # A pasta de dados dos testes está vazia: sem isto o `main()` pararia no assistente da primeira abertura (D86).
+    # A pasta de dados está vazia: sem isto o `main()` pararia no assistente da primeira abertura.
     monkeypatch.setattr(modulo_app.assistente, "precisa_mostrar", lambda: False)

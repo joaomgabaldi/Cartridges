@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Checagem de versão nova, notas da release e download do instalador (sem `gi`)."""
+"""Checagem de versão nova, notas da release e download do instalador."""
 
 import hashlib
 import subprocess
@@ -30,7 +30,7 @@ from cartridges.utils.app_updater import (
 
 _SHA = "932503f6ff3c8714d7c45d862134365a1b8ae064abbb0f4ba8d44ab7b2d9fb9b"
 
-# Formato real de releases/latest em 13/09/2026, só com os campos lidos.
+# Formato real de releases/latest, só com os campos lidos.
 _API = {
     "tag_name": "v2026.09.10",
     "body": "## Novidades\r\n\r\n- Uma aba nova\r\n\r\n## Instalação\r\n\r\nBaixe o exe.",
@@ -140,7 +140,7 @@ def test_notes_markup_escapes_pango_special_characters():
     markup = notes_to_markup("- 800<600 & **R&D**")
     assert markup == "• 800&lt;600 &amp; <b>R&amp;D</b>"
     assert _is_valid_markup(markup)
-    # Review Focus 2: texto de terceiros com tag e link aparece como está, nada clicável.
+    # Texto de terceiros com tag e link aparece como está, nada clicável.
     assert notes_to_markup("a & <b>c</b>") == "a &amp; &lt;b&gt;c&lt;/b&gt;"
     assert "<a " not in notes_to_markup('<a href="https://x">clique</a>')
 
@@ -270,8 +270,7 @@ def test_download_writes_verified_installer(tmp_path, fake_get):
     assert fractions == sorted(fractions)
 
 
-# O `app_dirs` do conftest cria pastas dentro do tmp_path; o download vai para
-# uma subpasta própria para "não sobrou nada" poder olhar a pasta inteira.
+# O download vai para uma subpasta própria para "não sobrou nada" poder olhar a pasta inteira.
 
 
 def test_download_with_wrong_hash_leaves_nothing(tmp_path, fake_get):
@@ -453,7 +452,8 @@ def test_conftest_bloqueia_o_instalador(tmp_path, sem_instalador_de_verdade):
 
 
 def test_fechar_o_app_no_meio_do_download_descarta_o_resultado(tmp_path, monkeypatch, sem_instalador_de_verdade):
-    """Review Focus 3: o `stop()` do fechamento, antes do `_finish`, não abre o instalador, não sai e não deixa o `.part`."""
+    """O `stop()` do fechamento
+, antes do `_finish`, não abre o instalador, não sai e não deixa o `.part`."""
     sairam = _sem_sair(monkeypatch)
     fila: list = []
     monkeypatch.setattr(app_updater, "na_thread_principal", lambda f, *a: fila.append((f, a)))

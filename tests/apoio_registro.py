@@ -5,7 +5,7 @@
 """Apoio dos testes que mexem no registro de testes (HKCU, Software, CartridgesTestes).
 
 Módulo à parte, e não o `conftest`: importar `tests.conftest` roda o arquivo
-uma segunda vez (ver `apoio_edicao`).
+uma segunda vez.
 """
 
 import winreg

@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""O assistente da primeira abertura (D86): o `Assistente` sem tela e a `JanelaDoAssistente.qml` aberta pelo
+"""O assistente da primeira abertura: o `Assistente` sem tela e a `JanelaDoAssistente.qml` aberta pelo
 `app._mostrar_assistente`, com o `_abrir` e o `_restaurar_e_abrir` espiões.
 
 Nada de verdade: fitas, nuvem da Tuya, navegador, rede e monitores são os falsos do `conftest`; o backup é validado e
@@ -37,25 +37,25 @@ _COD = "0123456789abcdef0123456789abcdef"
 
 @pytest.fixture(autouse=True)
 def _sem_monitores(monkeypatch):
-    # Os testes não dependem dos monitores da máquina; quem precisa sobrescreve.
+    # Quem precisa de monitores sobrescreve.
     monkeypatch.setattr(window_geometry, "monitores_da_sessao", lambda: [])
 
 
 @pytest.fixture(autouse=True)
 def _sem_a_barra_do_qwindowkit(monkeypatch):
-    # Os testes não carregam a ponte do QWindowKit: a janela fica com a moldura nativa (`comAgente` não existe).
+    # Sem a ponte do QWindowKit a janela fica com a moldura nativa (`comAgente` não existe).
     monkeypatch.setattr(modulo_app, "_com_barra_propria", lambda _motor: None)
 
 
 @pytest.fixture(autouse=True)
 def _com_animacoes(monkeypatch):
-    # O ajuste do Windows desta máquina não decide o teste; quem precisa sem animações sobrescreve.
+    # Quem precisa sem animações sobrescreve.
     monkeypatch.setattr(modulo, "_animacoes_do_sistema", lambda: True)
 
 
 @pytest.fixture(autouse=True)
 def _store_de_volta(monkeypatch):
-    # O `_mostrar_assistente` troca a store; o teste seguinte não a herda.
+    # O `_mostrar_assistente` troca a store.
     monkeypatch.setattr(shared, "store", None, raising=False)
     monkeypatch.setattr(shared, "aplicativo", None, raising=False)
 
@@ -202,7 +202,7 @@ def test_concluir_marca_e_chama_ao_terminar(schema):
 
 
 def test_concluir_abre_a_biblioteca_e_fecha_o_assistente(app_qt, monkeypatch, schema):
-    """Review Focus 4: "Abrir a biblioteca" na última tela abre a principal e o assistente sai."""
+    """"Abrir a biblioteca" na última tela abre a principal e o assistente sai."""
     j = _Janela(app_qt, monkeypatch, abrir=lambda abertura: setattr(abertura, "aplicativo", object()))
     try:
         j.ir_para("pronto")
@@ -238,7 +238,7 @@ def test_pasta_grava_e_liga_importacao_e_a_ultima_vale(schema, tmp_path):
 
 
 def test_subtitulo_da_pasta_com_e_comercial(janela, schema):
-    """Review Focus 2: um "&" no caminho aparece como está, em texto puro."""
+    """Um "&" no caminho aparece como está, em texto puro."""
     janela.modelo.escolherPasta(QUrl.fromLocalFile("D:/Jogos & Cia"))
     assert janela.modelo.subtituloDaPasta == "D:\\Jogos & Cia"
     esperar()
@@ -421,7 +421,7 @@ def test_sem_segundo_monitor_a_tela_some():
 
 
 def test_sem_3d_a_tela_do_controle_some(monkeypatch):
-    """Review Focus 4: sem renderizador 3D, a tela do controle (o Big Picture) sai da lista."""
+    """Sem renderizador 3D, a tela do controle (o Big Picture) sai da lista."""
     monkeypatch.setattr(big_picture, "tem_3d", lambda _janela: False)
     assistente, _, _ = _assistente()
     assert "controle" in assistente.paginas
@@ -456,7 +456,7 @@ def test_rodape_nao_fica_numa_barra_da_janela(janela):
 
 
 def test_cartao_do_aviso_na_pagina_de_conquistas_e_embutido(janela):
-    """Como na main (`conquista-aviso-cartao-embutido`): contorno e sombra no cartão do assistente."""
+    """Contorno e sombra no cartão do assistente (`conquista-aviso-cartao-embutido`)."""
     janela.ir_para("conquistas")
     sombra = janela.achar("sombraDoAviso")
     assert sombra.property("visible") is True
@@ -519,14 +519,14 @@ def test_boas_vindas_mostra_o_logo_do_app(janela):
 
 
 def test_icone_da_iluminacao_e_de_luz(janela):
-    # O "display-brightness-symbolic" da `main` (DA-05 e DA-43): o SVG da Adwaita em 128 px, e não o glifo da Segoe.
+    # O "display-brightness-symbolic": o SVG da Adwaita em 128 px, e não o glifo da Segoe.
     icone = janela.achar("icone_iluminacao")
     assert icone.property("nome") == "display-brightness"
     assert icone.property("tamanho") == 128
 
 
 def test_status_page_tem_os_tamanhos_do_libadwaita(janela):
-    """DA-42: título title-1 (22), descrição de 12 e ícone de 128; a página das conquistas é `compact` (title-2 e 96)."""
+    """Título title-1 (22), descrição de 12 e ícone de 128; a página das conquistas é `compact` (title-2 e 96)."""
     titulo = janela.achar("titulo_iluminacao")
     assert titulo.property("font").pixelSize() == 22
     assert janela.achar("descricao_iluminacao").property("font").pixelSize() == 12
@@ -535,7 +535,7 @@ def test_status_page_tem_os_tamanhos_do_libadwaita(janela):
 
 
 def test_botoes_do_rodape_sao_os_da_main(janela):
-    """DA-44: "Voltar" e "Pular" são botões comuns; "Continuar" é sugestão sem cápsula; "Pular configuração" é plano."""
+    """"Voltar" e "Pular" são botões comuns; "Continuar" é sugestão sem cápsula; "Pular configuração" é plano."""
     janela.ir_para("jogos")
     assert janela.achar("botaoVoltar").property("estilo") == "normal"
     assert janela.achar("botaoPular").property("estilo") == "normal"
@@ -546,7 +546,7 @@ def test_botoes_do_rodape_sao_os_da_main(janela):
 
 
 def test_ponto_da_tela_atual_e_maior(janela):
-    """DA-45: o ponto da página à vista tem raio 4 (8 px) e os outros 3 (6 px)."""
+    """O ponto da página à vista tem raio 4 (8 px) e os outros 3 (6 px)."""
     esperar()
     pontos = [p for p in janela.achar("pontos").childItems() if p.property("peso") is not None]
     assert len(pontos) == len(janela.modelo.paginas)
@@ -554,7 +554,7 @@ def test_ponto_da_tela_atual_e_maior(janela):
 
 
 def test_animar_e_relido_a_cada_troca_de_tela(janela, monkeypatch):
-    """DA-46: o ajuste de animações do Windows muda com a janela aberta; a `main` o lê a cada `scroll_to`."""
+    """O ajuste de animações do Windows muda com a janela aberta e é relido a cada rolagem."""
     assert janela.modelo.animar is True
     monkeypatch.setattr(modulo, "_animacoes_do_sistema", lambda: False)
     janela.modelo.avancar()
@@ -562,7 +562,7 @@ def test_animar_e_relido_a_cada_troca_de_tela(janela, monkeypatch):
 
 
 def test_troca_de_tela_anima_o_carrossel_e_termina_no_indice_exato(janela):
-    """G-M8: com `animar` verdadeiro o "Continuar" leva a posição por valores intermediários até o índice exato."""
+    """Com `animar` verdadeiro o "Continuar" leva a posição por valores intermediários até o índice exato."""
     carrossel = janela.achar("carrossel")
     assert janela.modelo.animar is True and carrossel.property("posicao") == 0
     visto = []
@@ -580,7 +580,7 @@ def test_troca_de_tela_anima_o_carrossel_e_termina_no_indice_exato(janela):
 def test_tela_das_capas_tem_o_palco_com_as_duas_imagens(janela):
     palco = janela.achar("palcoDasCapas")
     capa, vazia = janela.achar("capaDeExemplo"), janela.achar("capaVazia")
-    # DA-47: as duas imagens passam por uma máscara de raio 6 (um item entre elas e o palco).
+    # As duas imagens passam por uma máscara de raio 6 (um item entre elas e o palco).
     assert capa.parentItem() is vazia.parentItem() and capa.parentItem().parentItem() is palco
     assert capa.property("source").toString().endswith("/data/capa_de_exemplo.svg")
     assert vazia.property("source").toString().endswith("/data/library_placeholder.svg")
@@ -801,7 +801,7 @@ def test_restaurar_bloqueia_a_tela_ate_terminar(janela, monkeypatch, tmp_path):
 
 
 def test_fechar_no_x_espera_a_preparacao_da_restauracao(janela, monkeypatch, tmp_path):
-    """Review Focus 3: o X durante "Preparando a restauração. Aguarde…" é recusado."""
+    """O X durante "Preparando a restauração. Aguarde…" é recusado."""
     pendentes = []
     monkeypatch.setattr(modulo, "_em_thread", pendentes.append)
 
@@ -849,7 +849,7 @@ def test_as_tres_saidas_fecham_as_contas(app_qt, monkeypatch, schema, tmp_path, 
 
 
 def test_conectar_conta_no_assistente_sem_biblioteca_nao_levanta(janela, monkeypatch):
-    """Review Focus 4: a conta conecta antes de a biblioteca existir; a leitura dos jogos da loja corre sobre a store
+    """A conta conecta antes de a biblioteca existir; a leitura dos jogos da loja corre sobre a store
     vazia do assistente, sem levantar."""
     conectada = []
     monkeypatch.setattr(epic_conta, "conectada", lambda: bool(conectada))
@@ -899,7 +899,7 @@ def test_assistente_sem_gi(tmp_path):
 
 
 def test_concluir_durante_a_preparacao_e_recusado_e_o_backup_restaura_uma_vez(monkeypatch, schema, tmp_path):
-    """Review final (Task 5, m1): "Abrir a biblioteca" no meio da preparação não abre a biblioteca duas vezes."""
+    """"Abrir a biblioteca" no meio da preparação não abre a biblioteca duas vezes."""
     pendentes = []
     monkeypatch.setattr(modulo, "_em_thread", pendentes.append)
     monkeypatch.setattr(modulo, "na_thread_principal", lambda funcao, *args: funcao(*args))
@@ -919,7 +919,7 @@ def test_concluir_durante_a_preparacao_e_recusado_e_o_backup_restaura_uma_vez(mo
 
 
 def test_anel_de_foco_so_aparece_com_o_teclado(janela):
-    """DA-06 (I4): aberto e avançado com o mouse, o primeiro controle de cada tela não mostra o anel; pelo teclado, sim."""
+    """Aberto e avançado com o mouse, o primeiro controle de cada tela não mostra o anel; pelo teclado, sim."""
     comecar = janela.achar("botaoComecar")
     assert esperar(lambda: comecar.property("activeFocus") is True)
     assert comecar.property("visualFocus") is False  # aberto sem teclado: sem anel
@@ -938,7 +938,7 @@ def test_anel_de_foco_so_aparece_com_o_teclado(janela):
 
 
 def test_barra_com_titulo_texto_no_clamp_de_600_e_botao_escolher_com_fundo(janela):
-    """V6: a barra mostra "Kyron"; o texto da tela cabe no `AdwClamp` de 600 da `StatusPage`; "Escolher" é um botão cinza de 34."""
+    """A barra mostra "Kyron"; o texto da tela cabe em 600 de largura; "Escolher" é um botão cinza de 34."""
     assert janela.achar("barraDoAssistente").property("titulo") == "Kyron"
     descricao = janela.achar("descricao_boas_vindas")
     assert descricao.property("width") <= 600

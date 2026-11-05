@@ -32,7 +32,7 @@ def test_um_por_vez_na_ordem(app_qt):
     segundo = fila.adicionar("dois", segundos=0)
     assert (fila.texto, fila.visivel) == ("um", True)
     fila.fechar()
-    # A04: o aviso sai com o fade antes de o próximo entrar.
+    # O aviso sai com o fade antes de o próximo entrar.
     assert fila.visivel is False
     assert _esperar(lambda: fila.visivel)
     assert fila.texto == "dois"
@@ -72,7 +72,7 @@ def test_segundos_fecha_sozinho(app_qt):
 
 
 def test_mesma_chave_tira_o_antigo_e_vai_ao_fim_da_fila(app_qt):
-    """A07: como `game.py:400-406` da `main`: o velho sai e o novo entra no fim."""
+    """O velho sai e o novo entra no fim."""
     fila = FilaDeAvisos()
     fila.adicionar("a", segundos=0)
     fila.adicionar("b1", segundos=0, chave=("x", "remove"))
@@ -91,7 +91,8 @@ def test_mesma_chave_tira_o_antigo_e_vai_ao_fim_da_fila(app_qt):
 
 
 def test_o_mouse_em_cima_para_o_tempo(app_qt):
-    """A05: o tempo do aviso para com o mouse em cima e retoma de onde estava."""
+    """O tempo do aviso
+ para com o mouse em cima e retoma de onde estava."""
     fila = FilaDeAvisos()
     fila.adicionar("oi", segundos=0.1)
     fila.pausar()

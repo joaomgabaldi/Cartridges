@@ -35,14 +35,11 @@ _RAIZ_REGISTRO = r"Software\CartridgesTestes"
 from tests.apoio_registro import _apagar_chave  # noqa: E402
 
 
-# Antes de qualquer `import cartridges`: o `shared` real calcula os caminhos ao ser importado,
-# e sem isso cairia nos dados reais do usuário. Cada teste ganha a sua própria pasta e subchave
-# (`dados_temporarios`); estas valem para o que roda na importação e entre testes.
+# Antes de qualquer `import cartridges`: o `shared` calcula os caminhos ao ser importado e cairia nos dados reais.
 _DADOS_DA_SESSAO = tempfile.mkdtemp(prefix="cartridges-testes-")
 _REGISTRO_DA_SESSAO = f"{_RAIZ_REGISTRO}\\sessao-{uuid.uuid4()}"
 os.environ["CARTRIDGES_DADOS"] = _DADOS_DA_SESSAO
 os.environ["CARTRIDGES_REGISTRO"] = _REGISTRO_DA_SESSAO
-# O log detalhado (rastreio de toda chamada) fica desligado nos testes; os que precisam o ligam.
 os.environ["CARTRIDGES_LOG_DETALHADO"] = "0"
 
 
@@ -55,7 +52,6 @@ def pytest_sessionfinish(session, exitstatus):  # noqa: ARG001
     shutil.rmtree(_DADOS_DA_SESSAO, ignore_errors=True)
 
 
-# Como no app: o texto da interface passa por `_()` já na definição das classes.
 builtins._ = lambda message: message  # type: ignore[attr-defined]
 builtins.ngettext = (  # type: ignore[attr-defined]
     lambda singular, plural, n: singular if n == 1 else plural
@@ -65,10 +61,9 @@ builtins.ngettext = (  # type: ignore[attr-defined]
 from cartridges import shared  # noqa: E402
 from cartridges.utils import window_geometry as _window_geometry  # noqa: E402
 
-_MONITORS_REAL = _window_geometry.monitors  # a enumeração de verdade (`monitors_de_verdade`)
+_MONITORS_REAL = _window_geometry.monitors
 from cartridges.configuracoes import Configuracoes  # noqa: E402
 
-# `import_time` fixo, como antes.
 shared.import_time = 1_700_000_000
 
 
@@ -78,18 +73,14 @@ def import_time_fixo(monkeypatch):
     monkeypatch.setattr(shared, "import_time", 1_700_000_000, raising=False)
 
 
-# O `ludusavi.exe` desta máquina nunca roda nos testes. O corte é na sessão toda, e não num
-# monkeypatch por teste: uma thread de backup que sobrevive ao seu teste acorda com
-# `sys.executable` e `shared.app_dir` já desfeitos, acharia o Ludusavi daqui e o rodaria
-# sobre a pasta de lugar nenhum. (Foi o que aconteceu em 11/10/2026: ele baixou o manifesto
-# de 17 MB para `tests/_unset` e criou `~/ludusavi-backup`.) Por isso `ludusavi.executavel`
-# vira um embrulho que só devolve um exe que mora dentro do basetemp do pytest, seja qual for
-# o `sys.executable`. Quem quer um exe "presente" pede `ludusavi_de_verdade` (um de mentira,
-# em `tmp_path`); só o teste de integração de propósito usa `ludusavi_real_da_maquina`.
+# O corte do Ludusavi é na sessão toda, e não num monkeypatch por teste: uma thread de backup que sobrevive ao seu
+# teste acorda com `sys.executable` e `shared.app_dir` já desfeitos e rodaria o Ludusavi desta máquina sobre a pasta
+# errada (já baixou o manifesto para `tests/_unset` e criou `~/ludusavi-backup`). Por isso `executavel` só devolve
+# um exe que mora dentro do basetemp; quem quer um "presente" pede `ludusavi_de_verdade`.
 from cartridges.saves import ludusavi as _ludusavi
 
 EXECUTAVEL_DE_VERDADE = _ludusavi.executavel
-_basetemp: Path | None = None  # preenchido no início da sessão por `basetemp_do_ludusavi`
+_basetemp: Path | None = None
 
 
 def _executavel_so_no_basetemp() -> Path | None:
@@ -102,18 +93,9 @@ def _executavel_so_no_basetemp() -> Path | None:
 _ludusavi.executavel = _executavel_so_no_basetemp
 
 
-# --------------------------------------------------------------------------
-# Fixtures
-# --------------------------------------------------------------------------
-
-
 @pytest.fixture(autouse=True)
 def app_dirs(tmp_path, monkeypatch):
-    """Point every data directory at a fresh tmp dir, for every test.
-
-    Autouse on purpose: forgetting it would mean a test writing into the real
-    library, and that failure mode is silent and unrecoverable.
-    """
+    """Aponta todas as pastas de dados para uma pasta temporária nova, em todo teste."""
     games = tmp_path / "games"
     covers = tmp_path / "covers"
     logos = tmp_path / "logos"
@@ -130,13 +112,11 @@ def app_dirs(tmp_path, monkeypatch):
     monkeypatch.setattr(shared, "logos_dir", logos, raising=False)
     monkeypatch.setattr(shared, "wallpapers_dir", wallpapers, raising=False)
     monkeypatch.setattr(shared, "log_dir", logs, raising=False)
-    # Not created: the fita code makes it on first write, like the real app.
     monkeypatch.setattr(shared, "fitas_dir", tmp_path / "fitas", raising=False)
     monkeypatch.setattr(shared, "conquistas_dir", tmp_path / "conquistas", raising=False)
     monkeypatch.setattr(
         shared, "conquistas_cache_dir", tmp_path / "cache" / "conquistas", raising=False
     )
-    # Not created: quem gera as cópias cria a pasta na primeira gravação.
     monkeypatch.setattr(
         shared, "capas_animadas_dir", tmp_path / "cache" / "capas_animadas", raising=False
     )
@@ -157,7 +137,7 @@ def app_dirs(tmp_path, monkeypatch):
 
 @pytest.fixture(autouse=True)
 def chave_do_registro(monkeypatch):
-    """Uma subchave de registro nova por teste, dentro da da sessão (apagada no fim dela)."""
+    """Uma subchave de registro nova por teste, dentro da da sessão."""
     chave = _REGISTRO_DA_SESSAO + "\\" + uuid.uuid4().hex
     monkeypatch.setattr(shared, "chave_do_registro", chave, raising=False)
     return chave
@@ -180,7 +160,7 @@ def state_schema(monkeypatch, chave_do_registro):
 
 @pytest.fixture(autouse=True)
 def sem_som(monkeypatch):
-    """Nenhum teste toca som de verdade: cada `PlaySound` vira um `(dados, flags)` nesta lista."""
+    """Cada `PlaySound` vira um `(dados, flags)` nesta lista, sem tocar som."""
     tocados = []
     monkeypatch.setattr(winsound, "PlaySound", lambda dados, flags: tocados.append((dados, flags)))
     return tocados
@@ -188,7 +168,7 @@ def sem_som(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def sem_cortina_de_verdade(monkeypatch):
-    """Nenhum teste abre a janela preta TOPMOST do fade: sem a fábrica falsa, a cortina falha ao criar."""
+    """Sem a fábrica falsa, a cortina (janela TOPMOST do fade) falha ao criar."""
     from cartridges.utils import cortina_monitor  # noqa: PLC0415
 
     def recusa():
@@ -199,8 +179,7 @@ def sem_cortina_de_verdade(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def sem_janela_por_cima_de_verdade(monkeypatch):
-    """Nenhum teste deixa uma janela TOPMOST nem muda estilos Win32 de verdade: sem o `user32_falso`,
-    `janela_por_cima.preparar` falha (e o aviso de conquista não entra)."""
+    """Sem o `user32_falso`, `janela_por_cima.preparar` falha (e o aviso de conquista não entra)."""
     from cartridges.utils import janela_por_cima  # noqa: PLC0415
 
     def recusa():
@@ -212,8 +191,7 @@ def sem_janela_por_cima_de_verdade(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def sem_monitor_de_verdade(monkeypatch):
-    """Os testes não dependem de quantos monitores a máquina tem: `window_geometry.monitors` devolve um principal e
-    um segundo, falsos. Quem exercita a enumeração de verdade a restaura (`monitors_de_verdade`)."""
+    """`window_geometry.monitors` devolve um principal e um segundo, falsos; `monitors_de_verdade` restaura o real."""
     from cartridges.utils import window_geometry  # noqa: PLC0415
 
     monkeypatch.setattr(
@@ -235,7 +213,7 @@ def monitors_de_verdade(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def sem_placa_de_verdade(monkeypatch):
-    """Nenhum teste põe a placa "Identificar monitores" numa tela de verdade: sem um `criar` falso, falha."""
+    """Sem um `criar` falso, a placa "Identificar monitores" falha em vez de aparecer na tela."""
     from cartridges.utils import window_geometry  # noqa: PLC0415
 
     def recusa(*_args, **_kwargs):
@@ -248,8 +226,8 @@ def sem_placa_de_verdade(monkeypatch):
 class User32Falso:
     """O user32 que `janela_por_cima` usa, sem janela de verdade: anota as chamadas.
 
-    Estilos e donos ficam num dicionário por HWND; ``primeiro_plano`` é o que
-    ``GetForegroundWindow`` devolve (o teste o muda quando a janela aparece).
+    ``falhas`` mapeia o nome de uma chamada ao valor devolvido no lugar do de sempre;
+    ``primeiro_plano`` é o que ``GetForegroundWindow`` devolve.
     """
 
     DONO = 9000
@@ -260,7 +238,7 @@ class User32Falso:
         self.donos: dict[int, int] = {}
         self.primeiro_plano = 50
         self.tamanho = (300, 80)
-        self.falhas: dict[str, Any] = {}  # nome -> valor devolvido no lugar do de sempre
+        self.falhas: dict[str, Any] = {}
 
     def __getattr__(self, nome):
         if nome.startswith("_"):
@@ -329,7 +307,7 @@ class User32Falso:
 
 @pytest.fixture
 def user32_falso(monkeypatch):
-    """Troca o user32 do `janela_por_cima` pelo `User32Falso` (o dono oculto é o `User32Falso.DONO`)."""
+    """Troca o user32 do `janela_por_cima` pelo `User32Falso`."""
     from cartridges.utils import janela_por_cima  # noqa: PLC0415
 
     falso = User32Falso()
@@ -339,10 +317,9 @@ def user32_falso(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def sem_jogo_de_verdade(monkeypatch):
-    """Nenhum teste inicia um jogo: o `launch` que chegar ao `run_executable` falha alto.
+    """O `launch` que chegar ao `run_executable` falha alto.
 
-    Também zera a sessão: o `ModeloDaSessao` (`shared.sessao`), os rastreadores ativos e o vigia das conquistas não
-    passam de um teste ao outro.
+    Também zera a sessão (`shared.sessao`), os rastreadores ativos e o vigia das conquistas entre os testes.
     """
     from cartridges import jogo, process_session, session_window  # noqa: PLC0415
     from cartridges.conquistas import sessao as sessao_conquistas  # noqa: PLC0415
@@ -362,7 +339,7 @@ def sem_jogo_de_verdade(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def sem_relancar_de_verdade(monkeypatch):
-    """Nenhum teste reabre o app (D75): o `_popen` do `relancar()` levanta; quem prova o comando troca o `_popen`."""
+    """O `_popen` do `relancar()` levanta; quem prova o comando troca o `_popen`."""
     from cartridges import app as modulo_app  # noqa: PLC0415
 
     def recusa(*_args, **_kwargs):
@@ -373,8 +350,8 @@ def sem_relancar_de_verdade(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def sem_instalador_de_verdade(monkeypatch, tmp_path):
-    """Nenhum teste abre um instalador nem apaga a pasta de downloads de verdade: o `_abrir_instalador` levanta (e o
-    teste falha ao fim, mesmo que o erro tenha sido engolido) e o `download_dir` aponta para o `tmp_path`.
+    """O `_abrir_instalador` levanta (e o teste falha ao fim, mesmo que o erro tenha sido engolido) e o
+    `download_dir` aponta para o `tmp_path`.
 
     Devolve a lista dos caminhos pedidos; quem prova o guarda de propósito a esvazia.
     """
@@ -394,8 +371,8 @@ def sem_instalador_de_verdade(monkeypatch, tmp_path):
 
 @pytest.fixture(autouse=True)
 def sem_navegador_de_verdade(monkeypatch):
-    """Nenhum login abre o navegador: o padrão de `LoginDaLoja` e o de `login.entrar` (Xbox) levantam, e o
-    teste falha ao fim se algum foi chamado (o login engole a exceção, como faria com um navegador ausente).
+    """O padrão de `LoginDaLoja` e o de `login.entrar` (Xbox) levantam, e o teste falha ao fim se algum foi chamado
+    (o login engole a exceção, como faria com um navegador ausente).
 
     Devolve a lista das URLs pedidas; quem prova o guarda de propósito a esvazia.
     """
@@ -409,17 +386,16 @@ def sem_navegador_de_verdade(monkeypatch):
         chamadas.append(url)
         raise AssertionError("navegador: nenhum login abre nos testes")
 
-    # O funil de `abrir_url` (Novidades, Sobre, detalhes...): quem importa o nome e o troca no próprio módulo não passa por aqui.
+    # O funil de `abrir_url`; quem importa o nome e o troca no próprio módulo não passa por aqui.
     monkeypatch.setattr(open_uri.QDesktopServices, "openUrl", staticmethod(lambda url: recusa(url.toString())))
 
     monkeypatch.setattr(modelo_das_contas, "_abrir_navegador", recusa)
     original = login_xbox._abrir_navegador  # noqa: SLF001
     monkeypatch.setattr(login_xbox, "_abrir_navegador", recusa)
     # O padrão de `entrar` foi fixado na definição: trocar o atributo do módulo não o alcança. Troca-se o primeiro
-    # padrão, e só se ele for mesmo o navegador (se a assinatura mudar, o teste avisa em vez de trocar o parâmetro errado).
+    # padrão, e só se ele for o navegador.
     assert login_xbox.entrar.__defaults__[0] is original, "o primeiro padrão de login.entrar já não é o navegador"
     monkeypatch.setattr(login_xbox.entrar, "__defaults__", (recusa, *login_xbox.entrar.__defaults__[1:]))
-    # Os logins com a troca na rede não passam de um teste ao outro.
     monkeypatch.setattr(modelo_das_contas, "_em_voo", set())
     yield chamadas
     assert not chamadas, f"o teste abriu o navegador: {chamadas}"
@@ -427,7 +403,7 @@ def sem_navegador_de_verdade(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def sem_rede(monkeypatch):
-    """Nenhum teste fala com a rede (D57): tudo do app sai por `requests`, e o envio vira uma falha de conexão."""
+    """Tudo do app sai por `requests`; o envio vira uma falha de conexão."""
     import requests  # noqa: PLC0415
 
     enviar = requests.sessions.Session.send
@@ -436,7 +412,7 @@ def sem_rede(monkeypatch):
         # O laço local (servidor de teste em 127.0.0.1) não é rede.
         if urlsplit(requisicao.url).hostname not in ("127.0.0.1", "localhost", "::1"):
             raise requests.ConnectionError("rede bloqueada nos testes")
-        kwargs["proxies"] = {}  # nem um proxy de ambiente recebe o tráfego do laço local
+        kwargs["proxies"] = {}  # nem um proxy de ambiente recebe o tráfego local
         return enviar(self, requisicao, **kwargs)
 
     monkeypatch.setattr(requests.sessions.Session, "send", recusa)
@@ -444,7 +420,7 @@ def sem_rede(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def fila_da_principal_vazia(app_qt, app_dirs, schema):  # noqa: ARG001
-    """O que um teste deixou na fila da thread principal (`na_thread_principal`) acaba antes do teste seguinte."""
+    """O que um teste deixou na fila da thread principal acaba antes do teste seguinte."""
     yield
     QCoreApplication.processEvents()
 
@@ -488,8 +464,7 @@ def avisos(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def sem_steam_no_registro(monkeypatch):
-    """A Steam desta máquina (se houver) não entra nos testes: quem precisa de
-    uma Steam monta a sua em ``tmp_path``."""
+    """Quem precisa de uma Steam monta a sua em ``tmp_path``."""
     from cartridges.conquistas import arquivos  # noqa: PLC0415
 
     monkeypatch.setattr(arquivos, "_valor_do_registro", lambda *_a: None)
@@ -498,8 +473,7 @@ def sem_steam_no_registro(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def sem_ubisoft_no_registro(monkeypatch):
-    """Os jogos da Ubisoft instalados nesta máquina (se houver) não entram nos testes:
-    quem precisa de instalações troca `locais._do_registro`."""
+    """Quem precisa de instalações da Ubisoft troca `locais._do_registro`."""
     from cartridges.conquistas.ubisoft import locais  # noqa: PLC0415
 
     monkeypatch.setattr(locais, "_do_registro", lambda: {})
@@ -507,8 +481,7 @@ def sem_ubisoft_no_registro(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def sem_ea_no_registro(monkeypatch):
-    """Os jogos da EA instalados nesta máquina (se houver) não entram nos testes:
-    quem precisa de instalações troca `ea.jogo.chaves_do_registro`."""
+    """Quem precisa de instalações da EA troca `ea.jogo.chaves_do_registro`."""
     from cartridges.conquistas.ea import jogo  # noqa: PLC0415
 
     monkeypatch.setattr(jogo, "chaves_do_registro", lambda: [])
@@ -516,10 +489,8 @@ def sem_ea_no_registro(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def sem_ludusavi(request, monkeypatch):
-    """O Ludusavi desta máquina (se houver um ao lado do Python) não roda nos testes:
-    o fim de uma sessão dispararia um backup de verdade. Os testes dos saves montam o
-    seu próprio executor e ficam de fora; os demais que precisem dele disponível
-    trocam `backup_de_saves.disponivel`."""
+    """O fim de uma sessão dispararia um backup de verdade. Os testes dos saves montam o seu próprio executor e ficam
+    de fora; os demais que precisem dele disponível trocam `backup_de_saves.disponivel`."""
     if request.module.__name__.startswith("test_saves_"):
         return
     from cartridges.saves import backup_de_saves  # noqa: PLC0415
@@ -529,7 +500,7 @@ def sem_ludusavi(request, monkeypatch):
 
 @pytest.fixture(scope="session", autouse=True)
 def basetemp_do_ludusavi(tmp_path_factory):
-    """Diz à guarda de `ludusavi.executavel` onde fica o basetemp; fora da sessão, nada passa."""
+    """Diz à guarda de `ludusavi.executavel` onde fica o basetemp."""
     global _basetemp  # pylint: disable=global-statement
     _basetemp = tmp_path_factory.getbasetemp().resolve()
     yield
@@ -538,23 +509,20 @@ def basetemp_do_ludusavi(tmp_path_factory):
 
 @pytest.fixture
 def ludusavi_de_verdade(tmp_path, monkeypatch):
-    """Um Python de mentira em `tmp_path`: o `ludusavi.executavel` (a função real, atrás da
-    guarda) olha só para lá, e quem pede a fixture põe, ou não, um `ludusavi.exe` ao lado."""
+    """Um Python de mentira em `tmp_path`: quem pede a fixture põe, ou não, um `ludusavi.exe` ao lado."""
     monkeypatch.setattr(sys, "executable", str(tmp_path / "python.exe"))
 
 
 @pytest.fixture
 def ludusavi_real_da_maquina(monkeypatch):
-    """OPT-IN DE PROPÓSITO (Task 10, teste de integração): tira a guarda e deixa
-    `ludusavi.executavel` achar o `ludusavi.exe` verdadeiro desta máquina. Nenhum outro
-    teste deve pedir; quem pede só pode rodá-lo sobre `tmp_path` (config e backups)."""
+    """Só o teste de integração pede: tira a guarda e deixa `ludusavi.executavel` achar o `ludusavi.exe` verdadeiro.
+    Quem pede só pode rodá-lo sobre `tmp_path` (config e backups)."""
     monkeypatch.setattr(_ludusavi, "executavel", EXECUTAVEL_DE_VERDADE)
 
 
 @pytest.fixture(autouse=True)
 def sem_thread_de_backup_sobrando():
-    """Uma thread de trabalho dos saves que sobra depois do teste roda com o ambiente
-    já desfeito: o teste que a abriu tem de esperá-la (`esperar`)."""
+    """Uma thread dos saves que sobra roda com o ambiente já desfeito: o teste que a abriu tem de esperá-la."""
     yield
     sobraram = [
         thread.name
@@ -578,12 +546,8 @@ class _FakeSinal:
 
 
 class FakeGame:
-    """Duck-type standing in for ``Jogo`` in store tests.
-
-    The store never needs a real ``Jogo`` — it reads a handful of fields and
-    calls ``save``/``update`` — so the fake keeps these tests about the store. ``saves`` is a counter because several tests are precisely
-    about how *many* times a scan writes a record.
-    """
+    """No lugar do ``Jogo`` nos testes da store. ``saves`` é um contador: vários testes provam quantas vezes uma
+    varredura grava um registro."""
 
     def __init__(self, **overrides) -> None:
         self.source = overrides.pop("source", "shortcuts")
@@ -613,7 +577,6 @@ class FakeGame:
         self.backup_dos_saves_desligado = overrides.pop("backup_dos_saves_desligado", False)
         for key, value in overrides.items():
             setattr(self, key, value)
-        # Derived exactly the way Jogo.__init__ derives it.
         self.base_source = self.source.split("_")[0]
         self.saves = 0
         self.updates = 0
@@ -628,19 +591,14 @@ class FakeGame:
         self.updates += 1
 
     def update_values(self, data: dict) -> None:
-        # Duck-types Jogo.update_values (plain setattr, no _KNOWN_KEYS
-        # filtering).
         for key, value in data.items():
             setattr(self, key, value)
 
     @property
     def zerado(self) -> bool:
-        # A mesma regra de Jogo.zerado.
         return self.removed and not self.blacklisted and self.status == "beaten"
 
     def get_cover_path(self) -> Path | None:
-        # Duck-types Jogo.get_cover_path: the backup exporter calls this on
-        # whatever `shared.store` holds, real Jogo or this fake.
         from cartridges.utils.save_cover import ANIMATED_SUFFIXES  # noqa: PLC0415
 
         for suffix in (*ANIMATED_SUFFIXES, ".tiff"):
@@ -655,7 +613,7 @@ class FakeGame:
 
 @pytest.fixture
 def make_game():
-    """Factory for store-facing game records."""
+    """Fábrica de registros de jogo para a store."""
 
     def factory(**overrides) -> FakeGame:
         return FakeGame(**overrides)
@@ -665,11 +623,7 @@ def make_game():
 
 @pytest.fixture
 def store():
-    """A clean ``Store`` with no managers registered.
-
-    No managers means ``add_game`` connects no signals and runs no pipeline
-    work, which is what keeps these tests about bookkeeping.
-    """
+    """Uma ``Store`` limpa, sem gerenciadores: ``add_game`` não liga sinais nem roda o pipeline."""
     from cartridges.store.store import Store  # noqa: PLC0415
 
     instance = Store()
@@ -680,7 +634,7 @@ def store():
 
 @pytest.fixture
 def write_record(app_dirs):
-    """Write a game's JSON record the way ``FileManager`` would."""
+    """Grava o JSON de um jogo como o ``FileManager`` faria."""
 
     def writer(game_id: str, **fields) -> Path:
         path = app_dirs.games / f"{game_id}.json"
@@ -694,7 +648,7 @@ def write_record(app_dirs):
 
 @pytest.fixture
 def write_asset(app_dirs):
-    """Drop a cover/logo file so migrations have something real to move."""
+    """Põe uma capa ou logo para as migrações terem o que mover."""
 
     def writer(directory: str, name: str, content: bytes = b"x") -> Path:
         target = getattr(app_dirs, directory) / name
@@ -706,10 +660,7 @@ def write_asset(app_dirs):
 
 @pytest.fixture(autouse=True)
 def sem_area_de_trabalho(monkeypatch):
-    """O papel de parede de verdade da área de trabalho nunca é tocado: sem COM nos testes.
-
-    Quem precisa da `IDesktopWallpaper` troca `_AreaDeTrabalho` por um falso.
-    """
+    """Sem COM nos testes: quem precisa da `IDesktopWallpaper` troca `_AreaDeTrabalho` por um falso."""
 
     def proibida(*_args, **_kwargs):
         raise AssertionError("o teste tentou abrir a área de trabalho de verdade (IDesktopWallpaper)")
@@ -721,10 +672,7 @@ def sem_area_de_trabalho(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def sem_fita_de_verdade(monkeypatch):
-    """Nenhum teste fala com uma fita de LED: o `_dispositivo` (a tinytuya, com rede) falha alto.
-
-    Quem prova a conversa troca `_dispositivo` por um módulo falso (`falsas`, de `tests/apoio_fita.py`).
-    """
+    """O `_dispositivo` (a tinytuya, com rede) falha alto; quem prova a conversa o troca por um módulo falso (`falsas`)."""
     from cartridges.utils import session_fita  # noqa: PLC0415
 
     def proibido(*_args, **_kwargs):
@@ -735,11 +683,8 @@ def sem_fita_de_verdade(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def sem_tuya_de_verdade(request, monkeypatch):
-    """Nenhum teste fala com a nuvem da Tuya nem varre a rede atrás de fitas: as duas portas falham alto.
-
-    Quem prova o assistente troca `fita_wizard._nuvem` e `session_fita.enderecos_na_rede` por falsos. Os que provam a
-    própria `enderecos_na_rede` (com a `tinytuya` falsa em `sys.modules`) levam a marca `varredura_real`.
-    """
+    """A nuvem da Tuya e a varredura da rede falham alto. Quem prova o assistente troca `fita_wizard._nuvem` e
+    `session_fita.enderecos_na_rede`; quem prova a própria `enderecos_na_rede` leva a marca `varredura_real`."""
     from cartridges import fita_wizard  # noqa: PLC0415
     from cartridges.utils import session_fita  # noqa: PLC0415
 
@@ -753,7 +698,7 @@ def sem_tuya_de_verdade(request, monkeypatch):
 
 @pytest.fixture(autouse=True)
 def dados_temporarios(tmp_path, monkeypatch):
-    """Pasta e subchave de registro próprias de cada teste (as da sessão ficam no topo do arquivo)."""
+    """Pasta e subchave de registro próprias de cada teste."""
     registro = f"{_RAIZ_REGISTRO}\\{uuid.uuid4()}"
     monkeypatch.setenv("CARTRIDGES_DADOS", str(tmp_path))
     monkeypatch.setenv("CARTRIDGES_REGISTRO", registro)
@@ -763,10 +708,10 @@ def dados_temporarios(tmp_path, monkeypatch):
 
 @pytest.fixture(scope="session", autouse=True)
 def app_qt():
-    """Uma única `QGuiApplication` para a sessão toda, sem janela na tela."""
+    """Uma única `QGuiApplication` para a sessão toda."""
     os.environ["QT_QPA_PLATFORM"] = "offscreen"
     from PySide6.QtGui import QGuiApplication  # noqa: PLC0415
 
-    # A opção desliga a animação de abrir e fechar diálogos (`Tema.animacoes`): os testes leem o `visible` na hora.
+    # A opção desliga a animação dos diálogos: os testes leem o `visible` na hora.
     app = QGuiApplication.instance() or QGuiApplication(["pytest", "--sem-animacao-de-dialogo"])
     yield app

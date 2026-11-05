@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Auditoria de 23/09: histórico de sessões (M4, M5, B18, B19, B20, B21, B22)."""
+"""Regressões da auditoria de 23/09: histórico de sessões."""
 
 import json
 from datetime import date, datetime, timedelta
@@ -97,10 +97,9 @@ def test_zero_segundos_vira_nenhuma_sessao():
 
 
 def test_record_concorrente_com_mover_jogo_nao_perde_linha():
-    """Achado 3: `record` (thread do jogo que fecha) e `mover_jogo`/`apagar_jogo`
-    (threads de import/restore) mexem no mesmo arquivo. Sem uma trava em comum,
-    um `record` entre o `read_text` e o `tmp.replace` de uma reescrita se
-    perde, e duas reescritas concorrentes disputam o mesmo `.jsonl.tmp`."""
+    """`record` (thread do jogo que fecha) e `mover_jogo`/`apagar_jogo` (threads de import/restore) mexem no mesmo
+    arquivo. Sem uma trava em comum, um `record` entre o `read_text` e o `tmp.replace` se perde e duas reescritas
+    disputam o mesmo `.jsonl.tmp`."""
     import threading
 
     N = 200

@@ -477,7 +477,7 @@ def test_lista_vazia_ate_entrar(app_qt):
     modelo = ModeloDaBiblioteca()
     modelo.atualizar(_jogo("a", 30))
     bp = BigPicture(modelo)
-    assert bp.jogos == [] and bp.vazia is True  # a camada escondida não decodifica capas (D39)
+    assert bp.jogos == [] and bp.vazia is True  # a camada escondida não decodifica capas
     bp.entrar()
     assert _ids(bp) == ["a"]
 
@@ -1039,7 +1039,7 @@ def test_maximizada_so_volta_maximizada_na_saida_do_big_picture(app_qt, tiques, 
     bp.aberturaTerminou()
     bp.sair()
     bp.filaTerminou()
-    # Ao abrir o jogo a `main` só chama `unfullscreen()` (BP-16): a ida do jogo é "normal"; a maximização volta na saída.
+    # Ao abrir o jogo só se chama `unfullscreen()`: a ida do jogo é "normal"; a maximização volta na saída.
     assert janela.chamadas.count("maximizada") == 1
     assert janela.chamadas.index("normal") < janela.chamadas.index("maximizada")
 
@@ -1051,8 +1051,7 @@ def test_voltou_do_jogo_sem_estar_ocupada_nao_faz_nada(abrivel):
 
 
 def test_voltou_do_jogo_com_a_janela_minimizada_restaura_antes_da_tela_cheia(abrivel):
-    # Achado na conferência no app: o "Jogar" minimiza a janela e, sem restaurá-la antes, o Windows a devolvia em
-    # modo janela com o Big Picture aberto.
+    # O "Jogar" minimiza a janela e, sem restaurá-la antes, o Windows a devolvia em modo janela com o Big Picture aberto.
     a = abrivel
     a.bp.abrirJogo()
     a.janela.minimizada = True
@@ -1064,7 +1063,7 @@ def test_voltou_do_jogo_com_a_janela_minimizada_restaura_antes_da_tela_cheia(abr
 def test_voltou_do_jogo_reabre_com_o_jogo_no_centro(abrivel):
     a = abrivel
     a.bp.atualizar("b")
-    a.bp.abrirJogo()  # ocupada, como com uma sessão em curso (o plano 5 liga o fim dela)
+    a.bp.abrirJogo()  # ocupada, como com uma sessão em curso
     a.bp.voltouDoJogo()
     assert not a.bp.ocupada and a.aberturas[-1] == (1.0, 0.0)
     assert a.janela.chamadas[-1] == "tela cheia" and a.focos == [1]
@@ -1090,7 +1089,7 @@ def test_lista_refeita_durante_a_abertura_fica_para_a_volta(abrivel):
     assert _ids(a.bp) == ["n", "a", "b", "c"] and a.bp.nome == "B"
 
 
-# --- a sessão de jogo (Review Focus 5 do plano 5) ---------------------------------------------------
+# --- a sessão de jogo ---------------------------------------------------
 
 
 @pytest.fixture

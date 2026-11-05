@@ -230,7 +230,7 @@ def test_conectado_do_qml_so_com_a_grade_a_vista(app_qt, monkeypatch):
 
 @pytest.mark.parametrize("quantidade", [3, 0], ids=["com_jogos", "biblioteca_vazia"])
 def test_conectado_com_menu_aberto_entra(app_qt, monkeypatch, quantidade):
-    # Só diálogo impede a entrada automática (`window.py:1396-1410`); um menu aberto não (BP-14). Sem jogos não há
+    # Só diálogo impede a entrada automática; um menu aberto não. Sem jogos não há
     # fila de entrada, e o menu também não pode ficar por cima.
     app = _entrada(monkeypatch, grade=False, quantidade=quantidade)
     shared.schema.set_boolean("big-picture-ao-conectar", True)
@@ -402,7 +402,7 @@ def test_dialogo_aberto_tira_a_entrada_do_big_picture(app_qt, monkeypatch):
     app.fechar()
 
 
-# --- a reserva de DLL e os quatro slots (já existem no xinput.py; aqui só a prova) -------------------
+# --- a reserva de DLL e os quatro slots -------------------
 
 
 def _dll_falsa(slot_ocupado=None):

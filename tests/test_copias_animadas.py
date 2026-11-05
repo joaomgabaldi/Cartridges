@@ -70,8 +70,7 @@ def _vermelhos(caminho):
 
 
 def test_quadro_curto_cede_a_imagem_ao_quadro_seguinte(tmp_path):
-    # O quadro de 16 ms é fundido ao de 500 ms: quem aparece pelos 516 ms é o
-    # de 500, não o relance de 16 ms esticado por meio segundo.
+    # O quadro de 16 ms é fundido ao de 500 ms: quem aparece pelos 516 ms é o de 500.
     origem = _animada(tmp_path / "a.webp", [100, 16, 500], tons=[0, 120, 240])
     destino = tmp_path / "copia.webp"
 
@@ -116,8 +115,7 @@ def test_cancelar_no_meio_nao_codifica_o_resto(tmp_path, monkeypatch):
 def test_sem_o_codificador_quadro_a_quadro_grava_pelo_caminho_da_lista(
     tmp_path, monkeypatch
 ):
-    # A API do codificador é privada do Pillow: se sumir ou mudar, a cópia
-    # ainda sai, pelo ``save`` público.
+    # A API do codificador é privada do Pillow: se sumir, a cópia ainda sai pelo ``save`` público.
     monkeypatch.setattr(copias_animadas, "_webp", None)
     monkeypatch.setattr(copias_animadas, "_sem_codificador", False)
     origem = _animada(tmp_path / "a.webp", [100, 16, 500], tons=[0, 120, 240])
@@ -132,9 +130,8 @@ def test_sem_o_codificador_quadro_a_quadro_grava_pelo_caminho_da_lista(
 
 
 def test_grade_e_detalhes_tem_a_mesma_duracao_total(tmp_path):
-    # Quadros repetidos e quase iguais: o libwebp os funde em um só, e com
-    # perda isso depende dos pixels, ou seja, do tamanho. A contagem de quadros
-    # das duas cópias pode divergir; a duração total, não.
+    # O libwebp funde quadros quase iguais, e com perda isso depende do tamanho: a contagem de quadros das duas
+    # cópias pode divergir; a duração total, não.
     tons = [0, 0, 0, 2, 2, 200, 200, 202]
     origem = _animada(tmp_path / "a.webp", [40] * 8, tons=tons)
     grade = tmp_path / "grade.webp"
