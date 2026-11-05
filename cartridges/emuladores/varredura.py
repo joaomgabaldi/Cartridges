@@ -183,7 +183,7 @@ def ligar_ao_app() -> None:
     mudados: set[str] = set()
     _espera = espera = QTimer()
     espera.setSingleShot(True)
-    espera.setInterval(800)  # a linha de texto avisa a cada tecla
+    espera.setInterval(800)  # mudanças seguidas (nome e idioma) viram uma reaplicação só
 
     def disparar() -> None:
         campos = list(mudados)
