@@ -37,6 +37,7 @@
           <li>A janela não tem mais a borda invisível que atrapalhava cliques e o encaixe nas laterais da tela.</li>
           <li>Agora o Kyron aplica o idioma e o nome do jogador nos jogos que guardam essas informações em arquivos de configuração. Defina-os em Preferências.</li>
           <li>Os jogos instalados fora da Steam passaram a ser reconhecidos com mais precisão.</li>
+          <li>As Preferências foram reorganizadas em seções, com a lista à esquerda, para facilitar encontrar cada opção.</li>
         </ul>
       </description>
     </release>
