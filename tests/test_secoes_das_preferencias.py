@@ -176,8 +176,8 @@ def test_busca_abre_a_secao_do_resultado_mesmo_com_o_grupo_apagado(app):  # noqa
     assert _esperar(lambda: _dialogo(app).property("secao") == "monitores")
     assert _esperar(lambda: _visivel(app, "paginaDosMonitores"))
     assert app.achar("campoDeBuscaDasPreferencias").property("text") == ""
-    # Com o grupo apagado a página não tem linha para focar: o foco fica no diálogo, não no campo que sumiu da vista.
-    assert _esperar(lambda: _foco_dentro_de(app, "dialogoDePreferencias"))
+    # Com o grupo apagado a página não tem linha para focar: o foco cai no item da seção, não em algo escondido.
+    assert _esperar(lambda: _foco_dentro_de(app, "secao-monitores"))
     assert app.achar("campoDeBuscaDasPreferencias").property("activeFocus") is not True
 
 
@@ -223,3 +223,90 @@ def test_lista_rola_para_acompanhar_o_foco_em_janela_baixa(app):  # noqa: F811
         QTest.keyClick(app.janela, Qt.Key.Key_Up)
     assert _dialogo(app).property("secao") == "geral"
     assert _na_vista(app, "secao-geral")
+
+
+def test_clicar_numa_secao_durante_a_busca_mostra_a_secao(app):  # noqa: F811
+    _abrir(app)
+    _dialogo(app).setProperty("filtro", "brilho")
+    assert _esperar(lambda: _visivel(app, "resultadosDaBuscaDasPreferencias"))
+    _clique(app, "secao-controle")
+    assert _esperar(lambda: _visivel(app, "paginaDoControle"))
+    assert app.achar("campoDeBuscaDasPreferencias").property("text") == ""
+    assert not _visivel(app, "resultadosDaBuscaDasPreferencias")
+
+
+def test_enter_numa_secao_durante_a_busca_mostra_a_secao(app):  # noqa: F811
+    _abrir(app)
+    _dialogo(app).setProperty("filtro", "brilho")
+    assert _esperar(lambda: _visivel(app, "resultadosDaBuscaDasPreferencias"))
+    app.achar("secao-controle").forceActiveFocus(Qt.FocusReason.TabFocusReason)
+    QTest.keyClick(app.janela, Qt.Key.Key_Return)
+    assert _esperar(lambda: _visivel(app, "paginaDoControle"))
+    assert app.achar("campoDeBuscaDasPreferencias").property("text") == ""
+
+
+def test_tab_do_campo_aos_resultados_nao_apaga_a_busca(app):  # noqa: F811
+    _abrir(app)
+    campo = app.achar("campoDeBuscaDasPreferencias")
+    _dialogo(app).setProperty("filtro", "brilho")
+    assert _esperar(lambda: _visivel(app, "resultadosDaBuscaDasPreferencias"))
+    campo.forceActiveFocus(Qt.FocusReason.TabFocusReason)
+    for _ in range(6):
+        QTest.keyClick(app.janela, Qt.Key.Key_Tab)
+        if _foco_dentro_de(app, "resultadoDaBusca-0"):
+            break
+    assert _foco_dentro_de(app, "resultadoDaBusca-0")
+    assert campo.property("text") == "brilho"
+    assert _visivel(app, "resultadosDaBuscaDasPreferencias")
+
+
+def test_direcional_para_a_direita_durante_a_busca_vai_ao_primeiro_resultado(app):  # noqa: F811
+    _abrir(app)
+    _dialogo(app).setProperty("filtro", "brilho")
+    assert _esperar(lambda: _visivel(app, "resultadosDaBuscaDasPreferencias"))
+    app.achar("secao-geral").forceActiveFocus(Qt.FocusReason.TabFocusReason)
+    app.controle.mover.emit(1, 0)
+    assert _esperar(lambda: _foco_dentro_de(app, "resultadoDaBusca-0"))
+    assert app.achar("campoDeBuscaDasPreferencias").property("text") == "brilho"
+
+
+def test_direcional_para_a_direita_sem_linha_focavel_fica_na_lista(app):  # noqa: F811
+    shared.schema.set_boolean("playtime-tracking", False)
+    _abrir(app, "monitores")
+    app.achar("secao-monitores").forceActiveFocus(Qt.FocusReason.TabFocusReason)
+    app.controle.mover.emit(1, 0)
+    assert _foco_dentro_de(app, "secao-monitores")
+
+
+def test_trocar_de_secao_volta_a_rolagem_ao_topo(app):  # noqa: F811
+    app.janela.setHeight(420)
+    _abrir(app, "conquistas")
+    rolagem = app.achar("rolagemDasPreferencias")
+    assert rolagem.property("contentHeight") > rolagem.property("height")
+    rolagem.setProperty("contentY", 80)
+    assert rolagem.property("contentY") > 0
+    _clique(app, "secao-geral")
+    assert _esperar(lambda: _visivel(app, "paginaGeral"))
+    assert rolagem.property("contentY") == 0
+
+
+def test_resultado_no_fim_da_pagina_termina_com_a_linha_a_vista(app):  # noqa: F811
+    app.janela.setHeight(420)
+    _abrir(app, "aplicativo")
+    _dialogo(app).setProperty("filtro", "a")
+    assert _esperar(lambda: _visivel(app, "resultadosDaBuscaDasPreferencias"))
+    resultados = _avaliar(_dialogo(app), "resultados.map(r => r.secao)")
+    alvo = max(i for i, sec in enumerate(resultados) if sec == "geral")
+    _clique(app, f"resultadoDaBusca-{alvo}Botao")
+    assert _esperar(lambda: _visivel(app, "paginaGeral"))
+    rolagem = app.achar("rolagemDasPreferencias")
+
+    def a_vista():
+        foco = app.janela.activeFocusItem()
+        if foco is None or not _foco_dentro_de(app, "paginaGeral"):
+            return False
+        y = foco.mapToItem(rolagem, QPointF(0, 0)).y()
+        return y >= -0.5 and y + foco.height() <= rolagem.property("height") + 0.5
+
+    assert _esperar(a_vista)
+    assert rolagem.property("contentY") > 0

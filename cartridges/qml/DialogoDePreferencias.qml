@@ -40,6 +40,8 @@ MolduraDoDialogo {
     nomeAcessivel: "Preferências"
     onFecharPedido: preferencias.fechar()
 
+    // Cada seção abre no topo; `abrirResultado` foca a linha depois (callLater), e aí a rolagem a acompanha.
+    onSecaoChanged: rolagem.contentY = 0
     onFiltroChanged: {
         rolagem.contentY = 0
         procurar()
@@ -76,6 +78,8 @@ MolduraDoDialogo {
         lista.focarSecao(secao)
     }
     function entrarNasLinhas() {
+        // Na busca a direita são os resultados; sem eles, o foco fica na lista.
+        if (buscando) { if (resultados.length > 0) focarLinha(repetidorDeResultados.itemAt(0)); return }
         focarLinha(paginas.children[indiceDaSecao])
     }
     function contagem(id: string): int {
@@ -134,7 +138,7 @@ MolduraDoDialogo {
         }
         var alvo = achar(linha)
         if (alvo) alvo.forceActiveFocus(Qt.TabFocusReason)
-        else linha.forceActiveFocus(Qt.TabFocusReason)
+        else lista.focarSecao(secao)  // sem linha focável o foco fica no item da seção, nunca em algo escondido
     }
     function abrirResultado(resultado) {
         secao = resultado.secao
@@ -300,6 +304,7 @@ MolduraDoDialogo {
                         visible: dialogo.buscando && dialogo.resultados.length > 0
 
                         Repeater {
+                            id: repetidorDeResultados
                             model: dialogo.buscando ? dialogo.resultados : []
                             LinhaDeAcao {
                                 required property var modelData

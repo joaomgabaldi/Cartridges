@@ -581,14 +581,15 @@ def test_foco_levado_para_outro_controle_nao_e_roubado_ao_terminar(app, store, m
 # region Personalização
 
 
-def test_textos_da_personalizacao(app):
-    _abrir(app, "monitores")
-    assert app.achar("paginaDosMonitores").property("visible") is True
+def test_textos_das_paginas_geral_e_dos_monitores(app):
+    _abrir(app, "geral")
     assert app.achar("grupoInterface").property("titulo") == "Interface"
     assert _linha(app, "interruptor-cover-autoplay") == (
         "Reproduzir capas animadas automaticamente",
         "As capas animadas são reproduzidas na biblioteca automaticamente e em loop.",
     )
+    app.achar("dialogoDePreferencias").setProperty("secao", "monitores")
+    assert _esperar(lambda: app.achar("paginaDosMonitores").property("visible") is True)
     assert app.achar("grupoAoIniciarUmJogo").property("titulo") == "Ao iniciar um jogo"
     assert app.achar("grupoAoIniciarUmJogo").property("descricao") == (
         "Move o Kyron para outro monitor (se disponível) em vez de minimizá-lo para a barra de tarefas."

@@ -116,7 +116,9 @@ Rectangle {
                             else if (base > rolagemDaLista.contentY + rolagemDaLista.height)
                                 rolagemDaLista.contentY = Math.max(0, base - rolagemDaLista.height)
                         }
-                        onClicked: lista.escolhida(modelData.id)
+                        // Clique/Enter encerram a busca (senão a direita seguiria nos resultados). Não no foco: o Tab
+                        // do campo aos resultados passa por este item e não pode apagar o texto.
+                        onClicked: { lista.texto = ""; lista.escolhida(modelData.id) }
                         Keys.onReturnPressed: click()
                         Keys.onEnterPressed: click()
                         Keys.onDownPressed: lista.irPara(index + 1)
