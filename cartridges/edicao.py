@@ -330,7 +330,7 @@ def _capa_do_sgdb_chegou(jogo: Jogo, manager: Any) -> None:
     for error in manager.collect_errors():
         # Só o erro amigável (a chave do SteamGridDB recusada) é dito à pessoa.
         if isinstance(error, FriendlyError) and shared.aplicativo is not None:
-            shared.aplicativo.pedir_dialogo(error.title, error.subtitle, [], lambda: None, preferencias="sgdb")
+            shared.aplicativo.pedir_dialogo(error.title, error.subtitle, [], lambda: None, preferencias="metadados")
 
 
 def saiu_da_store(jogo: Optional[Jogo]) -> bool:

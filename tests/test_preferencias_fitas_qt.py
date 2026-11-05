@@ -406,7 +406,7 @@ def app(app_qt, previas, arranques):  # noqa: ARG001
 
 
 def _abrir(app):
-    assert app.preferencias.abrir("session")
+    assert app.preferencias.abrir("monitores")
     assert _esperar(lambda: app.achar("paginaDePersonalizacao").property("visible") is True)
 
 

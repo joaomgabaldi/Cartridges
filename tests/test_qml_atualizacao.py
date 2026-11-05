@@ -139,7 +139,7 @@ def test_esc_no_download_e_cancelar(janela, download_falso):  # noqa: ARG001
 
 
 def test_pergunta_fica_por_cima_das_preferencias(janela):
-    assert janela.preferencias.abrir("general")
+    assert janela.preferencias.abrir("geral")
     prefs = janela.achar("dialogoDePreferencias")
     assert esperar(lambda: prefs.property("visible") is True)
 

@@ -44,7 +44,7 @@ def calibracao_aberta(app, fitas_espiadas, monkeypatch):
         [session_fita.Fita("Sala", "eb0", "192.0.2.10", "k"), session_fita.Fita("Quarto", "eb1", "192.0.2.11", "k")]
     )
     monkeypatch.setattr(session_fita, "previa_calibracao", lambda *_a: fitas_espiadas.append("so"))
-    _abrir(app, "session")
+    _abrir(app, "monitores")
     app.preferencias.abrirCalibracao()
     dialogo = app.achar("assistenteDeCalibracao")
     assert _esperar(lambda: dialogo.property("visible") is True)
@@ -72,7 +72,7 @@ def test_o_dialogo_e_uma_moldura_de_640_com_raio_15_e_altura_maxima(app):
 
 def test_cartoes_das_paginas_tem_532_em_640(app):
     """Cartões de x=54 a x=586 no diálogo de 640."""
-    _abrir(app, "general")
+    _abrir(app, "geral")
     grupo = app.achar("grupoComportamentoGeral")
     assert grupo.property("width") == 532
     # A margem de cima da página é 24: o título do primeiro grupo começa a 24 do cabeçalho.
@@ -103,26 +103,26 @@ def test_barra_das_abas_no_pe_com_icone_sobre_o_rotulo(app):
     # No pé do cartão.
     assert barra.mapToItem(cartao, QPointF(0, 0)).y() + barra.property("height") == pytest.approx(cartao.property("height"))
     icones = []
-    for aba in ("general", "session", "import", "sgdb", "conquistas"):
+    for aba in ("geral", "monitores", "importacao", "metadados", "conquistas"):
         botao = app.achar(f"aba-{aba}")
         assert (botao.property("width"), botao.property("height")) == (100, 40)
         icones.append(_avaliar(botao, "modelData.icone"))  # os ícones simbólicos
     assert icones == ["user-home", "video-joined-displays", "document-save", "image-x-generic", "starred"]
     # Ficam centralizadas, com 3 de vão (5 x 100 + 4 x 3 = 512 em 640).
-    primeira, ultima = app.achar("aba-general"), app.achar("aba-conquistas")
+    primeira, ultima = app.achar("aba-geral"), app.achar("aba-conquistas")
     x0 = primeira.mapToItem(cartao, QPointF(0, 0)).x()
     x1 = ultima.mapToItem(cartao, QPointF(ultima.property("width"), 0)).x()
     assert x0 == pytest.approx(64) and x1 == pytest.approx(576)
 
 
 def test_a_linha_da_barra_so_aparece_com_mais_conteudo_por_rolar(app):
-    _abrir(app, "import")  # a página curta cabe: sem linha
+    _abrir(app, "importacao")  # a página curta cabe: sem linha
     barra = app.achar("abas")
     linha = barra.childItems()[0]
     assert linha.property("visible") is False
-    _abrir_geral = app.achar("aba-general")
-    _clique(app, "aba-general")
-    assert _esperar(lambda: app.achar("dialogoDePreferencias").property("aba") == "general")
+    _abrir_geral = app.achar("aba-geral")
+    _clique(app, "aba-geral")
+    assert _esperar(lambda: app.achar("dialogoDePreferencias").property("aba") == "geral")
     assert _esperar(lambda: linha.property("visible") is True)  # a página Geral é longa
     app.achar("rolagemDasPreferencias").setProperty("contentY", 100000)
     assert _esperar(lambda: linha.property("visible") is False)
@@ -152,9 +152,9 @@ def test_o_aviso_das_preferencias_fica_no_cartao_delas(app):
 
 def test_abre_com_o_foco_no_x_e_a_aba_da_pagina_a_vista(app):
     # O primeiro Tab vai à primeira linha da página; a aba à vista é a pedida, mas não leva o foco.
-    _abrir(app, "sgdb")
+    _abrir(app, "metadados")
     assert _esperar(lambda: app.janela.activeFocusItem() is app.achar("dialogoDePreferencias").property("botaoFechar"))
-    assert app.achar("dialogoDePreferencias").property("aba") == "sgdb"
+    assert app.achar("dialogoDePreferencias").property("aba") == "metadados"
 
 
 def test_os_diretorios_de_arquivo_nao_tem_titulo_proprio():
@@ -177,7 +177,7 @@ def _rolar_ate(app, item):
 
 def test_linhas_das_fitas_acionam_pela_linha_inteira(app, fitas_espiadas):  # noqa: ARG001
     shared.schema.set_boolean("session-fita", True)
-    _abrir(app, "session")
+    _abrir(app, "monitores")
     linha = app.achar("linhaDoBrilhoPorDispositivo")
     assert linha.property("ativavel").objectName() == "linhaDoBrilhoPorDispositivoBotao"
     _rolar_ate(app, linha)
@@ -188,7 +188,7 @@ def test_linhas_das_fitas_acionam_pela_linha_inteira(app, fitas_espiadas):  # no
 
 
 def test_pasta_dos_saves_e_buscar_atualizacoes_nao_sao_ativaveis(app):
-    _abrir(app, "general")
+    _abrir(app, "geral")
     assert app.achar("linhaBuscarAtualizacoes").property("ativavel") is None
     assert app.achar("linhaPastaDosSaves").property("ativavel") is None
     assert app.achar("linhaBuscarAtualizacoesBotao").property("text") == "Buscar"
@@ -200,7 +200,7 @@ def test_pasta_dos_saves_e_buscar_atualizacoes_nao_sao_ativaveis(app):
 
 def test_progresso_dos_metadados_fica_abaixo_do_cartao(app, monkeypatch):
     refresh = _com_refresh_falso(monkeypatch)
-    _abrir(app, "import")
+    _abrir(app, "importacao")
     linha = app.achar("linhaDosMetadados")
     barra = app.achar("linhaDosMetadadosProgresso")
     assert barra.property("visible") is False
@@ -226,7 +226,7 @@ def test_balao_da_cor_abre_na_paleta_e_o_mais_leva_ao_seletor(app, fitas_espiada
     from cartridges.utils import session_fita  # noqa: PLC0415
 
     shared.schema.set_boolean("session-fita", True)
-    _abrir(app, "session")
+    _abrir(app, "monitores")
     linha = app.achar("linhaDaCorDoApp")
     _rolar_ate(app, linha)
     _clique(app, "linhaDaCorDoAppAmostra")
@@ -266,7 +266,7 @@ def test_clicar_num_tom_da_paleta_escolhe_a_cor(app, fitas_espiadas):
     from cartridges.utils import session_fita  # noqa: PLC0415
 
     shared.schema.set_boolean("session-fita", True)
-    _abrir(app, "session")
+    _abrir(app, "monitores")
     _rolar_ate(app, app.achar("linhaDaCorDoApp"))
     _clique(app, "linhaDaCorDoAppAmostra")
     assert _esperar(lambda: app.achar("linhaDaCorDoAppBalao").property("opened") is True)
@@ -291,7 +291,7 @@ def test_clicar_num_tom_da_paleta_escolhe_a_cor(app, fitas_espiadas):
 
 
 def test_assistente_das_fitas_enter_nao_busca_e_o_segredo_tem_botao_de_mostrar(app):
-    _abrir(app, "session")
+    _abrir(app, "monitores")
     app.preferencias.abrirConfiguracaoDasFitas()
     dialogo = app.achar("dialogoDaConfiguracaoDasFitas")
     assert _esperar(lambda: dialogo.property("visible") is True)
@@ -312,7 +312,7 @@ def test_assistente_das_fitas_enter_nao_busca_e_o_segredo_tem_botao_de_mostrar(a
 
 def test_cabecalho_dos_dialogos_internos_tem_47_e_o_titulo_centralizado(app, fitas_espiadas):  # noqa: ARG001
     shared.schema.set_boolean("session-fita", True)
-    _abrir(app, "session")
+    _abrir(app, "monitores")
     app.preferencias.abrirConfiguracaoDasFitas()
     dialogo = app.achar("dialogoDaConfiguracaoDasFitas")
     assert _esperar(lambda: dialogo.property("visible") is True)
@@ -327,7 +327,7 @@ def test_cabecalho_dos_dialogos_internos_tem_47_e_o_titulo_centralizado(app, fit
 
 def test_brilho_por_dispositivo_cabecalho_47_com_cancelar_e_salvar(app, fitas_espiadas):  # noqa: ARG001
     shared.schema.set_boolean("session-fita", True)
-    _abrir(app, "session")
+    _abrir(app, "monitores")
     app.preferencias.abrirBrilhoPorDispositivo()
     dialogo = app.achar("dialogoDoBrilhoPorDispositivo")
     assert _esperar(lambda: dialogo.property("visible") is True)
@@ -366,7 +366,7 @@ def test_calibracao_todos_os_dispositivos_sem_cartao(app, fitas_espiadas, monkey
         [session_fita.Fita("Sala", "eb0", "192.0.2.10", "k"), session_fita.Fita("Quarto", "eb1", "192.0.2.11", "k")]
     )
     monkeypatch.setattr(session_fita, "previa_calibracao", lambda *_a: None)
-    _abrir(app, "session")
+    _abrir(app, "monitores")
     app.preferencias.abrirCalibracao()
     dialogo = app.achar("assistenteDeCalibracao")
     assert _esperar(lambda: dialogo.property("visible") is True)
@@ -391,7 +391,7 @@ def test_calibracao_todos_os_dispositivos_sem_cartao(app, fitas_espiadas, monkey
 
 def test_dialogo_interno_acompanha_o_redimensionamento_da_janela(app, fitas_espiadas):  # noqa: ARG001
     shared.schema.set_boolean("session-fita", True)
-    _abrir(app, "session")
+    _abrir(app, "monitores")
     app.preferencias.abrirBrilhoPorDispositivo()
     dialogo = app.achar("dialogoDoBrilhoPorDispositivo")
     assert _esperar(lambda: dialogo.property("visible") is True)
@@ -408,7 +408,7 @@ def test_dialogo_interno_acompanha_o_redimensionamento_da_janela(app, fitas_espi
 
 def test_aviso_e_contorno_ficam_abaixo_do_dialogo_interno(app, fitas_espiadas):  # noqa: ARG001
     shared.schema.set_boolean("session-fita", True)
-    _abrir(app, "session")
+    _abrir(app, "monitores")
     app.preferencias.abrirBrilhoPorDispositivo()
     dialogo = app.achar("dialogoDoBrilhoPorDispositivo")
     assert _esperar(lambda: dialogo.property("visible") is True)
@@ -428,7 +428,7 @@ def test_aviso_e_contorno_ficam_abaixo_do_dialogo_interno(app, fitas_espiadas): 
 
 def test_alerta_do_app_fica_na_frente_das_preferencias_e_responde_ao_clique(app, fitas_espiadas):  # noqa: ARG001
     """A camada dos avisos (z 20) fica acima das molduras (z 10): com as Preferências abertas, o clique real no botão do alerta o alcança e o fecha."""
-    _abrir(app, "session")
+    _abrir(app, "monitores")
     fechados = []
     app.aplicativo.pedir_dialogo("Aviso", "Corpo", [], lambda: fechados.append(1))
     dialogo = app.achar("dialogoDeErros")

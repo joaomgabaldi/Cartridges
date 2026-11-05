@@ -7,7 +7,7 @@ from PySide6.QtCore import Qt
 import pytest
 
 from cartridges import shared
-from cartridges.modelos.preferencias import Preferencias
+from cartridges.modelos.preferencias import PAGINAS, Preferencias
 from cartridges.utils import window_geometry
 from cartridges.utils.window_geometry import Monitor
 from tests.apoio_capas import _ManagerDeCapas
@@ -109,8 +109,8 @@ def test_valores_seguem_o_schema(p):
 
 
 def test_abrir_duas_vezes_nao_reabre(p):
-    assert not p.abrir("sgdb")
-    assert p.pagina == "general"
+    assert not p.abrir("metadados")
+    assert p.pagina == "geral"
 
 
 def test_abrir_durante_a_importacao_nao_abre(app_qt, monkeypatch):  # noqa: ARG001
@@ -123,10 +123,26 @@ def test_abrir_durante_a_importacao_nao_abre(app_qt, monkeypatch):  # noqa: ARG0
 def test_pagina_desconhecida_abre_o_geral(app_qt):  # noqa: ARG001
     modelo = Preferencias(None, lambda: True)
     assert modelo.abrir("nao-existe")
-    assert modelo.pagina == "general"
+    assert modelo.pagina == "geral"
     modelo.fechar()
-    assert modelo.abrir("sgdb")
-    assert modelo.pagina == "sgdb"
+    assert modelo.abrir("metadados")
+    assert modelo.pagina == "metadados"
+    modelo.fechar()
+
+
+@pytest.mark.parametrize("secao", PAGINAS)
+def test_abrir_cada_secao(app_qt, secao):  # noqa: ARG001
+    modelo = Preferencias(None, lambda: True)
+    assert modelo.abrir(secao) and modelo.pagina == secao
+    modelo.fechar()
+
+
+def test_id_antigo_ou_desconhecido_cai_na_geral(app_qt):  # noqa: ARG001
+    modelo = Preferencias(None, lambda: True)
+    for antigo in ("general", "session", "sgdb", "import", "xyz"):
+        modelo.fechar()
+        modelo.abrir(antigo)
+        assert modelo.pagina == "geral"
     modelo.fechar()
 
 

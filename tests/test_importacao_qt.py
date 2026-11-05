@@ -558,7 +558,7 @@ def test_botao_preferencias_do_dialogo_abre_a_tela(app_qt):
     ponto = botao.mapToScene(botao.boundingRect().center()).toPoint()
     QTest.mouseClick(janela.janela, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, ponto)
     assert _esperar(lambda: janela.preferencias.aberto)
-    assert janela.preferencias.pagina == "general"
+    assert janela.preferencias.pagina == "geral"
     assert janela.achar("dialogoDeErros").property("visible") is False
     assert fechados == []  # espera as Preferências fecharem
     janela.fechar()
@@ -571,7 +571,7 @@ def test_preferencias_do_dialogo_abre_e_o_resumo_espera_o_fechamento(fonte, app_
     _importar(app)
     assert fila.depois == []
     app.dialogoFechado(True)
-    assert preferencias.aberto is True and preferencias.pagina == "general"
+    assert preferencias.aberto is True and preferencias.pagina == "geral"
     assert fila.depois == []
     preferencias.fechar()
     assert fila.depois == [(1, 5)]
@@ -623,7 +623,7 @@ def test_resumo_vazio_tem_o_botao_preferencias_da_importacao(fonte, app_qt, monk
     _importar(app)
     assert fila.adicionados == [("Nenhum jogo novo encontrado", "Preferências", 0)]
     fila.clicar()
-    assert preferencias.aberto is True and preferencias.pagina == "import"
+    assert preferencias.aberto is True and preferencias.pagina == "importacao"
     preferencias.fechar()
 
 

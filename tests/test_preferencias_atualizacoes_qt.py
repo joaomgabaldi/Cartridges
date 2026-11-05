@@ -28,7 +28,7 @@ def janela(app_qt, monkeypatch, sem_instalador_de_verdade):  # noqa: ARG001
 
 
 def _abrir_preferencias(janela):
-    assert janela.preferencias.abrir("general")
+    assert janela.preferencias.abrir("geral")
     assert esperar(lambda: janela.achar("dialogoDePreferencias").property("visible") is True)
 
 

@@ -10,14 +10,14 @@ MolduraDoDialogo {
     objectName: "dialogoDePreferencias"
 
     readonly property var abas: [
-        { id: "general", titulo: "Geral", icone: "user-home" },
-        { id: "session", titulo: "Personalização", icone: "video-joined-displays" },
-        { id: "import", titulo: "Importação", icone: "document-save" },
-        { id: "sgdb", titulo: "SteamGridDB", icone: "image-x-generic" },
+        { id: "geral", titulo: "Geral", icone: "user-home" },
+        { id: "monitores", titulo: "Personalização", icone: "video-joined-displays" },
+        { id: "importacao", titulo: "Importação", icone: "document-save" },
+        { id: "metadados", titulo: "SteamGridDB", icone: "image-x-generic" },
         { id: "conquistas", titulo: "Conquistas", icone: "starred" }
     ]
     readonly property var rotulosDasAbas: abas.map(a => a.titulo)
-    property string aba: "general"
+    property string aba: "geral"
     readonly property int indiceDaAba: Math.max(0, abas.findIndex(a => a.id === aba))
     property bool buscaAtiva: false
     property alias filtro: campoDeBusca.text
@@ -38,7 +38,7 @@ MolduraDoDialogo {
         procurar()
     }
     onAbertoChanged: if (aberto) {
-        aba = abas.some(a => a.id === preferencias.pagina) ? preferencias.pagina : "general"
+        aba = abas.some(a => a.id === preferencias.pagina) ? preferencias.pagina : "geral"
         rolagem.contentY = 0
         filtro = ""
         buscaAtiva = false
@@ -219,10 +219,10 @@ MolduraDoDialogo {
                     width: rolagem.larguraDoConteudo
                     visible: !dialogo.buscando
 
-                    PaginaGeral { visible: dialogo.aba === "general" }
-                    PaginaDePersonalizacao { visible: dialogo.aba === "session" }
-                    PaginaDeImportacao { visible: dialogo.aba === "import" }
-                    PaginaDoSteamGridDB { visible: dialogo.aba === "sgdb" }
+                    PaginaGeral { visible: dialogo.aba === "geral" }
+                    PaginaDePersonalizacao { visible: dialogo.aba === "monitores" }
+                    PaginaDeImportacao { visible: dialogo.aba === "importacao" }
+                    PaginaDoSteamGridDB { visible: dialogo.aba === "metadados" }
                     PaginaDasConquistas { visible: dialogo.aba === "conquistas" }
                 }
 

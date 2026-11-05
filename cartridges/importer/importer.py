@@ -465,7 +465,7 @@ class Importer(ErrorProducer):
     @staticmethod
     def _abrir_preferencias() -> None:
         if shared.preferencias is not None:
-            shared.preferencias.abrir("import")
+            shared.preferencias.abrir("importacao")
 
     def timeout_toast(self, *_args: object) -> None:
         """Dá 5 segundos ao resumo depois que o usuário dispensou os avisos (pela fila: o resumo pode esperar atrás de outro aviso)."""

@@ -502,7 +502,7 @@ def test_erro_do_sgdb_oferece_as_preferencias_do_sgdb(edicao, store, aplicativo)
 
     stub_sgdb(store, erros=[FriendlyError("Não foi possível autenticar no SteamGridDB", "Verifique a chave.")])
     _aplicar(edicao, jogo(store, 84))
-    assert aplicativo.paginas == ["sgdb"]
+    assert aplicativo.paginas == ["metadados"]
 
 
 def test_capa_que_nao_grava_nao_derruba_o_aplicar(edicao, store, sgdb, monkeypatch, tmp_path, caplog):

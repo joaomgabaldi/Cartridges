@@ -75,7 +75,7 @@ CHAVES_DA_TELA = (
 )
 # Chaves inteiras: (mínimo, máximo), como no gschema. As demais de CHAVES_GRAVAVEIS são booleanas.
 _INTEIROS = {"process-tracking-grace": (0, 120), "conquistas-aviso-som-volume": (10, 100)}
-PAGINAS = ("general", "session", "import", "sgdb", "conquistas")
+PAGINAS = ("geral", "controle", "monitores", "iluminacao", "importacao", "metadados", "conquistas", "contas", "backup", "aplicativo")
 # Os estilos do alerta na ordem da lista da tela (os rótulos ficam no QML).
 ESTILOS_NA_TELA = ("piscar", "respirar", "rapido", "longo")
 SEM_3D = "Requer uma placa de vídeo com aceleração 3D."
@@ -520,7 +520,7 @@ class Preferencias(QObject):
         self._avisos = avisos
         self._tem_3d = tem_3d
         self._aberto = False
-        self._pagina = "general"
+        self._pagina = "geral"
         self._valores: dict[str, Any] = {}
         self._estado: dict[str, Any] = {}
         self._ligacao: int | None = None
@@ -631,7 +631,7 @@ class Preferencias(QObject):
         if self._aberto or getattr(shared.aplicativo, "importando", False):
             return False
         self._aberto = True
-        self._pagina = pagina if pagina in PAGINAS else "general"
+        self._pagina = pagina if pagina in PAGINAS else "geral"
         self._biblioteca.seguir(True)
         self._contas = ContasDasLojas(self._avisos, parent=self)
         self._ler_monitores()

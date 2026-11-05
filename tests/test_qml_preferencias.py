@@ -42,7 +42,7 @@ def test_enter_aciona_interruptor_aba_e_fechar(app, tecla, modificador):
     QTest.keyClick(app.janela, tecla, modificador)
     assert _esperar(lambda: chave.property("checked") is (not antes))
     # A aba abre a sua página.
-    app.achar("aba-import").forceActiveFocus(Qt.FocusReason.TabFocusReason)
+    app.achar("aba-importacao").forceActiveFocus(Qt.FocusReason.TabFocusReason)
     QTest.keyClick(app.janela, tecla, modificador)
     assert _esperar(lambda: app.achar("paginaDeImportacao").property("visible") is True)
     # O X fecha.
@@ -53,19 +53,19 @@ def test_enter_aciona_interruptor_aba_e_fechar(app, tecla, modificador):
 
 def test_setas_trocam_de_aba_e_levam_o_foco(app):
     _abrir(app)
-    app.achar("aba-general").forceActiveFocus(Qt.FocusReason.TabFocusReason)
+    app.achar("aba-geral").forceActiveFocus(Qt.FocusReason.TabFocusReason)
     QTest.keyClick(app.janela, Qt.Key.Key_Right)
-    assert app.achar("dialogoDePreferencias").property("aba") == "session"
-    assert _foco_dentro_de(app, "aba-session")
+    assert app.achar("dialogoDePreferencias").property("aba") == "monitores"
+    assert _foco_dentro_de(app, "aba-monitores")
     QTest.keyClick(app.janela, Qt.Key.Key_Left)
-    assert app.achar("dialogoDePreferencias").property("aba") == "general"
-    assert _foco_dentro_de(app, "aba-general")
+    assert app.achar("dialogoDePreferencias").property("aba") == "geral"
+    assert _foco_dentro_de(app, "aba-geral")
     QTest.keyClick(app.janela, Qt.Key.Key_Left)  # na ponta, nada acontece
-    assert app.achar("dialogoDePreferencias").property("aba") == "general"
+    assert app.achar("dialogoDePreferencias").property("aba") == "geral"
 
 
 def test_caixa_de_numero_tem_uma_parada_de_tab_e_segue_as_setas(app):
-    _abrir(app, "general")
+    _abrir(app, "geral")
     caixa = app.achar("linhaDaEsperaCaixa")
     caixa.forceActiveFocus(Qt.FocusReason.TabFocusReason)
     valor = caixa.property("value")
@@ -106,10 +106,10 @@ def test_abas_na_ordem_da_main(app):
 
 
 def test_abre_na_pagina_pedida_e_a_aba_troca_de_pagina(app):
-    _abrir(app, "sgdb")
+    _abrir(app, "metadados")
     assert app.achar("paginaDoSteamGridDB").property("visible") is True
     assert app.achar("paginaGeral").property("visible") is False
-    _clique(app, "aba-import")
+    _clique(app, "aba-importacao")
     assert _esperar(lambda: app.achar("paginaDeImportacao").property("visible") is True)
     assert app.achar("paginaDoSteamGridDB").property("visible") is False
 
@@ -180,7 +180,7 @@ def test_controle_nao_passa_com_as_preferencias_abertas(app):
 
 
 def test_interruptor_grava_no_schema(app):
-    _abrir(app, "import")
+    _abrir(app, "importacao")
     antes = shared.schema.get_boolean("auto-import")
     _clique(app, "interruptor-auto-importChave")
     assert shared.schema.get_boolean("auto-import") is (not antes)
@@ -305,7 +305,7 @@ def test_big_picture_sem_3d_explica_na_linha(app):
 def test_pasta_dos_atalhos_em_texto_puro_no_formato_do_windows(app):
     shared.schema["shortcuts-location"] = "D:/Games & Emulators"
     shared.schema.set_boolean("shortcuts", True)
-    _abrir(app, "import")
+    _abrir(app, "importacao")
     subtitulo = app.achar("linhaDaPastaSubtitulo")
     assert _esperar(lambda: subtitulo.property("text") == "D:\\Games & Emulators")
     assert _avaliar(subtitulo, "textFormat") == Qt.TextFormat.PlainText.value
@@ -314,7 +314,7 @@ def test_pasta_dos_atalhos_em_texto_puro_no_formato_do_windows(app):
 def test_sem_pasta_mostra_nenhuma_pasta_selecionada(app):
     shared.schema["shortcuts-location"] = ""
     shared.schema.set_boolean("shortcuts", True)
-    _abrir(app, "import")
+    _abrir(app, "importacao")
     assert _esperar(lambda: app.achar("linhaDaPastaSubtitulo").property("text") == "Nenhuma pasta selecionada")
 
 
@@ -330,7 +330,7 @@ def test_escolher_pasta_grava_o_caminho_e_url_vazia_nao_grava(app, tmp_path):
 
 def test_linhas_dos_atalhos_so_com_atalhos_ligado_e_o_expansor_aberto(app):
     shared.schema.set_boolean("shortcuts", False)
-    _abrir(app, "import")
+    _abrir(app, "importacao")
     expansor = app.achar("interruptor-shortcuts")
     assert expansor.property("icone") == "shortcuts-source"
     assert app.achar("linhaDaPasta").property("visible") is False
@@ -350,7 +350,7 @@ def test_linhas_dos_atalhos_so_com_atalhos_ligado_e_o_expansor_aberto(app):
 
 def test_expansor_abre_recolhido_com_a_chave_ja_ligada(app):
     shared.schema.set_boolean("shortcuts", True)
-    _abrir(app, "import")
+    _abrir(app, "importacao")
     assert app.achar("interruptor-shortcuts").property("checked") is True
     assert app.achar("interruptor-shortcuts").property("aberta") is False
     assert app.achar("linhaDaPasta").property("visible") is False
@@ -359,7 +359,7 @@ def test_expansor_abre_recolhido_com_a_chave_ja_ligada(app):
 def test_chave_do_sgdb_digitada_e_o_interruptor_acende(app):
     shared.schema["sgdb-key"] = ""
     shared.schema.set_boolean("sgdb", False)
-    _abrir(app, "sgdb")
+    _abrir(app, "metadados")
     assert app.achar("interruptor-sgdb").property("enabled") is False
     app.achar("campoDaChaveDoSgdb").forceActiveFocus(Qt.FocusReason.TabFocusReason)
     for letra in "abc":
@@ -371,7 +371,7 @@ def test_chave_do_sgdb_digitada_e_o_interruptor_acende(app):
 def test_descricao_da_autenticacao_e_o_link_abre_o_navegador_falso(app, monkeypatch):
     urls = []
     monkeypatch.setattr(open_uri, "abrir_url", lambda url: urls.append(url) or True)
-    _abrir(app, "sgdb")
+    _abrir(app, "metadados")
     grupo = app.achar("grupoAutenticacao")
     assert grupo.property("titulo") == "Autenticação"
     assert grupo.property("descricao") == (
@@ -421,7 +421,7 @@ def test_escopo_dos_metadados_tem_tres_botoes_e_comeca_no_que_falta(app, store, 
     _refresh, chamadas = _com_refresh_falso(monkeypatch)
     jogo = make_game(game_id="a", has_hltb_times=False)
     store.add_game(jogo, {})
-    _abrir(app, "import")
+    _abrir(app, "importacao")
     assert app.achar("linhaDosMetadados").property("titulo") == "Atualizar metadados"
     assert app.achar("linhaDosMetadados").property("subtitulo") == "Busca dados para jogos já na biblioteca"
     assert app.achar("linhaDosMetadadosBotao").property("text") == "Atualizar"
@@ -447,7 +447,7 @@ def test_confirmar_o_escopo_busca_so_o_que_falta_e_cancelar_nao_busca(app, store
     _refresh, chamadas = _com_refresh_falso(monkeypatch)
     jogo = make_game(game_id="a", has_hltb_times=False)
     store.add_game(jogo, {})
-    _abrir(app, "import")
+    _abrir(app, "importacao")
     dialogo = app.achar("dialogoDosMetadados")
     _clique(app, "linhaDosMetadadosBotao")
     assert _esperar(lambda: dialogo.property("visible") is True)
@@ -464,7 +464,7 @@ def test_confirmar_o_escopo_busca_so_o_que_falta_e_cancelar_nao_busca(app, store
 
 def test_barra_de_progresso_so_durante_a_atualizacao(app, monkeypatch):
     refresh, _ = _com_refresh_falso(monkeypatch)
-    _abrir(app, "import")
+    _abrir(app, "importacao")
     assert app.achar("linhaDosMetadadosBotao").property("visible") is True
     assert app.achar("linhaDosMetadadosProgresso").property("visible") is False
     assert app.achar("linhaDosMetadadosParar").property("visible") is False
@@ -490,7 +490,7 @@ def test_barra_de_progresso_so_durante_a_atualizacao(app, monkeypatch):
 
 def test_linha_dos_metadados_apagada_sem_as_duas_fontes(app):
     shared.schema.set_boolean("steam-metadata", True)
-    _abrir(app, "import")
+    _abrir(app, "importacao")
     assert app.achar("linhaDosMetadados").property("enabled") is True
     shared.schema.set_boolean("steam-metadata", False)
     shared.schema.set_boolean("hltb-metadata", False)
@@ -506,7 +506,7 @@ def test_atualizar_capas_apagado_sem_sgdb(app, store, make_game):
     store.add_game(make_game(game_id="a"), {})
     store.managers[SgdbManager] = gerente = _ManagerDeCapas()
     shared.schema.set_boolean("sgdb", False)
-    _abrir(app, "sgdb")
+    _abrir(app, "metadados")
     linha = app.achar("linhaDasCapas")
     assert linha.property("titulo") == "Atualizar capas"
     assert linha.property("subtitulo") == "Busca capas para jogos já na biblioteca"
@@ -532,7 +532,7 @@ def test_atualizar_capas_apagado_sem_sgdb(app, store, make_game):
 def test_foco_acompanha_o_botao_dos_metadados(app, store, make_game, monkeypatch):
     refresh, _ = _com_refresh_falso(monkeypatch)
     store.add_game(make_game(game_id="a", has_hltb_times=False), {})
-    _abrir(app, "import")
+    _abrir(app, "importacao")
     app.achar("linhaDosMetadadosBotao").forceActiveFocus(Qt.FocusReason.TabFocusReason)
     refresh.running, refresh.done, refresh.total = True, 0, 1
     refresh.progress.emit()
@@ -550,7 +550,7 @@ def test_foco_das_capas_fica_no_dialogo_e_esc_fecha(app, store, make_game):
     store.managers[SgdbManager] = gerente = _ManagerDeCapas()
     app.preferencias.definirTexto("sgdb-key", "abc")
     app.preferencias.definir("sgdb", True)
-    _abrir(app, "sgdb")
+    _abrir(app, "metadados")
     app.achar("linhaDasCapasBotao").forceActiveFocus(Qt.FocusReason.TabFocusReason)
     QTest.keyClick(app.janela, Qt.Key.Key_Return)
     assert _esperar(lambda: app.achar("linhaDasCapasOcupado").property("visible") is True)
@@ -566,23 +566,23 @@ def test_foco_das_capas_fica_no_dialogo_e_esc_fecha(app, store, make_game):
 def test_foco_levado_para_outro_controle_nao_e_roubado_ao_terminar(app, store, make_game, monkeypatch):
     refresh, _ = _com_refresh_falso(monkeypatch)
     store.add_game(make_game(game_id="a", has_hltb_times=False), {})
-    _abrir(app, "import")
+    _abrir(app, "importacao")
     app.achar("linhaDosMetadadosBotao").forceActiveFocus(Qt.FocusReason.TabFocusReason)
     refresh.running, refresh.done, refresh.total = True, 0, 1
     refresh.progress.emit()
     assert _esperar(lambda: _foco_dentro_de(app, "linhaDosMetadadosParar"))
-    app.achar("aba-sgdb").forceActiveFocus(Qt.FocusReason.TabFocusReason)
+    app.achar("aba-metadados").forceActiveFocus(Qt.FocusReason.TabFocusReason)
     refresh.running = False
     refresh.progress.emit()
     _esperar()
-    assert _foco_dentro_de(app, "aba-sgdb")
+    assert _foco_dentro_de(app, "aba-metadados")
 
 
 # region Personalização
 
 
 def test_textos_da_personalizacao(app):
-    _abrir(app, "session")
+    _abrir(app, "monitores")
     assert app.achar("paginaDePersonalizacao").property("visible") is True
     assert app.achar("grupoBiblioteca").property("titulo") == "Biblioteca"
     assert _linha(app, "interruptor-cover-autoplay") == (
@@ -609,7 +609,7 @@ def test_textos_da_personalizacao(app):
 def test_monitor_apagado_com_o_interruptor_desligado_e_identificar_sempre_ativo(app):
     shared.schema.set_boolean("playtime-tracking", True)
     shared.schema.set_boolean("session-move-window", False)
-    _abrir(app, "session")
+    _abrir(app, "monitores")
     assert not _enabled(app, "linhaDoMonitor")
     assert _enabled(app, "linhaIdentificarMonitores")
     app.preferencias.definir("session-move-window", True)
@@ -627,7 +627,7 @@ def test_sem_segundo_monitor_o_grupo_apaga_e_explica(app, monkeypatch):
     from tests.apoio_preferencias_qt import PRINCIPAL  # noqa: PLC0415
 
     monkeypatch.setattr(window_geometry, "monitors", lambda: [PRINCIPAL])
-    _abrir(app, "session")
+    _abrir(app, "monitores")
     assert not _enabled(app, "linhaDoMonitor")
     assert not _enabled(app, "interruptor-session-move-window")
     assert not _enabled(app, "interruptor-session-wallpaper")
@@ -644,7 +644,7 @@ def test_botao_em_linha_apagada_nao_soma_dois_apagados(app, store, make_game):
     store.add_game(make_game(game_id="a"), {})
     store.managers[SgdbManager] = _ManagerDeCapas()
     shared.schema.set_boolean("sgdb", False)
-    _abrir(app, "sgdb")
+    _abrir(app, "metadados")
     linha = app.achar("linhaDasCapas")
     assert linha.property("opacity") == 0.5
     botoes = [b for b in linha.findChildren(QObject) if b.metaObject().className().startswith("Botao_")]
@@ -655,7 +655,7 @@ def test_botao_em_linha_apagada_nao_soma_dois_apagados(app, store, make_game):
 def test_chave_do_wallhaven_apagada_sem_o_papel_de_parede(app):
     shared.schema.set_boolean("playtime-tracking", True)
     shared.schema.set_boolean("session-wallpaper", False)
-    _abrir(app, "session")
+    _abrir(app, "monitores")
     assert not _enabled(app, "campoDaChaveDoWallhaven")
     app.preferencias.definir("session-wallpaper", True)
     assert _esperar(lambda: _enabled(app, "campoDaChaveDoWallhaven"))
@@ -681,7 +681,7 @@ def test_placa_mostra_o_numero(app_qt):
 
 def test_m14_sem_contar_horas_o_papel_de_parede_fica_apagado(app):
     shared.schema.set_boolean("playtime-tracking", False)
-    _abrir(app, "session")
+    _abrir(app, "monitores")
     assert not _enabled(app, "grupoPapelDeParede")
     assert not _enabled(app, "interruptor-session-wallpaper")
     app.preferencias.definir("playtime-tracking", True)
@@ -693,7 +693,7 @@ def test_m14_sem_contar_horas_o_papel_de_parede_fica_apagado(app):
 
 def test_linhas_da_iluminacao_apagadas_sem_o_interruptor(app, fitas_espiadas):
     shared.schema.set_boolean("session-fita", False)
-    _abrir(app, "session")
+    _abrir(app, "monitores")
     assert app.achar("grupoIluminacao").property("titulo") == "Iluminação inteligente"
     assert app.achar("grupoIluminacao").property("descricao") == (
         "Muda a cor da iluminação inteligente enquanto o Kyron está aberto: a cor do aplicativo fora do jogo e "
@@ -730,7 +730,7 @@ def test_linhas_da_iluminacao_apagadas_sem_o_interruptor(app, fitas_espiadas):
 
 def test_interruptor_das_fitas_apagado_sem_fita(app):
     shared.schema.set_boolean("session-fita", True)
-    _abrir(app, "session")
+    _abrir(app, "monitores")
     assert not _enabled(app, "interruptor-session-fita")
     assert _linha(app, "interruptor-session-fita")[1] == "Nenhum dispositivo configurado"
     assert app.achar("interruptor-session-fita").property("checked") is False
@@ -740,7 +740,7 @@ def test_amostra_abre_o_seletor_e_a_cor_vai_ao_modelo(app, fitas_espiadas):
     from cartridges.utils import session_fita  # noqa: PLC0415
 
     shared.schema.set_boolean("session-fita", True)
-    _abrir(app, "session")
+    _abrir(app, "monitores")
     assert app.achar("linhaDaCorDoAppAmostra").property("dica") == "Escolher a cor da iluminação inteligente"
     _clique(app, "linhaDaCorDoAppAmostra")
     assert _esperar(lambda: app.achar("linhaDaCorDoAppBalao").property("opened") is True)
@@ -758,7 +758,7 @@ def test_voltar_a_cor_padrao_so_fora_do_roxo(app, fitas_espiadas):
     from cartridges.utils import session_fita  # noqa: PLC0415
 
     shared.schema.set_boolean("session-fita", True)
-    _abrir(app, "session")
+    _abrir(app, "monitores")
     assert app.achar("linhaDaCorDoAppVoltar").property("visible") is False
     session_fita.salvar_tom_do_app(200, 800)
     assert _esperar(lambda: app.achar("linhaDaCorDoAppVoltar").property("visible") is True)
@@ -776,7 +776,7 @@ def test_testar_troca_o_icone_e_mostra_o_resultado(app, fitas_espiadas, monkeypa
 
     solta = threading.Event()
     monkeypatch.setattr(session_fita, "aplicar", lambda *_a: solta.wait(5) and False)
-    _abrir(app, "session")
+    _abrir(app, "monitores")
     assert app.achar("linhaTestarFitasBotao").property("icone") == "media-playback-start"
     _clique(app, "linhaTestarFitasBotao")
     # Durante o teste o botão é o de parar.
@@ -801,7 +801,7 @@ def conta_da_tuya(tmp_path, monkeypatch):
 
 
 def _abrir_o_assistente(app):
-    _abrir(app, "session")
+    _abrir(app, "monitores")
     assert app.achar("linhaConfigurarFitas").property("titulo") == "Configurar a iluminação inteligente"
     assert app.achar("linhaConfigurarFitas").property("subtitulo") == "Busca os dispositivos na sua conta da Tuya"
     assert _enabled(app, "linhaConfigurarFitas")
@@ -914,7 +914,7 @@ def calibracao_aberta(app, fitas_espiadas, monkeypatch):
         [session_fita.Fita("<b>Sala</b> & Cia", "eb0", "192.0.2.10", "k"), session_fita.Fita("Quarto", "eb1", "192.0.2.11", "k")]
     )
     monkeypatch.setattr(session_fita, "previa_calibracao", lambda *_a: fitas_espiadas.append("so"))
-    _abrir(app, "session")
+    _abrir(app, "monitores")
     app.preferencias.abrirCalibracao()
     dialogo = app.achar("assistenteDeCalibracao")
     assert _esperar(lambda: dialogo.property("visible") is True)
@@ -1193,18 +1193,18 @@ def test_clicar_num_resultado_leva_a_pagina_e_poe_o_foco_na_linha(app):
     assert _esperar(lambda: app.achar("campoDeBuscaDasPreferencias").property("text") == "")
     dialogo = app.achar("dialogoDePreferencias")
     assert dialogo.property("buscaAtiva") is False
-    assert dialogo.property("aba") == "general"
+    assert dialogo.property("aba") == "geral"
     assert _visivel(app, "paginaGeral") and _visivel(app, "abas")
     assert _esperar(lambda: _foco_dentro_de(app, "interruptor-gamepad"))
     assert shared.schema.get_boolean("gamepad") is antes
 
 
 def test_clicar_num_resultado_de_outra_pagina_troca_de_aba(app):
-    _abrir(app, "general")
+    _abrir(app, "geral")
     _buscar(app, "capas animadas")
     assert _esperar(lambda: _resultados(app) != [])
     _clicar_resultado(app, 0)
-    assert _esperar(lambda: app.achar("dialogoDePreferencias").property("aba") == "session")
+    assert _esperar(lambda: app.achar("dialogoDePreferencias").property("aba") == "monitores")
     assert _esperar(lambda: _foco_dentro_de(app, "interruptor-cover-autoplay"))
 
 
@@ -1225,7 +1225,7 @@ def test_lupa_liga_o_campo_no_lugar_do_titulo(app):
 def test_digitar_em_qualquer_ponto_abre_a_busca(app):
     """A tecla que nenhum controle trata vai ao campo."""
     _abrir(app)
-    app.achar("aba-general").forceActiveFocus(Qt.FocusReason.TabFocusReason)
+    app.achar("aba-geral").forceActiveFocus(Qt.FocusReason.TabFocusReason)
     for tecla in (Qt.Key.Key_B, Qt.Key.Key_R, Qt.Key.Key_I):
         QTest.keyClick(app.janela, tecla)
     campo = app.achar("campoDeBuscaDasPreferencias")
@@ -1238,7 +1238,7 @@ def test_esc_sai_da_busca_mesmo_com_texto_e_o_segundo_fecha(app):
     _abrir(app)
     campo = app.achar("campoDeBuscaDasPreferencias")
     dialogo = app.achar("dialogoDePreferencias")
-    app.achar("aba-general").forceActiveFocus(Qt.FocusReason.TabFocusReason)
+    app.achar("aba-geral").forceActiveFocus(Qt.FocusReason.TabFocusReason)
     for tecla in (Qt.Key.Key_B, Qt.Key.Key_R, Qt.Key.Key_I):
         QTest.keyClick(app.janela, tecla)
     assert _esperar(lambda: campo.property("text") == "bri")
@@ -1252,19 +1252,19 @@ def test_esc_sai_da_busca_mesmo_com_texto_e_o_segundo_fecha(app):
 
 
 def test_limpar_volta_a_aba_de_antes(app):
-    _abrir(app, "import")
+    _abrir(app, "importacao")
     _buscar(app, "brilho")
     assert _esperar(lambda: _visivel(app, "resultadosDaBuscaDasPreferencias"))
     _buscar(app, "")
     assert _esperar(lambda: not _visivel(app, "resultadosDaBuscaDasPreferencias"))
     assert _visivel(app, "paginaDeImportacao")
-    assert app.achar("dialogoDePreferencias").property("aba") == "import"
+    assert app.achar("dialogoDePreferencias").property("aba") == "importacao"
 
 
 def test_ctrl_f_leva_ao_campo(app):
     _abrir(app)
     campo = app.achar("campoDeBuscaDasPreferencias")
-    app.achar("aba-general").forceActiveFocus(Qt.FocusReason.TabFocusReason)
+    app.achar("aba-geral").forceActiveFocus(Qt.FocusReason.TabFocusReason)
     assert campo.property("activeFocus") is not True
     QTest.keyClick(app.janela, Qt.Key.Key_F, Qt.KeyboardModifier.ControlModifier)
     assert _esperar(lambda: campo.property("activeFocus") is True)
@@ -1275,7 +1275,7 @@ def test_filtro_nao_esvazia_os_assistentes_abertos_por_cima(app, fitas_espiadas,
     from cartridges.utils import session_fita  # noqa: PLC0415
 
     monkeypatch.setattr(session_fita, "previa_calibracao", lambda *_a: None)
-    _abrir(app, "session")
+    _abrir(app, "monitores")
     _buscar(app, "brilho")
     assert _esperar(lambda: _visivel(app, "resultadosDaBuscaDasPreferencias"))
     app.preferencias.abrirBrilhoPorDispositivo()
@@ -1352,7 +1352,7 @@ def _itens_com_nome(raiz, prefixo):
 
 def test_foco_num_campo_abaixo_da_dobra_rola_a_pagina(app):
     """O `dentro()`/`contem()` subiam por `parentItem` (inexistente no QML): a rolagem não seguia o foco."""
-    _abrir(app, "session")
+    _abrir(app, "monitores")
     assert app.achar("rolagemDasPreferencias").property("contentY") == 0
     interruptores = [i for i in _itens_com_nome(app.achar("rolagemDasPreferencias"), "interruptor-") if i.property("enabled")]
     ultimo = max(interruptores, key=lambda i: i.mapToScene(QPointF(0, 0)).y())  # o mais baixo da página
@@ -1365,7 +1365,7 @@ def test_foco_que_passa_pela_propria_linha_ainda_volta_ao_botao_ao_terminar(app,
     """O `_dentro()` subia por `parentItem` (inexistente no QML): qualquer foco num filho da linha contava como "saiu"."""
     refresh, _ = _com_refresh_falso(monkeypatch)
     store.add_game(make_game(game_id="a", has_hltb_times=False), {})
-    _abrir(app, "import")
+    _abrir(app, "importacao")
     app.achar("linhaDosMetadadosBotao").forceActiveFocus(Qt.FocusReason.TabFocusReason)
     refresh.running, refresh.done, refresh.total = True, 0, 1
     refresh.progress.emit()
@@ -1386,7 +1386,7 @@ def test_a_roda_nas_preferencias_anda_o_passo_do_gtk(app):
     from PySide6.QtCore import QCoreApplication, QPoint  # noqa: PLC0415
     from PySide6.QtGui import QWheelEvent  # noqa: PLC0415
 
-    _abrir(app, "general")
+    _abrir(app, "geral")
     rolagem = app.achar("rolagemDasPreferencias")
     assert rolagem.property("contentHeight") > rolagem.property("height")
     esperado = rolagem.property("height") ** (2 / 3)
@@ -1412,7 +1412,7 @@ def test_a_roda_nas_preferencias_anda_o_passo_do_gtk(app):
 
 def test_o_primeiro_tab_vai_a_primeira_linha_habilitada_da_pagina(app):
     """O Tab inicial cai em "Contar horas de jogo", não numa aba."""
-    _abrir(app, "general")
+    _abrir(app, "geral")
     assert _foco_dentro_de(app, "fecharDoCabecalho")
     QTest.keyClick(app.janela, Qt.Key.Key_Tab)
     assert _foco_dentro_de(app, "interruptor-playtime-tracking")
@@ -1420,7 +1420,7 @@ def test_o_primeiro_tab_vai_a_primeira_linha_habilitada_da_pagina(app):
 
 def test_o_link_da_descricao_tem_a_opacidade_da_descricao(app):
     """O "Obtenha aqui" sai com os 55% da descrição apagada, e não vivo."""
-    _abrir(app, "sgdb")
+    _abrir(app, "metadados")
     grupo = app.achar("grupoAutenticacao")
     texto = [t for t in _filhos_text(grupo) if "Obtenha" in (t.property("text") or "")][0]
     assert abs(_avaliar(texto, "linkColor.a") - 0.55 * _avaliar(texto, "Tema.destaqueTexto.a")) < 0.02

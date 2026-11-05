@@ -579,7 +579,7 @@ def test_teclado_setas_e_enter_expandem_e_tab_chega_ao_link(janela, feed):
 
 
 def test_grupo_barra_superior_e_o_primeiro_da_personalizacao(janela):
-    janela.preferencias.abrir("session")
+    janela.preferencias.abrir("monitores")
     esperar()
     grupo = janela.achar("grupoBarraSuperior")
     assert grupo.property("titulo") == "Barra superior"

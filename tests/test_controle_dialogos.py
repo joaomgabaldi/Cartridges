@@ -117,7 +117,7 @@ def test_sobre_o_direcional_alcanca_as_linhas(app):
 
 def test_preferencias_o_direcional_anda_entre_as_linhas_sem_mudar_valor(app):
     # Em Preferências, o direcional anda entre as linhas e nunca muda valor (↑/↓ num `SpinBox` mudariam).
-    _abrir(app, "general")
+    _abrir(app, "geral")
     caixa = app.achar("linhaDaEsperaCaixa")
     caixa.forceActiveFocus(Qt.FocusReason.TabFocusReason)
     assert _esperar(lambda: _foco(app) is not None and (_foco(app) is caixa or _foco(app).parentItem() is caixa))
