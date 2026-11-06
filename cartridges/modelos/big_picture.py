@@ -278,19 +278,19 @@ class BigPicture(QObject):
 
     @Slot(int, result=bool)
     def mover(self, delta: int) -> bool:
-        return not self._ocupada and self._foi_para(self._carrossel.mover(delta))
+        return self._etapa_bp == "carrossel" and not self._ocupada and self._foi_para(self._carrossel.mover(delta))
 
     @Slot(int, result=bool)
     def irPara(self, indice: int) -> bool:  # noqa: N802
-        return not self._ocupada and self._foi_para(self._carrossel.ir_para(indice))
+        return self._etapa_bp == "carrossel" and not self._ocupada and self._foi_para(self._carrossel.ir_para(indice))
 
     @Slot(result=bool)
     def inicio(self) -> bool:
-        return not self._ocupada and self._foi_para(self._carrossel.inicio())
+        return self._etapa_bp == "carrossel" and not self._ocupada and self._foi_para(self._carrossel.inicio())
 
     @Slot(result=bool)
     def fim(self) -> bool:
-        return not self._ocupada and self._foi_para(self._carrossel.fim())
+        return self._etapa_bp == "carrossel" and not self._ocupada and self._foi_para(self._carrossel.fim())
 
     def definir_janela(self, janela: QWindow) -> None:
         """A janela que vai à tela cheia; o Big Picture só fica disponível com renderizador 3D."""

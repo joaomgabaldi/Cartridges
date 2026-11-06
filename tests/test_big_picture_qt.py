@@ -1400,3 +1400,15 @@ def test_entrar_de_novo_volta_ao_carrossel(etapas):
     e.bp.filaTerminou()
     e.bp.entrar()
     assert e.bp.etapa == "carrossel"
+
+
+def test_navegacao_so_no_carrossel(etapas):
+    e = etapas
+    e.sessao.jogoId = "a"
+    _nos_detalhes(e)
+    for _ in range(2):  # nos detalhes e depois na sessão
+        assert [e.bp.mover(1), e.bp.irPara(2), e.bp.inicio(), e.bp.fim()] == [False] * 4
+        assert e.bp.indice == 0
+        e.bp.ativar()
+        e.bp.etapaTerminou()
+    assert e.bp.etapa == "sessao"
