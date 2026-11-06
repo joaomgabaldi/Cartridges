@@ -15,8 +15,8 @@ Item {
     readonly property real profundidadeLateral: 220
     readonly property int capasDeCadaLado: 8
     readonly property int duracaoDoPasso: 350
-    readonly property real reflexoAlcance: 0.55
-    readonly property real reflexoOpacidade: 0.35
+    readonly property real reflexoAlcance: 0.72
+    readonly property real reflexoOpacidade: 0.22
 
     property real posicao: 0
     property real virada: 1
@@ -26,8 +26,17 @@ Item {
     property bool sessaoEmAndamento: false
 
     property real escala: Screen.devicePixelRatio
-    property real alturaCapa: height * 0.55
+    property real alturaCapa: height * 0.60
     property real larguraCapa: alturaCapa * 2 / 3
+    readonly property real centroDasCapas: height * 0.52
+    readonly property real espacoNoAlto: centroDasCapas - alturaCapa / 2
+    readonly property real alturaDoLogoNaColuna: height * 0.10
+    readonly property real alturaDoLogoDecodificado: Math.max(110, espacoNoAlto * 0.6, alturaDoLogoNaColuna) * escala
+    // Só a capa selecionada fica inteira: as outras recuam com a distância.
+    function escurecimento(i) {
+        const distancia = Math.abs(i - posicao)
+        return Math.min(0.7, Math.min(distancia, 1) * 0.4 + Math.max(distancia - 1, 0) * 0.08)
+    }
 
     property bool saltando: false
     function irDireto(valor) {
@@ -240,7 +249,7 @@ Item {
             source: tela.preparo.length > 0 && tela.jogos.length > 0 && tela.jogos[0].capaAnimada === "" ? tela.preparo[0] : ""
             asynchronous: true
             fillMode: Image.Stretch
-            sourceSize.height: Math.round(630 * tela.escala)
+            sourceSize.height: Math.round(900 * tela.escala)
             onStatusChanged: Qt.callLater(tela.conferirPreparo)
         }
     }
@@ -309,7 +318,7 @@ Item {
         // A projeção zera o z para nada ser recortado em profundidade.
         const projecao = Qt.matrix4x4(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, -1 / perspectiva, 1)
         const giro = Qt.matrix4x4(c, 0, s, 0, 0, 1, 0, 0, -s, 0, c, 0, 0, 0, 0, 1)
-        return translacao(width / 2, height * 0.40, 0)
+        return translacao(width / 2, centroDasCapas, 0)
             .times(projecao)
             .times(translacao(x, 0, prof))
             .times(giro)
@@ -371,8 +380,29 @@ Item {
         id: fundoDoBigPicture
         objectName: "fundoDoBigPicture"
         anchors.fill: parent
-        fonte: bigPicture.visivel ? detalhes.fundo : ""
+        fonte: bigPicture.visivel ? detalhes.fundoVivo : ""
         animar: bigPicture.animacoes
+    }
+
+    // A cor do jogo fica no alto; embaixo o fundo escurece e dá chão às capas.
+    Rectangle {
+        anchors.fill: parent
+        gradient: Gradient {
+            GradientStop { position: 0.45; color: "transparent" }
+            GradientStop { position: 1.0; color: Qt.rgba(0, 0, 0, 0.7) }
+        }
+    }
+    // Atrás do texto da tela do jogo; o lado da capa continua com a cor.
+    Rectangle {
+        objectName: "veuDosDetalhes"
+        anchors.fill: parent
+        opacity: tela.progressoDetalhe * (1 - tela.progressoSessao)
+        visible: opacity > 0
+        gradient: Gradient {
+            orientation: Gradient.Horizontal
+            GradientStop { position: 0.30; color: "transparent" }
+            GradientStop { position: 0.55; color: Qt.rgba(0, 0, 0, 0.6) }
+        }
     }
 
     Rectangle {
@@ -413,6 +443,7 @@ Item {
                     altura: tela.alturaCapa
                     escala: tela.escala
                     opacidadeDoReflexo: tela.reflexoOpacidade
+                    escurecer: tela.escurecimento(vaga.i)
                     // Só no fim do passo: segurando a tecla, nenhuma capa de passagem carrega a cópia em alta.
                     central: vaga.i === tela.centralExibida
                     animar: bigPicture.animarCentral && bigPicture.visivel && !tela.sessaoEmAndamento
@@ -460,18 +491,54 @@ Item {
         }
     }
 
-    LogoDoBigPicture {
-        visible: !bigPicture.vazia
-        opacity: tela.opacidadeDosTextos
-        posicao: bigPicture.etapa === "detalhes" ? "coluna" : bigPicture.etapa === "sessao" ? "relogio" : "alto"
-        animar: bigPicture.animacoes
+    // Duas vagas em anel, como as capas: num passo, o logo que sai e o que chega ficam cada um na sua vaga, sem recarregar.
+    // Cada um segue a capa do seu jogo e o fade só acontece no meio do caminho (até 70% da distância entre duas capas).
+    Repeater {
+        model: 2
+        delegate: LogoDoBigPicture {
+            required property int index
+            readonly property int base: Math.floor(tela.posicao)
+            readonly property int i: (base % 2 + 2) % 2 === index ? base : base + 1
+            readonly property real d: i - tela.posicao
+            readonly property bool perto: tela.opacidadeDosTextos > 0 && Math.abs(d) < 1
+            visible: !bigPicture.vazia
+            emCentro: i === tela.indice
+            jogo: perto && i >= 0 && i < tela.jogos.length ? tela.jogos[i] : null
+            deslocamento: d * tela.larguraCapa * tela.espacoCentral
+            opacity: tela.opacidadeDosTextos * Math.max(0, 1 - Math.abs(d) / 0.7)
+            posicao: bigPicture.etapa === "detalhes" ? "coluna" : bigPicture.etapa === "sessao" ? "relogio" : "alto"
+            animar: bigPicture.animacoes
+            espacoNoAlto: tela.espacoNoAlto
+            alturaDecodificada: tela.alturaDoLogoDecodificado
+            alturaNaColuna: tela.alturaDoLogoNaColuna
+        }
+    }
+
+    // Os logos das capas vizinhas já decodificados: o do próximo passo chega junto com a capa.
+    Item {
+        visible: false
+        Repeater {
+            model: 2
+            delegate: Image {
+                required property int index
+                readonly property int i: tela.indice + (index === 0 ? -1 : 1)
+                readonly property bool existe: i >= 0 && i < tela.jogos.length
+                objectName: "preparoDoLogo"
+                source: existe ? bigPicture.logoDe(tela.jogos[i].jogoId) : ""
+                asynchronous: true
+                fillMode: Image.PreserveAspectFit  // o cache do Qt Quick só acerta com a mesma URL, `sourceSize` e `fillMode`
+                sourceSize.height: tela.alturaDoLogoDecodificado
+            }
+        }
     }
 
     DetalhesDoBigPicture {
         x: tela.width * 0.42
-        y: tela.height * 0.12 + 72 + 20
-        width: tela.width * 0.50
-        height: tela.height * 0.88 - y
+        // Da altura do logo até o pé da capa selecionada, para o texto e a capa formarem um bloco só.
+        y: tela.height * 0.14 + tela.alturaDoLogoNaColuna + tela.height * 0.03
+        alturaDaTela: tela.height
+        width: tela.width * 0.33  // termina em 3/4 da tela: linhas longas demais cansam a leitura
+        height: tela.height * 0.90 - y
         mostrar: bigPicture.etapa === "detalhes"
         animar: bigPicture.animacoes
     }

@@ -24,7 +24,8 @@ from cartridges import shared
 from cartridges.modelos import regras_do_big_picture as regras
 from cartridges.modelos.biblioteca import ModeloDaBiblioteca
 from cartridges.modelos.detalhes import DetalhesDoJogo
-from cartridges.modelos.ordem import Linha
+from cartridges.modelos.ordem import Linha, _url_da_capa  # noqa: PLC2701
+from cartridges.utils import game_logo
 from cartridges.utils.cortina_monitor import CortinaMonitor
 
 _SO_CAPA = {ModeloDaBiblioteca.Papel.Capa, ModeloDaBiblioteca.Papel.CapaAnimada}
@@ -128,6 +129,7 @@ class BigPicture(QObject):
             detalhes.sair.connect(self._detalhes_pediu_saida)
         self._carrossel = regras.Carrossel([])
         self._jogos: list[dict[str, str]] = []
+        self._logos: dict[str, str] = {}  # jogo → URL do logo em disco ("" sem logo), lida uma vez por entrada
         self._agendado = False
         self._ocupada = False
         # Confirmação que chegou durante a volta da sessão aos detalhes: (jogo, .ini já conferidos).
@@ -154,6 +156,16 @@ class BigPicture(QObject):
     @Property("QVariantList", notify=jogosMudaram)
     def jogos(self) -> list[dict[str, str]]:
         return self._jogos
+
+    @Slot(str, result=str)
+    def logoDe(self, jogo_id: str) -> str:  # noqa: N802
+        """O logo em disco de um jogo do carrossel: os logos seguem as capas, sem esperar o `detalhes` chegar ao central."""
+        if jogo_id not in self._logos:
+            jogo = shared.store.get(jogo_id) if shared.store is not None else None
+            caminho = game_logo.cached_logo_path(jogo) if jogo is not None else None
+            carregado = game_logo.load_logo(caminho) if caminho else None
+            self._logos[jogo_id] = _url_da_capa(carregado[0]) if carregado else ""
+        return self._logos[jogo_id]
 
     @Property(int, notify=alterado)
     def indice(self) -> int:
@@ -324,6 +336,7 @@ class BigPicture(QObject):
             return
         self._carrossel = regras.Carrossel([])
         self._etapa_bp, self._transicao, self._indo = "carrossel", None, False
+        self._logos = {}
         self._montada = True
         self._refazer()
         self._mostrar_central()
@@ -432,6 +445,9 @@ class BigPicture(QObject):
     def _mostrar_central(self) -> bool:
         """Mostra o jogo central nos detalhes (sem esperar o timer) e devolve se havia o que mostrar."""
         self._espera_do_central.stop()
+        # O logo baixado nesta entrada: sem isto, voltar a esse jogo mostraria o nome até o `detalhes` chegar.
+        if self._detalhes is not None and self._detalhes.logo:
+            self._logos[self._detalhes.jogoId] = self._detalhes.logo
         central = self._central()
         if central is None:
             return False

@@ -36,6 +36,7 @@ _CHAVES_HLTB = ("hltb_main", "hltb_main_extra", "hltb_completionist")
 _RESERVA = desfoque.LUMINANCIA_RESERVA
 # Sem capa, o fundo é o placeholder pequeno esticado, sem desfoque.
 _FUNDO_SEM_CAPA = (Path(__file__).resolve().parent.parent.parent / "data" / "library_placeholder_small.svg").as_uri()
+_PREFIXO_VIVO = "vivo-"  # o fundo do Big Picture, ao lado do desfoque da página
 _BUSCAS = {
     "igdb": "https://www.igdb.com/search?type=1&q=",
     "sgdb": "https://www.steamgriddb.com/search/grids?term=",
@@ -155,18 +156,22 @@ def _alto_contraste() -> bool:
     return False
 
 
+def url_do_fundo_vivo(game_id: str, versao: int) -> str:
+    return f"image://desfoque/{_PREFIXO_VIVO}{quote(game_id)}?v={versao}"
+
+
 class ProvedorDeDesfoque(QQuickImageProvider):
-    """Serve o PNG do desfoque do jogo mostrado em `image://desfoque/<id>?v=<n>`."""
+    """Serve o PNG do desfoque do jogo mostrado em `image://desfoque/<id>?v=<n>` e o do Big Picture em `vivo-<id>`."""
 
     def __init__(self) -> None:
         super().__init__(QQuickImageProvider.ImageType.Image)
         self._lock = threading.Lock()
         self._png: dict[str, bytes] = {}
 
-    def guardar(self, game_id: str, png: bytes) -> None:
+    def guardar(self, game_id: str, png: bytes, png_vivo: bytes) -> None:
         """Só o jogo mostrado precisa do seu desfoque: o anterior sai."""
         with self._lock:
-            self._png = {game_id: png}
+            self._png = {game_id: png, _PREFIXO_VIVO + game_id: png_vivo}
 
     def requestImage(self, id: str, size: Any, requested_size: Any) -> QImage:  # noqa: A002, N802, ARG002
         with self._lock:
@@ -180,7 +185,7 @@ _PADRAO: dict[str, Any] = {
             "jogoId", "nome", "capa", "capaAnimada", "logo", "desenvolvedora", "publicadora",
             "dataDeLancamento", "nota", "metacritic", "avaliacoes", "genero", "controle", "descricao",
             "adicionado", "jogadoPorUltimo", "tempoDeJogo", "tamanho", "rotuloDoStatus", "status",
-            "dicaDaAnotacao", "anotacao", "fundo",
+            "dicaDaAnotacao", "anotacao", "fundo", "fundoVivo",
         ),
         "",
     ),
@@ -268,6 +273,7 @@ class DetalhesDoJogo(QObject):
     anotacaoEditavel = _p(bool, "anotacaoEditavel")  # noqa: N815
     temSessoes = _p(bool, "temSessoes")  # noqa: N815
     fundo = _p(str, "fundo")
+    fundoVivo = _p(str, "fundoVivo")  # noqa: N815
     opacidadeDoFundo = _p(float, "opacidadeDoFundo")  # noqa: N815
     del _p
     statusOpcoes = Property("QVariantList", lambda self: [[k, v] for k, v in STATUS_LABELS.items()], constant=True)  # noqa: N815
@@ -390,7 +396,7 @@ class DetalhesDoJogo(QObject):
             "temSessoes": bool(tempo_de_jogo(jogo)) and bool(session_log.load(jogo.game_id)),
         }  # fmt: skip
         if trocou:
-            campos.update(logo="", larguraDoLogo=0, fundo="")
+            campos.update(logo="", larguraDoLogo=0, fundo="", fundoVivo="")
             self._luminancia = _RESERVA
             self._chave_do_fundo = ""
         campos.update(self._logo(jogo))
@@ -502,7 +508,7 @@ class DetalhesDoJogo(QObject):
         caminho = jogo.get_cover_path()
         if caminho is None:
             self._luminancia = _RESERVA
-            return {"fundo": _FUNDO_SEM_CAPA}
+            return {"fundo": _FUNDO_SEM_CAPA, "fundoVivo": _FUNDO_SEM_CAPA}
         threading.Thread(
             target=_calcular_fundo, args=(weakref.ref(self), jogo.game_id, chave, caminho), daemon=True
         ).start()
@@ -513,9 +519,12 @@ class DetalhesDoJogo(QObject):
             return
         if resultado is None:
             self._luminancia = _RESERVA
-            self._mesclar({"fundo": _FUNDO_SEM_CAPA})
+            self._mesclar({"fundo": _FUNDO_SEM_CAPA, "fundoVivo": _FUNDO_SEM_CAPA})
             return
-        self.provedor.guardar(game_id, resultado.png)
+        self.provedor.guardar(game_id, resultado.png, resultado.png_vivo)
         self._versao_do_fundo += 1
         self._luminancia = resultado.luminancia
-        self._mesclar({"fundo": f"image://desfoque/{quote(game_id)}?v={self._versao_do_fundo}"})
+        self._mesclar({
+            "fundo": f"image://desfoque/{quote(game_id)}?v={self._versao_do_fundo}",
+            "fundoVivo": url_do_fundo_vivo(game_id, self._versao_do_fundo),
+        })

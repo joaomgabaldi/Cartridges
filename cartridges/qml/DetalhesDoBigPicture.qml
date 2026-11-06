@@ -1,20 +1,29 @@
 import QtQuick
 
 // Os dados do jogo selecionado, na coluna à direita do Big Picture. Só leitura. Os textos entram e saem só com fade.
+// Em cima o que ajuda a escolher (gênero, descrição, Iniciar); no pé da capa, os números e o resto, menor.
 Item {
     id: coluna
     objectName: "detalhesDoBigPicture"
 
     property bool mostrar: false
     property bool animar: true
+    property real alturaDaTela: 1080
 
-    readonly property real larguraDoTexto: width
+    readonly property real unidade: Math.max(0.85, alturaDaTela / 1080)  // lido do sofá: o texto acompanha a tela
     readonly property var conquistas: conquistasDoJogo.pagina
 
     opacity: 0
     visible: opacity > 0
 
-    function unir(partes) { return partes.filter(p => p !== "").join("  ·  ") }
+    function unir(partesDoTexto) {
+        return partesDoTexto.filter((p, i, todas) => p !== "" && todas.indexOf(p) === i).join("  ·  ")
+    }
+    // "Tempo de jogo: 12 h" vira ["Tempo de jogo", "12 h"]: o rótulo pequeno e o valor em destaque.
+    function partes(texto) {
+        const corte = texto.indexOf(": ")
+        return corte < 0 ? ["", texto] : [texto.slice(0, corte), texto.slice(corte + 2)]
+    }
     // Os tempos do HowLongToBeat, sem link: "Principal 10 h  ·  ..."
     function tempos(hltb) {
         return unir((hltb.celulas || []).map(c => c.valor === "" ? "" : c.rotulo + " " + c.valor))
@@ -35,51 +44,101 @@ Item {
     NumberAnimation { id: sumir; target: coluna; property: "opacity"; to: 0; duration: 300 }
 
     component Linha: Text {
-        width: coluna.larguraDoTexto
+        property real tamanho: 16
+        width: coluna.width
         visible: text !== ""
         textFormat: Text.PlainText
         wrapMode: Text.Wrap
         color: "white"
-        opacity: 0.8
-        font { family: Tema.fonte; pixelSize: Tema.corpo }
+        opacity: 0.6
+        font { family: Tema.fonte; pixelSize: Math.round(tamanho * coluna.unidade) }
+    }
+    component Destaque: Column {
+        id: destaque
+        property string rotulo
+        property string valor
+        visible: valor !== ""
+        spacing: 2 * coluna.unidade
+        Text {
+            text: destaque.valor
+            textFormat: Text.PlainText
+            color: "white"
+            font { family: Tema.fonte; pixelSize: Math.round(20 * coluna.unidade); features: { "tnum": 1 } }
+        }
+        Text {
+            text: destaque.rotulo
+            textFormat: Text.PlainText
+            color: "white"
+            opacity: 0.6
+            font { family: Tema.fonte; pixelSize: Math.round(13 * coluna.unidade) }
+        }
     }
 
     Column {
         id: dados
+        objectName: "dadosDoJogoNoBigPicture"
         width: parent.width
-        spacing: 10
+        spacing: 14 * coluna.unidade
 
         Linha {
-            objectName: "linhaDeAutoria"
-            text: coluna.unir([detalhes.desenvolvedora, detalhes.publicadora, detalhes.dataDeLancamento, detalhes.genero])
-            opacity: 1
+            objectName: "linhaDeGenero"
+            tamanho: 18
+            opacity: 0.8
+            text: coluna.unir([detalhes.genero, coluna.partes(detalhes.dataDeLancamento)[1]])
         }
         Linha {
-            objectName: "linhaDeDestaques"
-            text: coluna.unir([detalhes.tempoDeJogo, detalhes.jogadoPorUltimo, detalhes.status])
+            objectName: "descricaoDoJogo"
+            tamanho: 20
+            opacity: 0.9
+            lineHeight: 1.15
+            text: detalhes.descricao
+            maximumLineCount: 5
+            elide: Text.ElideRight
         }
-        Column {
-            objectName: "resumoDeConquistas"
-            visible: coluna.conquistas.visivel === true
-            width: Math.min(coluna.width, 320)
-            spacing: 6
-            Linha {
-                width: parent.width
-                text: coluna.unir([coluna.conquistas.contagem || "", coluna.conquistas.porcentagem || ""])
-                opacity: 1
+    }
+
+    BotaoDoBigPicture {
+        id: iniciar
+        objectName: "botaoIniciar"
+        y: dados.height + 24
+        unidade: coluna.unidade
+        texto: "Iniciar"
+        ativo: coluna.mostrar && !bigPicture.ocupada
+        onAcionado: bigPicture.ativar()
+    }
+
+    Column {
+        // No pé da capa; numa tela pequena, logo abaixo do botão.
+        y: Math.max(iniciar.y + iniciar.height + 20, coluna.height - height)
+        width: parent.width
+        spacing: 12 * coluna.unidade
+
+        Flow {
+            objectName: "destaquesDoJogo"
+            width: parent.width
+            spacing: 32 * coluna.unidade
+            bottomPadding: 8 * coluna.unidade
+            Destaque {
+                rotulo: coluna.partes(detalhes.tempoDeJogo)[0]
+                valor: coluna.partes(detalhes.tempoDeJogo)[1]
             }
-            Rectangle {
-                width: parent.width
-                height: 6
-                radius: 3
-                color: Qt.rgba(1, 1, 1, 0.2)
-                Rectangle {
-                    width: parent.width * Math.max(0, Math.min(1, coluna.conquistas.fracao || 0))
-                    height: parent.height
-                    radius: 3
-                    color: "white"
-                }
+            Destaque {
+                rotulo: coluna.partes(detalhes.jogadoPorUltimo)[0]
+                valor: coluna.partes(detalhes.jogadoPorUltimo)[1]
             }
+            Destaque {
+                objectName: "resumoDeConquistas"
+                rotulo: "Conquistas"
+                valor: coluna.conquistas.visivel === true ? coluna.conquistas.contagem : ""
+            }
+            Destaque {
+                rotulo: "Status"
+                valor: detalhes.status
+            }
+        }
+        Linha {
+            objectName: "linhaDeAutoria"
+            text: coluna.unir([detalhes.desenvolvedora, detalhes.publicadora])
         }
         Linha {
             objectName: "linhaDeAvaliacoes"
@@ -92,44 +151,6 @@ Item {
         Linha {
             objectName: "linhaDoHltb"
             text: coluna.tempos(detalhes.hltb)
-        }
-        Linha {
-            objectName: "descricaoDoJogo"
-            text: detalhes.descricao
-            maximumLineCount: 6
-            elide: Text.ElideRight
-        }
-    }
-
-    Rectangle {
-        id: pilula
-        objectName: "botaoIniciar"
-        anchors { left: parent.left; bottom: parent.bottom }
-        width: rotulo.x + rotulo.width + 28
-        height: 44
-        radius: height / 2
-        color: "white"
-        Accessible.role: Accessible.Button
-        Accessible.name: "Iniciar"
-
-        GlifoDoBotao {
-            id: glifo
-            letra: "A"
-            x: 14
-            anchors.verticalCenter: parent.verticalCenter
-        }
-        Text {
-            id: rotulo
-            x: glifo.x + glifo.width + 10
-            anchors.verticalCenter: parent.verticalCenter
-            text: "Iniciar"
-            textFormat: Text.PlainText
-            color: "black"
-            font { family: Tema.fonte; pixelSize: Tema.corpo; weight: Tema.pesoForte }
-        }
-        TapHandler {
-            enabled: coluna.mostrar && !bigPicture.ocupada
-            onTapped: bigPicture.ativar()
         }
     }
 }

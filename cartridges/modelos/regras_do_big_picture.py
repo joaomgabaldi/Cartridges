@@ -30,8 +30,8 @@ ESPACO_LATERAL = 0.45  # entre laterais
 PROFUNDIDADE_LATERAL = 220
 CAPAS_DE_CADA_LADO = 8
 DURACAO_PASSO_MS = 350
-REFLEXO_ALCANCE = 0.55  # o reflexo some a esta fração da altura da capa
-REFLEXO_OPACIDADE = 0.35
+REFLEXO_ALCANCE = 0.72  # o reflexo some a esta fração da altura da capa
+REFLEXO_OPACIDADE = 0.22
 
 # Fundo: degradê vertical do topo à base, pontilhado em no máximo 1 tom.
 FUNDO_TOPO = (28, 28, 30)  # #1c1c1e

@@ -1,13 +1,11 @@
 import QtQuick
-import QtQuick.Effects
 
 // A capa desfocada do jogo central, cruzada com a anterior; só vale o `image://desfoque/`. Por baixo fica o fundo de sempre.
 Item {
     id: fundo
     property string fonte
     property bool animar: true
-    readonly property real intensidade: 0.4
-    readonly property real saturacao: -0.25
+    readonly property real intensidade: 0.85
     readonly property real opacidadeVisivel: Math.max(a.opacity, b.opacity)
     property bool frenteEhA: false
 
@@ -47,8 +45,6 @@ Item {
         cache: false
         opacity: alvo
         visible: opacity > 0
-        layer.enabled: visible
-        layer.effect: MultiEffect { saturation: fundo.saturacao }
         Behavior on opacity { enabled: fundo.animar && fundo.visible; NumberAnimation { duration: 900 } }
     }
     Camada { id: a }

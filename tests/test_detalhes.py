@@ -649,3 +649,70 @@ def test_mudar_o_tema_nao_le_o_historico(app_qt, store, monkeypatch):
     detalhes._tema_mudou()  # noqa: SLF001
 
     assert lidos == ["a"], "o tema não muda as sessões"
+
+
+def _capa_de_duas_cores(caminho, esquerda, direita):
+    from PIL import Image  # noqa: PLC0415
+
+    imagem = Image.new("RGB", (200, 300), esquerda)
+    imagem.paste(direita, (100, 0, 200, 300))
+    imagem.save(caminho, "PNG")
+    return caminho
+
+
+def _png(dados):
+    from io import BytesIO  # noqa: PLC0415
+
+    from PIL import Image  # noqa: PLC0415
+
+    return Image.open(BytesIO(dados)).convert("RGB")
+
+
+def test_fundo_vivo_guarda_as_cores_da_capa(tmp_path):
+    """O desfoque da página vira uma média cinza; o do Big Picture mantém as manchas de cor da capa."""
+    from cartridges.utils import desfoque  # noqa: PLC0415
+
+    resultado = desfoque.calcular(_capa_de_duas_cores(tmp_path / "c.png", (180, 30, 30), (30, 30, 180)))
+    vivo = _png(resultado.png_vivo)
+    esquerda, direita = vivo.getpixel((5, 75)), vivo.getpixel((94, 75))
+    assert esquerda[0] > esquerda[2] + 40
+    assert direita[2] > direita[0] + 40
+    pagina = _png(resultado.png)
+    assert abs(pagina.getpixel((5, 75))[0] - pagina.getpixel((94, 75))[0]) < esquerda[0] - direita[0]
+
+
+def test_fundo_vivo_nao_ofusca_capa_clara(tmp_path):
+    from PIL import ImageStat  # noqa: PLC0415
+
+    from cartridges.utils import desfoque  # noqa: PLC0415
+
+    resultado = desfoque.calcular(_capa_de_duas_cores(tmp_path / "c.png", (240, 240, 235), (250, 245, 240)))
+    assert ImageStat.Stat(_png(resultado.png_vivo).convert("L")).mean[0] <= desfoque.BRILHO_MAXIMO_DO_FUNDO_VIVO + 1
+
+
+def test_fundo_vivo_nao_clareia_capa_escura(tmp_path):
+    from PIL import ImageStat  # noqa: PLC0415
+
+    from cartridges.utils import desfoque  # noqa: PLC0415
+
+    resultado = desfoque.calcular(_capa_de_duas_cores(tmp_path / "c.png", (20, 20, 25), (25, 20, 20)))
+    assert ImageStat.Stat(_png(resultado.png_vivo).convert("L")).mean[0] < 30
+
+
+def test_provedor_serve_o_desfoque_e_o_fundo_vivo(app_qt):
+    from PIL import Image  # noqa: PLC0415
+    from PySide6.QtCore import QSize  # noqa: PLC0415
+
+    from cartridges.modelos.detalhes import ProvedorDeDesfoque, url_do_fundo_vivo  # noqa: PLC0415
+    from io import BytesIO  # noqa: PLC0415
+
+    def png(cor):
+        saida = BytesIO()
+        Image.new("RGB", (2, 3), cor).save(saida, "PNG")
+        return saida.getvalue()
+
+    provedor = ProvedorDeDesfoque()
+    provedor.guardar("jogo/1", png((255, 0, 0)), png((0, 255, 0)))
+    assert provedor.requestImage("jogo%2F1?v=1", QSize(), QSize()).pixelColor(0, 0).red() == 255
+    id_vivo = url_do_fundo_vivo("jogo/1", 1).removeprefix("image://desfoque/")
+    assert provedor.requestImage(id_vivo, QSize(), QSize()).pixelColor(0, 0).green() == 255

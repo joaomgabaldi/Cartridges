@@ -1,49 +1,37 @@
 import QtQuick
 
-// O logo do jogo central (ou o nome, sem logo). Anda entre as posições do Big Picture; a troca de jogo é só um fade.
+// O logo de um jogo do carrossel (ou o nome, sem logo). Anda entre as posições do Big Picture e, num passo, acompanha a capa dele.
 Item {
     id: logo
-    objectName: "logoDoBigPicture"
+    objectName: emCentro ? "logoDoBigPicture" : "logoVizinhoDoBigPicture"
 
+    property var jogo: null
+    property bool emCentro: true
+    property real deslocamento: 0  // a distância horizontal da capa dele ao centro; não anima: já vem do passo das capas
     property string posicao: "alto"  // "alto", "coluna" ou "relogio"
     property bool animar: true
+    // A faixa livre acima da capa central, que varia com a resolução: no alto o logo ocupa 60% dela, mais perto da capa do que do topo.
+    property real espacoNoAlto: 137
+    property real alturaNaColuna: 72
+    property real alturaDecodificada: 110  // a mesma do preparo dos vizinhos: o cache do Qt Quick só acerta com o mesmo `sourceSize`
 
     readonly property bool naColuna: posicao === "coluna"
     // A altura anda junto com x e y; a imagem é decodificada uma vez, na maior (`sourceSize` fixo).
-    property real altura: naColuna ? 72 : 110
+    property real altura: naColuna ? alturaNaColuna : posicao === "alto" ? espacoNoAlto * 0.6 : 110
     Behavior on altura { enabled: logo.animar; NumberAnimation { duration: 800; easing.type: Easing.OutCubic } }
-    // O que está na tela: copia o jogo só depois do fade de saída.
-    property string logoExibido: ""
-    property string nomeExibido: ""
-    // Escondido, nada é lido nem decodificado: a página de detalhes do modo normal também mexe em `detalhes`.
-    readonly property string logoDoJogo: bigPicture.visivel ? detalhes.logo : ""
-    readonly property string nomeDoJogo: bigPicture.visivel ? detalhes.nome : ""
+    // O `detalhes` traz o logo recém-baixado do jogo central; o resto vem do disco. Sem jogo, nada é lido nem decodificado.
+    readonly property string logoDoJogo: !jogo ? ""
+        : detalhes.jogoId === jogo.jogoId && detalhes.logo !== "" ? detalhes.logo : bigPicture.logoDe(jogo.jogoId)
 
     width: Math.min(conteudo.width, parent ? parent.width * (naColuna ? 0.5 : 0.8) : conteudo.width)
     height: altura
-    x: posicao === "coluna" ? (parent ? parent.width * 0.42 : 0) : (parent ? (parent.width - width) / 2 : 0)
-    y: !parent ? 0 : posicao === "alto" ? parent.height * 0.05 : posicao === "relogio" ? parent.height * 0.18 : parent.height * 0.12
-    Behavior on x { enabled: logo.animar; NumberAnimation { duration: 800; easing.type: Easing.OutCubic } }
+    // Só o caminho até a coluna anima: cada logo tem uma largura, e recentrar com animação faria todos deslizarem para o mesmo lado.
+    property real fracaoDaColuna: naColuna ? 1 : 0
+    Behavior on fracaoDaColuna { enabled: logo.animar; NumberAnimation { duration: 800; easing.type: Easing.OutCubic } }
+    x: !parent ? 0 : (parent.width - width) / 2 + (parent.width * 0.42 - (parent.width - width) / 2) * fracaoDaColuna
+    y: !parent ? 0 : posicao === "alto" ? espacoNoAlto * 0.25 : posicao === "relogio" ? parent.height * 0.18 : parent.height * 0.14
     Behavior on y { enabled: logo.animar; NumberAnimation { duration: 800; easing.type: Easing.OutCubic } }
-
-    function copiar() {
-        logoExibido = logoDoJogo
-        nomeExibido = nomeDoJogo
-    }
-    Component.onCompleted: copiar()
-    onLogoDoJogoChanged: trocar()
-    onNomeDoJogoChanged: trocar()
-    function trocar() {
-        if (logoDoJogo === logoExibido && nomeDoJogo === nomeExibido) return
-        if (animar && visible) troca.restart()
-        else { troca.stop(); copiar(); conteudo.opacity = 1 }
-    }
-    SequentialAnimation {
-        id: troca
-        NumberAnimation { target: conteudo; property: "opacity"; to: 0; duration: 120 }
-        ScriptAction { script: logo.copiar() }
-        NumberAnimation { target: conteudo; property: "opacity"; to: 1; duration: 220 }
-    }
+    transform: Translate { x: logo.deslocamento }
 
     Item {
         id: conteudo
@@ -51,22 +39,22 @@ Item {
         height: parent.height
         Image {
             id: imagem
-            objectName: "logoDoJogoNoBigPicture"
-            visible: logo.logoExibido !== "" && status === Image.Ready
-            source: logo.logoExibido
+            objectName: logo.emCentro ? "logoDoJogoNoBigPicture" : ""
+            visible: status === Image.Ready
+            source: logo.logoDoJogo
             height: logo.altura
             width: implicitHeight > 0 ? height * implicitWidth / implicitHeight : 0
             fillMode: Image.PreserveAspectFit
-            asynchronous: false
-            sourceSize.height: 110 * Screen.devicePixelRatio
+            asynchronous: true  // arquivo em disco, sem provedor Python: segurar o direcional não trava o passo
+            sourceSize.height: logo.alturaDecodificada
         }
         Text {
             id: texto
-            objectName: "nomeDoLogoDoBigPicture"
-            visible: !imagem.visible && text !== ""
+            objectName: logo.emCentro ? "nomeDoLogoDoBigPicture" : "nomeDoLogoVizinhoDoBigPicture"
+            visible: text !== "" && (logo.logoDoJogo === "" || imagem.status === Image.Error)
             width: Math.min(implicitWidth, logo.parent ? logo.parent.width * 0.8 : implicitWidth)
             anchors.verticalCenter: parent.verticalCenter
-            text: logo.nomeExibido
+            text: logo.jogo ? logo.jogo.nome : ""
             textFormat: Text.PlainText
             color: "white"
             elide: Text.ElideRight

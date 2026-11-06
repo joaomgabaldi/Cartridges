@@ -1222,7 +1222,7 @@ class _DetalhesFalsos(QObject):
 
     def __init__(self):
         super().__init__()
-        self.mostrados, self.esquecidos, self.aceita, self.jogoId = [], 0, True, ""
+        self.mostrados, self.esquecidos, self.aceita, self.jogoId, self.logo = [], 0, True, "", ""
 
     def mostrar(self, jogo_id):
         self.mostrados.append(jogo_id)
@@ -1522,3 +1522,13 @@ def test_confirmacao_durante_a_volta_guarda_a_marca_dos_inis(etapas):
     e.bp.etapaTerminou()  # fim da volta: recomeça a abertura
     e.bp.etapaTerminou()  # fim da abertura: lança
     assert launch.chamadas == 2 and launch.inis_conferidos is True
+
+def test_logo_baixado_fica_guardado_ao_trocar_de_jogo(app_qt):
+    """Com o logo já no `detalhes`, o carrossel não volta a mostrar o nome quando o jogo reaparece."""
+    from types import SimpleNamespace  # noqa: PLC0415
+
+    bp = BigPicture(ModeloDaBiblioteca())
+    bp._detalhes = SimpleNamespace(logo="file:///baixado.png", jogoId="x", mostrar=lambda _id: True)  # noqa: SLF001
+    bp._logos["x"] = ""  # noqa: SLF001
+    bp._mostrar_central()  # noqa: SLF001
+    assert bp.logoDe("x") == "file:///baixado.png"

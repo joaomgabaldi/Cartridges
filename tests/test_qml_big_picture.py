@@ -49,7 +49,7 @@ def _produto(a, b):
 # Graphene vem das capturas do protótipo; aqui pega-se regressão e erro de encadeamento.
 def _referencia_do_gtk(i, posicao, virada, largura_tela, altura_tela):
     """Os cantos projetados da capa `i`, pela cadeia de transformação e de arranjo."""
-    altura = altura_tela * 0.55
+    altura = altura_tela * 0.60
     largura = altura * 2 / 3
     d = i - posicao
     a = min(abs(d), 1.0)
@@ -75,7 +75,7 @@ def _referencia_do_gtk(i, posicao, virada, largura_tela, altura_tela):
     c, s = math.cos(r), math.sin(r)
     perspectiva = [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, -1 / regras.PERSPECTIVA, 1]]
     giro = [[c, 0, s, 0], [0, 1, 0, 0], [-s, 0, c, 0], [0, 0, 0, 1]]
-    m = trans(largura_tela / 2, altura_tela * 0.40, 0)
+    m = trans(largura_tela / 2, altura_tela * 0.52, 0)
     for passo in (perspectiva, trans(x, 0, prof), giro, trans(-largura / 2, -altura / 2, 0)):
         m = _produto(m, passo)
     cantos = []
@@ -107,9 +107,9 @@ def _capa_em(tela, x, y):
 
 def test_capa_em_acha_a_central_no_meio(app_qt):
     tela = _Tela()
-    assert _capa_em(tela, LARGURA / 2, ALTURA * 0.40) == 0
+    assert _capa_em(tela, LARGURA / 2, ALTURA * 0.52) == 0
     tela.bp.irPara(3)
-    assert _capa_em(tela, LARGURA / 2, ALTURA * 0.40) == 3
+    assert _capa_em(tela, LARGURA / 2, ALTURA * 0.52) == 3
     tela.fechar()
 
 
@@ -231,7 +231,7 @@ def test_toque_na_central_abre_e_na_lateral_vai(app_qt):
     tela = _Tela()
     tela.bp.irPara(2)
     tela.bp.definir_animacoes_do_sistema(False)  # noqa: FBT003
-    _clicar(tela, LARGURA / 2, ALTURA * 0.40)
+    _clicar(tela, LARGURA / 2, ALTURA * 0.52)
     assert tela.bp.etapa == "detalhes"
     tela.bp.voltar()
     cantos = _cantos(tela, 3)
@@ -246,7 +246,7 @@ def test_toque_na_central_abre_e_na_lateral_vai(app_qt):
 def test_toque_depois_de_arrastar_nao_conta(app_qt):
     tela = _Tela()
     tela.bp.irPara(3)
-    x0, y = LARGURA / 2, ALTURA * 0.40
+    x0, y = LARGURA / 2, ALTURA * 0.52
     QTest.mousePress(tela.janela, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, QPoint(round(x0), round(y)))
     for dx in range(10, 211, 20):
         QTest.mouseMove(tela.janela, QPoint(round(x0 + dx), round(y)))
@@ -257,7 +257,7 @@ def test_toque_depois_de_arrastar_nao_conta(app_qt):
     _esperar()
     assert tela.bp.etapa == "carrossel"
     # Arrastar para a direita traz as capas anteriores: dx / (0,45 · larguraCapa) passos.
-    passos = int(210 / (regras.ESPACO_LATERAL * (ALTURA * 0.55 * 2 / 3)))
+    passos = int(210 / (regras.ESPACO_LATERAL * (ALTURA * 0.60 * 2 / 3)))
     assert passos >= 1
     assert tela.bp.indice == 3 - passos
     tela.fechar()
@@ -283,7 +283,7 @@ def test_ocupada_ignora_entrada(app_qt):
     _esperar()
     for tecla in (Qt.Key.Key_Right, Qt.Key.Key_End, Qt.Key.Key_Return, Qt.Key.Key_Escape):
         QTest.keyClick(tela.janela, tecla)
-    _clicar(tela, LARGURA / 2, ALTURA * 0.40)
+    _clicar(tela, LARGURA / 2, ALTURA * 0.52)
     _clicar(tela, 1, 1)
     assert (tela.bp.indice, tela.bp.etapa) == (0, "carrossel")
     tela.fechar()
@@ -319,10 +319,10 @@ def test_central_em_alta_so_estatica(app_qt, tmp_path):
     lateral = _capa_de_teste(motor, tmp_path, central=False)
     animada = _capa_de_teste(motor, tmp_path, central=True, animada=True)
     _esperar()
-    # As texturas em pixels reais: 300 · 1,25 nas laterais (a da grade); a central ganha por cima a dos detalhes, 630 · 1,25.
+    # As texturas em pixels reais: 300 · 1,25 nas laterais (a da grade); a central ganha por cima a de alta resolução, 900 · 1,25.
     assert _avaliar(_achar(capa, "capa"), "sourceSize.height") == round(300 * 1.25)
     em_alta = _achar(capa, "capaEmAlta")
-    assert _avaliar(em_alta, "sourceSize.height") == round(630 * 1.25)
+    assert _avaliar(em_alta, "sourceSize.height") == round(900 * 1.25)
     assert _avaliar(_achar(capa, "capa"), "fillMode") == 0 == _avaliar(em_alta, "fillMode")  # Stretch: 2:3 sem corte
     assert em_alta.property("source").toString() != ""
     assert em_alta.property("visible") is True  # pronta: só então aparece
@@ -775,7 +775,7 @@ def test_preparo_usa_o_mesmo_tamanho_das_capas():
     altura = json.loads(dados["vagas"][0])[0]
     assert altura == round(300 * 1.25)  # a textura da grade
     assert len(dados["central"]) == 1 and dados["central"] == dados["preparoCentral"]
-    assert dados["central"][0][0] == round(630 * 1.25)
+    assert dados["central"][0][0] == round(900 * 1.25)
 
 
 def test_preparo_avisa_com_capa_ilegivel_e_sem_capa(app_qt, tmp_path):
@@ -1074,10 +1074,10 @@ def test_fundo_so_com_desfoque(app_qt):
     _esperar()
     assert tela.js("fundoDoBigPicture.opacidadeVisivel") == 0
     fundo.setProperty("fonte", "image://desfoque/x?v=1")
-    assert _esperar(lambda: abs(tela.js("fundoDoBigPicture.opacidadeVisivel") - 0.4) < 0.01, limite=3)
+    assert _esperar(lambda: abs(tela.js("fundoDoBigPicture.opacidadeVisivel") - 0.85) < 0.01, limite=3)
     fundo.setProperty("fonte", "")  # o desfoque do jogo seguinte ainda calcula: o fundo atual fica, sem esmaecer
     _esperar()
-    assert tela.js("fundoDoBigPicture.opacidadeVisivel") == pytest.approx(0.4, abs=0.01)
+    assert tela.js("fundoDoBigPicture.opacidadeVisivel") == pytest.approx(0.85, abs=0.01)
     fundo.setProperty("visible", False)  # ao sair, as camadas largam a imagem
     _esperar()
     imagens = _itens(fundo, lambda i: i.objectName() == "imagemDoFundo")
@@ -1086,10 +1086,9 @@ def test_fundo_so_com_desfoque(app_qt):
     tela.fechar()
 
 
-def test_fundo_com_saturacao_menor(app_qt):
+def test_fundo_na_thread_principal(app_qt):
     tela = _Tela()
     fundo = tela.achar("fundoDoBigPicture")
-    assert fundo.property("saturacao") == -0.25  # os dois `MultiEffect` leem este valor
     imagens = _itens(fundo, lambda i: i.objectName() == "imagemDoFundo")
     assert len(imagens) == 2
     assert all(i.property("asynchronous") is False for i in imagens)  # D45
@@ -1157,7 +1156,7 @@ def test_toque_fora_do_botao_nos_detalhes_nao_faz_nada(app_qt):
     tela = _Tela()
     tela.bp.ativar()
     _aguardar_etapa(tela)
-    _clicar(tela, LARGURA * 0.1, ALTURA * 0.40)  # onde a capa central estaria no carrossel
+    _clicar(tela, LARGURA * 0.1, ALTURA * 0.52)  # onde a capa central estaria no carrossel
     _clicar(tela, 1, 1)
     assert tela.bp.etapa == "detalhes" and tela.bp.indice == 0
     tela.fechar()
@@ -1371,3 +1370,253 @@ def test_ponta_a_ponta_com_a_ligacao_real(app_qt, monkeypatch):
     assert bp.jogos[bp.indice]["jogoId"] == jogo.game_id
     assert app.detalhes.jogoId == jogo.game_id
 
+
+
+@pytest.mark.parametrize("altura", [480, 600, 720, 1080])
+def test_logo_no_alto_cabe_acima_da_capa(app_qt, altura):
+    """O logo cresce e encolhe com a faixa livre acima da capa central, sem encostar nela em nenhuma resolução."""
+    tela = _Tela()
+    tela.tela.setProperty("height", altura)
+    tela.bp.definir_animacoes_do_sistema(False)
+    _esperar()
+    logo = tela.achar("logoDoBigPicture")
+    topo_da_capa = altura * 0.52 - tela.tela.property("alturaCapa") / 2
+    assert logo.property("y") > 0
+    assert logo.property("y") + logo.property("height") < topo_da_capa
+    tela.fechar()
+
+
+def test_logo_cresce_com_a_tela(app_qt):
+    tela = _Tela()
+    tela.bp.definir_animacoes_do_sistema(False)
+    logo = tela.achar("logoDoBigPicture")
+    tela.tela.setProperty("height", 720)
+    _esperar()
+    menor = logo.property("height")
+    tela.tela.setProperty("height", 2160)
+    _esperar()
+    assert logo.property("height") > 2 * menor
+    tela.fechar()
+
+
+def _vizinho(tela):
+    return tela.achar("logoVizinhoDoBigPicture")
+
+
+def test_capas_maiores_e_mais_baixas_com_o_logo_acima(app_qt):
+    tela = _Tela()
+    assert tela.tela.property("alturaCapa") == pytest.approx(ALTURA * 0.60)
+    topo_da_capa = ALTURA * 0.52 - ALTURA * 0.30
+    logo = tela.achar("logoDoBigPicture")
+    assert logo.property("y") == pytest.approx(topo_da_capa * 0.25)
+    assert logo.property("height") == pytest.approx(topo_da_capa * 0.6)
+    tela.fechar()
+
+
+def test_logo_acompanha_a_capa_com_fade_no_meio(app_qt):
+    """No meio do passo os dois logos estão à vista: o que sai segue a capa dele e o que chega vem com a capa seguinte."""
+    tela = _Tela()
+    tela.js("irDireto(0.4)")
+    _esperar()
+    saindo, chegando = tela.achar("logoDoBigPicture"), _vizinho(tela)
+    assert saindo.property("deslocamento") == pytest.approx(tela.js("arranjo(0)[0]"))
+    assert chegando.property("deslocamento") == pytest.approx(tela.js("arranjo(1)[0]"))
+    assert saindo.property("opacity") == pytest.approx(1 - 0.4 / 0.7)
+    assert chegando.property("opacity") == pytest.approx(1 - 0.6 / 0.7)
+    tela.fechar()
+
+
+def test_logo_parado_so_o_central_a_vista(app_qt):
+    tela = _Tela()
+    logo = tela.achar("logoDoBigPicture")
+    assert logo.property("deslocamento") == 0
+    assert logo.property("opacity") == 1
+    assert _vizinho(tela).property("opacity") == 0
+    tela.fechar()
+
+
+def test_cada_logo_mostra_o_seu_jogo(app_qt):
+    tela = _Tela()
+    tela.js("irDireto(0.4)")
+    _esperar()
+    assert tela.achar("nomeDoLogoDoBigPicture").property("text") == "Jogo 0"
+    assert tela.achar("nomeDoLogoVizinhoDoBigPicture").property("text") == "Jogo 1"
+    tela.fechar()
+
+
+def test_logo_de_le_o_disco_uma_vez_por_jogo(app_qt, monkeypatch, tmp_path):
+    arquivo = tmp_path / "logo.png"
+    Image.new("RGBA", (40, 10)).save(arquivo)
+    lidos = []
+    jogos = {"com": object(), "sem": object()}
+    monkeypatch.setattr(shared, "store", SimpleNamespace(get=jogos.get), raising=False)
+    monkeypatch.setattr(
+        "cartridges.utils.game_logo.cached_logo_path",
+        lambda jogo: lidos.append(jogo) or (arquivo if jogo is jogos["com"] else None),
+    )
+    bp = BigPicture(ModeloDaBiblioteca())
+    assert "logo.png" in bp.logoDe("com")
+    assert bp.logoDe("com") == bp.logoDe("com")
+    assert bp.logoDe("sem") == ""
+    assert bp.logoDe("sumiu") == ""
+    assert lidos == [jogos["com"], jogos["sem"]]
+
+
+
+def test_logo_troca_de_largura_sem_andar(app_qt):
+    """A largura de cada logo é diferente: recentrar não pode animar, senão o logo desliza sempre para o mesmo lado."""
+    tela = _Tela()
+    logo = tela.achar("logoDoBigPicture")
+    logo.setProperty("jogo", {"jogoId": "x", "nome": "Um nome de jogo bem mais comprido que os outros"})
+    assert logo.property("x") == pytest.approx((LARGURA - logo.property("width")) / 2)
+    tela.fechar()
+
+
+def test_logo_anda_ate_a_coluna_e_volta(app_qt):
+    tela = _Tela()
+    logo = tela.achar("logoDoBigPicture")
+    logo.setProperty("animar", False)
+    logo.setProperty("posicao", "coluna")
+    _esperar()
+    assert logo.property("x") == pytest.approx(LARGURA * 0.42)
+    logo.setProperty("posicao", "alto")
+    _esperar()
+    assert logo.property("x") == pytest.approx((LARGURA - logo.property("width")) / 2)
+    tela.fechar()
+
+
+def test_vizinhos_do_logo_ja_carregam(app_qt):
+    tela = _Tela()
+    tela.bp._logos["imported_2"] = "file:///logo-do-vizinho.png"
+    tela.bp.mover(1)
+    _esperar()
+    fontes = [i.property("source").toString() for i in _itens(tela.tela, lambda i: i.objectName() == "preparoDoLogo")]
+    assert "file:///logo-do-vizinho.png" in fontes
+    preparo = _itens(tela.tela, lambda i: i.objectName() == "preparoDoLogo")[0]
+    logo = tela.achar("logoDoJogoNoBigPicture")
+    assert _avaliar(preparo, "fillMode") == _avaliar(logo, "fillMode")
+    assert _avaliar(preparo, "sourceSize.height") == _avaliar(logo, "sourceSize.height")
+    tela.fechar()
+
+
+def test_texto_dos_detalhes_para_antes_do_fim_da_tela(app_qt):
+    tela = _Tela()
+    coluna = tela.achar("detalhesDoBigPicture")
+    assert coluna.property("x") + coluna.property("width") == pytest.approx(LARGURA * 0.75)
+    tela.fechar()
+
+
+def test_iniciar_logo_abaixo_do_texto_e_centrado_na_pilula(app_qt):
+    tela = _Tela()
+    tela.bp.ativar()
+    _esperar()
+    botao = tela.achar("botaoIniciar")
+    dados = tela.achar("dadosDoJogoNoBigPicture")
+    assert botao.property("y") == pytest.approx(dados.property("height") + 24)
+    conteudo = _achar(botao, "conteudoDoBotao")
+    assert conteudo.property("x") == pytest.approx((botao.property("width") - conteudo.property("width")) / 2, abs=1)  # o Qt alinha ao pixel
+    tela.fechar()
+
+
+
+def test_veu_dos_detalhes_so_na_tela_do_jogo(app_qt):
+    tela = _Tela()
+    veu = tela.achar("veuDosDetalhes")
+    assert veu.property("opacity") == 0
+    tela.js("progressoDetalhe = 1")
+    assert veu.property("opacity") == 1
+    tela.js("progressoSessao = 1")
+    assert veu.property("opacity") == 0
+    tela.fechar()
+
+
+def test_laterais_escurecem_com_a_distancia(app_qt):
+    tela = _Tela()
+    assert tela.js("escurecimento(0)") == 0
+    perto, longe = tela.js("escurecimento(1)"), tela.js("escurecimento(3)")
+    assert 0 < perto < longe <= 0.7
+    tela.fechar()
+
+
+def test_partes_de_um_dado_separam_rotulo_e_valor(app_qt):
+    tela = _Tela()
+    coluna = tela.achar("detalhesDoBigPicture")
+    assert _avaliar(coluna, "partes('Tempo de jogo: 12 h')") == ["Tempo de jogo", "12 h"]
+    assert _avaliar(coluna, "partes('')") == ["", ""]
+    assert _avaliar(coluna, "unir(['Respawn', '', 'Respawn', 'EA'])") == "Respawn  ·  EA"
+    tela.fechar()
+
+
+def test_texto_dos_detalhes_cresce_com_a_tela(app_qt):
+    tela = _Tela()
+    descricao = tela.achar("descricaoDoJogo")
+    tela.tela.setProperty("height", 1080)
+    _esperar()
+    em_1080 = descricao.property("font").pixelSize()
+    tela.tela.setProperty("height", 2160)
+    _esperar()
+    assert em_1080 == 20
+    assert descricao.property("font").pixelSize() == 40
+    tela.fechar()
+
+
+def test_destaques_abaixo_do_iniciar(app_qt):
+    tela = _Tela()
+    tela.tela.setProperty("height", 1080)
+    _esperar()
+    botao, base = tela.achar("botaoIniciar"), tela.achar("destaquesDoJogo").parent()
+    assert base.property("y") >= botao.property("y") + botao.property("height")
+    tela.fechar()
+
+
+def test_big_picture_usa_o_fundo_vivo(app_qt, monkeypatch, tmp_path):
+    monkeypatch.setattr(shared, "covers_dir", tmp_path, raising=False)
+    Image.new("RGB", (200, 300), (200, 40, 40)).save(tmp_path / "imported_0.tiff")
+    tela = _Tela()
+    fundo = tela.achar("fundoDoBigPicture")
+    assert _esperar(lambda: "vivo" in fundo.property("fonte"), limite=3)
+    assert fundo.property("fonte") == tela.detalhes.fundoVivo
+    tela.fechar()
+
+
+def test_jogo_sem_capa_nao_herda_o_fundo_vivo_do_anterior(app_qt, monkeypatch, tmp_path):
+    monkeypatch.setattr(shared, "covers_dir", tmp_path, raising=False)
+    Image.new("RGB", (200, 300), (200, 40, 40)).save(tmp_path / "imported_0.tiff")
+    tela = _Tela()
+    fundo = tela.achar("fundoDoBigPicture")
+    assert _esperar(lambda: tela.js("fundoDoBigPicture.opacidadeVisivel") > 0, limite=3)
+    tela.detalhes.mostrar("imported_1")
+    assert _esperar(lambda: tela.js("fundoDoBigPicture.opacidadeVisivel") == 0, limite=3)
+    assert not fundo.property("fonte").startswith("image://")
+    tela.fechar()
+
+def test_logo_com_arquivo_quebrado_mostra_o_nome(app_qt, tmp_path):
+    tela = _Tela()
+    quebrado = tmp_path / "quebrado.png"
+    quebrado.write_bytes(b"nada")
+    logo = tela.achar("logoDoBigPicture")
+    tela.detalhes._v["logo"] = quebrado.as_uri()
+    tela.detalhes.alterado.emit()
+    assert _esperar(lambda: _avaliar(tela.achar("logoDoJogoNoBigPicture"), "status") == 3, limite=3)  # Image.Error
+    assert logo.property("logoDoJogo").endswith("quebrado.png")
+    assert tela.achar("nomeDoLogoDoBigPicture").property("visible") is True
+    tela.fechar()
+
+
+def test_logos_nas_pontas_da_lista(app_qt):
+    tela = _Tela(2)
+    logos = _itens(tela.tela, lambda i: i.objectName() in {"logoDoBigPicture", "logoVizinhoDoBigPicture"})
+    assert len(logos) == 2
+    for posicao in (-0.4, 1.4):  # além da primeira e da última capa: só um dos dois lados tem jogo
+        tela.js(f"irDireto({posicao})")
+        _esperar()
+        assert sum(_avaliar(logo, "jogo !== null") for logo in logos) == 1
+    tela.fechar()
+
+
+def test_logo_invisivel_na_fila_nao_le_o_disco(app_qt):
+    tela = _Tela()
+    tela.tela.setProperty("opacidadeDosTextos", 0)
+    _esperar()
+    assert tela.achar("logoDoBigPicture").property("jogo") is None
+    tela.fechar()

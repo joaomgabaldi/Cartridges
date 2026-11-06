@@ -64,36 +64,13 @@ Item {
         }
     }
 
-    Rectangle {
-        id: pilula
+    BotaoDoBigPicture {
         objectName: "botaoJaTerminei"
         // Acima do aviso "iniciado" (de h-70 a h-24), que é centrado e a cobriria.
         anchors { horizontalCenter: parent.horizontalCenter; bottom: parent.bottom; bottomMargin: 96 }
-        width: rotulo.x + rotulo.width + 28
-        height: 44
-        radius: height / 2
-        color: "white"
-        Accessible.role: Accessible.Button
-        Accessible.name: "Já terminei de jogar"
-
-        GlifoDoBotao {
-            id: glifo
-            letra: "A"
-            x: 14
-            anchors.verticalCenter: parent.verticalCenter
-        }
-        Text {
-            id: rotulo
-            x: glifo.x + glifo.width + 10
-            anchors.verticalCenter: parent.verticalCenter
-            text: "Já terminei de jogar"
-            textFormat: Text.PlainText
-            color: "black"
-            font { family: Tema.fonte; pixelSize: Tema.corpo; weight: Tema.pesoForte }
-        }
-        TapHandler {
-            enabled: tela.mostrar && sessao.emAndamento
-            onTapped: sessao.terminar()
-        }
+        texto: "Já terminei de jogar"
+        unidade: Math.max(0.85, tela.height / 1080)
+        ativo: tela.mostrar && sessao.emAndamento
+        onAcionado: sessao.terminar()
     }
 }

@@ -14,7 +14,8 @@ Item {
     property bool central: false
     property url placeholder
     property bool animar: false
-    property real opacidadeDoReflexo: 0.35
+    property real opacidadeDoReflexo: 0.22
+    property real escurecer: 0  // o quanto a capa recua: a selecionada fica em destaque
 
     width: largura
     height: altura
@@ -48,7 +49,7 @@ Item {
             source: capa.central && capa.jogo.capaAnimada === "" ? capa.jogo.capa : ""
             asynchronous: true
             fillMode: Image.Stretch
-            sourceSize.height: Math.round(630 * capa.escala)
+            sourceSize.height: Math.round(900 * capa.escala)
             mipmap: true
             visible: status === Image.Ready
         }
@@ -64,6 +65,12 @@ Item {
             cache: false
         }
     }
+    Rectangle {
+        anchors.fill: parent
+        color: "black"
+        opacity: capa.escurecer
+        visible: opacity > 0
+    }
 
     OpacityMask {
         objectName: "reflexo"
@@ -72,7 +79,7 @@ Item {
         height: capa.altura
         source: face
         maskSource: capa.mascara
-        opacity: capa.opacidadeDoReflexo
+        opacity: capa.opacidadeDoReflexo * (1 - capa.escurecer)
         layer.enabled: true
         layer.mipmap: true
         layer.smooth: true
