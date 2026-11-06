@@ -28,8 +28,8 @@ TITULOS = {
     "depuracao": "Informações de depuração",
 }
 DESENVOLVEDOR = "joaomgabaldi"
-# A GPLv3 (seção 5d) pede o aviso de copyright na interface, por isso a linha do autor original fica aqui.
-COPYRIGHT = "© 2022-2024 kramo\n© 2026 joaomgabaldi"
+# A GPLv3 (seção 5d) pede o aviso de copyright na interface, por isso os autores do projeto original ficam aqui.
+COPYRIGHT = "© 2022-2024 kramo\n© 2023 Geoffrey Coulaud\n© 2026 joaomgabaldi"
 URL_DA_LICENCA = "https://www.gnu.org/licenses/gpl-3.0.html"
 ABOUT_LICENSE = (
     "Este aplicativo é fornecido sem nenhuma garantia. Veja a "

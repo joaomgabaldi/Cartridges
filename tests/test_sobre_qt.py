@@ -157,7 +157,7 @@ def test_textos_do_sobre_sao_os_da_main():
         "problemas": "Solução de problemas",
         "depuracao": "Informações de depuração",
     }
-    assert modulo_sobre.COPYRIGHT == "© 2022-2024 kramo\n© 2026 joaomgabaldi"
+    assert modulo_sobre.COPYRIGHT == "© 2022-2024 kramo\n© 2023 Geoffrey Coulaud\n© 2026 joaomgabaldi"
     assert modulo_sobre.DESENVOLVEDOR == "joaomgabaldi"
     assert modulo_sobre.ABOUT_LICENSE == (
         "Este aplicativo é fornecido sem nenhuma garantia. Veja a "
@@ -327,7 +327,7 @@ def test_licenca_com_um_unico_link_e_so_ele_abre(janela, _sem_navegador):
     assert esperar(lambda: janela.sobre.pagina == "legal")
     licenca = janela.achar("licencaDoApp")
     # Copyright e licença num único rótulo.
-    assert licenca.property("text") == "© 2022-2024 kramo<br>© 2026 joaomgabaldi<br><br>" + modulo_sobre.ABOUT_LICENSE
+    assert licenca.property("text") == "© 2022-2024 kramo<br>© 2023 Geoffrey Coulaud<br>© 2026 joaomgabaldi<br><br>" + modulo_sobre.ABOUT_LICENSE
     assert avaliar(licenca, "textFormat === Text.StyledText") is True
     avaliar(licenca, 'linkActivated("' + GPL + '")')  # o sinal do Text liga ao `abrirLicenca`
     assert _sem_navegador == [GPL]
