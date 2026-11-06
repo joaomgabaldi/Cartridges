@@ -1,15 +1,84 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="15 15 226 226" width="256" height="256">
-  <defs>
-    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#18181B"/>
-      <stop offset="100%" stop-color="#09090B"/>
-    </linearGradient>
-    <linearGradient id="kyron" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#22D3EE"/>
-      <stop offset="100%" stop-color="#818CF8"/>
-    </linearGradient>
-  </defs>
-  <rect x="16" y="16" width="224" height="224" rx="34" fill="url(#bg)" stroke="#27272A" stroke-width="2"/>
-  <rect x="78" y="72" width="26" height="112" rx="13" fill="url(#kyron)"/>
-  <path d="M116 128 L168 76 L188 76 L138 128 L188 180 L168 180 Z" fill="url(#kyron)" stroke="url(#kyron)" stroke-width="6" stroke-linejoin="round"/>
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="256"
+     height="256"
+     viewBox="3 5.5 26 26"
+     shape-rendering="crispEdges">
+
+  <!-- Botões de ombro: sombras -->
+  <rect x="6" y="9" width="6" height="2" fill="#8993A1"/>
+  <rect x="20" y="9" width="6" height="2" fill="#8993A1"/>
+
+  <!-- Botões de ombro: faces -->
+  <rect x="6" y="8" width="6" height="1" fill="#B9C1CC"/>
+  <rect x="20" y="8" width="6" height="1" fill="#B9C1CC"/>
+
+  <!-- Corpo e empunhaduras: sombra inferior -->
+  <path d="M7 11
+           H25 V12 H27 V14 H28
+           V25 H27 V28 H26 V29 H23
+           V28 H22 V26 H21 V24 H20 V23
+           H12 V24 H11 V26 H10 V28 H9 V29
+           H6 V28 H5 V25 H4
+           V14 H5 V12 H7 Z"
+        fill="#8993A1"/>
+
+  <!-- Corpo e empunhaduras: face principal -->
+  <path d="M7 10
+           H25 V11 H27 V13 H28
+           V24 H27 V27 H26 V28 H23
+           V27 H22 V25 H21 V23 H20 V22
+           H12 V23 H11 V25 H10 V27 H9 V28
+           H6 V27 H5 V24 H4
+           V13 H5 V11 H7 Z"
+        fill="#D8DCE3"/>
+
+  <!-- Corpo: realces superiores -->
+  <path d="M7 10 H25 V11 H7 Z
+           M5 12 H6 V15 H5 Z"
+        fill="#EEF1F5"/>
+
+  <!-- Empunhaduras: realces externos -->
+  <path d="M4 20 H5 V24 H4 Z
+           M5 24 H6 V27 H5 Z
+           M6 27 H9 V28 H6 Z
+           M27 20 H28 V24 H27 Z"
+        fill="#EEF1F5"/>
+
+  <!-- Direcional: sombra -->
+  <path d="M8 14 H10 V16 H12 V18 H10 V20
+           H8 V18 H6 V16 H8 Z"
+        fill="#1E293B"/>
+
+  <!-- Direcional: face -->
+  <path d="M8 13 H10 V15 H12 V17 H10 V19
+           H8 V17 H6 V15 H8 Z"
+        fill="#334155"/>
+
+  <!-- Direcional: relevo central -->
+  <rect x="8" y="15" width="2" height="2" fill="#475569"/>
+
+  <!-- Botão central esquerdo: sombra e face -->
+  <rect x="12.5" y="17" width="2" height="1" fill="#8993A1"/>
+  <rect x="12.5" y="16" width="2" height="1" fill="#475569"/>
+
+  <!-- Botão central direito: sombra e face -->
+  <rect x="15.5" y="17" width="2" height="1" fill="#8993A1"/>
+  <rect x="15.5" y="16" width="2" height="1" fill="#475569"/>
+
+  <!-- Botão Y: amarelo -->
+  <rect x="21" y="13" width="2" height="2" fill="#A16207"/>
+  <rect x="21" y="12" width="2" height="2" fill="#FACC15"/>
+
+  <!-- Botão B: vermelho -->
+  <rect x="24" y="16" width="2" height="2" fill="#991B1B"/>
+  <rect x="24" y="15" width="2" height="2" fill="#F87171"/>
+
+  <!-- Botão A: azul -->
+  <rect x="21" y="19" width="2" height="2" fill="#1D4ED8"/>
+  <rect x="21" y="18" width="2" height="2" fill="#3B82F6"/>
+
+  <!-- Botão X: verde -->
+  <rect x="18" y="16" width="2" height="2" fill="#166534"/>
+  <rect x="18" y="15" width="2" height="2" fill="#4ADE80"/>
+
 </svg>

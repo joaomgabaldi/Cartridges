@@ -3,13 +3,19 @@
     <linearGradient id="bg" x1="0" y1="0" x2="200" y2="300" gradientUnits="userSpaceOnUse">
       <stop offset="0" stop-color="#3F3F46"/><stop offset="1" stop-color="#27272A"/>
     </linearGradient>
-    <linearGradient id="k" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#22D3EE"/><stop offset="100%" stop-color="#818CF8"/>
-    </linearGradient>
   </defs>
   <rect width="200" height="300" fill="url(#bg)"/>
-  <g transform="translate(100 150) scale(0.72) translate(-133 -128)">
-    <rect x="78" y="72" width="26" height="112" rx="13" fill="#FFFFFF"/>
-    <path d="M116 128 L168 76 L188 76 L138 128 L188 180 L168 180 Z" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="6" stroke-linejoin="round"/>
+  <!-- O controle do ícone do app em um só tom: ombros, corpo e, recortados, direcional e botões. -->
+  <g transform="translate(100 150) scale(4) translate(-16 -18)" shape-rendering="crispEdges">
+    <path fill="#71717A" fill-rule="evenodd" d="M6 8 H12 V10 H7 V11 H6 Z
+      M20 8 H26 V11 H25 V10 H20 Z
+      M7 10 H25 V11 H27 V13 H28 V24 H27 V27 H26 V28 H23 V27 H22 V25 H21 V23 H20 V22 H12 V23 H11 V25 H10 V27 H9 V28 H6 V27 H5 V24 H4 V13 H5 V11 H7 Z
+      M8 13 H10 V15 H12 V17 H10 V19 H8 V17 H6 V15 H8 Z
+      M12.5 16 H14.5 V17 H12.5 Z
+      M15.5 16 H17.5 V17 H15.5 Z
+      M21 12 H23 V14 H21 Z
+      M24 15 H26 V17 H24 Z
+      M21 18 H23 V20 H21 Z
+      M18 15 H20 V17 H18 Z"/>
   </g>
 </svg>
