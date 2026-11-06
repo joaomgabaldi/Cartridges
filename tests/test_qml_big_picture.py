@@ -1090,3 +1090,101 @@ def test_fundo_com_saturacao_menor(app_qt):
     assert len(imagens) == 2
     assert all(i.property("asynchronous") is False for i in imagens)  # D45
     tela.fechar()
+
+
+def _aguardar_etapa(tela):
+    assert _esperar(lambda: not tela.bp.ocupada, limite=5)
+
+
+def test_detalhes_aparecem_e_dicas_so_voltar(app_qt):
+    tela = _Tela()
+    tela.bp.ativar()
+    _aguardar_etapa(tela)
+    assert tela.achar("detalhesDoBigPicture").property("opacity") == 1
+    assert tela.js("dicasDoBigPicture.textos") == ["Voltar"]
+    assert tela.achar("logoDoBigPicture").property("posicao") == "coluna"
+    tela.fechar()
+
+
+def test_vizinhas_saem_da_tela_e_central_vai_a_esquerda(app_qt):
+    tela = _Tela(9)
+    tela.bp.irPara(4)
+    _esperar(lambda: tela.js("posicao") == 4, limite=2)
+    tela.bp.ativar()
+    _aguardar_etapa(tela)
+    for i in (0, 1, 2, 3, 5, 6, 7, 8):
+        xs = [x for x, _ in _cantos(tela, i)]
+        assert max(xs) <= 0 or min(xs) >= LARGURA, i
+    cantos = _cantos(tela, 4)
+    centro = sum(x for x, _ in cantos) / 4
+    assert centro == pytest.approx(LARGURA / 2 - 0.28 * LARGURA, abs=2)
+    tela.fechar()
+
+
+def test_volta_dos_detalhes_restaura_o_carrossel(app_qt):
+    tela = _Tela()
+    antes = [_cantos(tela, i) for i in range(5)]
+    tela.bp.ativar()
+    _aguardar_etapa(tela)
+    tela.bp.voltar()
+    _aguardar_etapa(tela)
+    assert tela.achar("detalhesDoBigPicture").property("opacity") == 0
+    for i in range(5):
+        for (ox, oy), (ex, ey) in zip(_cantos(tela, i), antes[i], strict=True):
+            assert ox == pytest.approx(ex, abs=0.01)
+            assert oy == pytest.approx(ey, abs=0.01)
+    tela.fechar()
+
+
+def test_iniciar_no_botao_chama_ativar(app_qt):
+    tela = _Tela()
+    tela.bp.ativar()
+    _aguardar_etapa(tela)
+    pedidos = []
+    tela.bp.etapaPedida.connect(lambda de, para: pedidos.append((de, para)))  # o jogo de mentira não abre: a etapa volta
+    botao = tela.achar("botaoIniciar")
+    centro = botao.mapToScene(QPointF(botao.width() / 2, botao.height() / 2))
+    _clicar(tela, centro.x(), centro.y())
+    assert pedidos[0] == ("detalhes", "sessao")
+    tela.fechar()
+
+
+def test_toque_fora_do_botao_nos_detalhes_nao_faz_nada(app_qt):
+    tela = _Tela()
+    tela.bp.ativar()
+    _aguardar_etapa(tela)
+    _clicar(tela, LARGURA * 0.1, ALTURA * 0.40)  # onde a capa central estaria no carrossel
+    _clicar(tela, 1, 1)
+    assert tela.bp.etapa == "detalhes" and tela.bp.indice == 0
+    tela.fechar()
+
+
+def test_detalhes_somente_leitura(app_qt):
+    tela = _Tela()
+    tela.bp.ativar()
+    _aguardar_etapa(tela)
+    detalhes = tela.achar("detalhesDoBigPicture")
+    nomes = ("TextEdit", "TextInput", "TextField", "Button", "MouseArea")
+    for item in _itens(detalhes, lambda _: True):
+        assert not item.metaObject().className().startswith(nomes), item.metaObject().className()
+        nome = item.objectName().lower()
+        assert not any(p in nome for p in ("menu", "excluir", "editar", "status", "anotacao", "atualizacao")), nome
+    tela.fechar()
+
+
+def test_um_pedido_novo_durante_a_animacao_termina_a_etapa_uma_vez(app_qt):
+    tela = _Tela()
+    chamadas = []
+    original = tela.bp._destravar  # noqa: SLF001
+    tela.bp._destravar = lambda: (chamadas.append(1), original())  # noqa: SLF001
+    tela.bp.ativar()
+    assert tela.bp.ocupada
+    tela.bp.voltar()  # ocupada: ignorado
+    assert tela.bp.etapa == "detalhes"
+    _esperar(lambda: False, limite=0.3)  # no meio da animação
+    tela.detalhes.sair.emit()
+    assert tela.bp.etapa == "carrossel"
+    _aguardar_etapa(tela)
+    _esperar()
+    assert len(chamadas) == 1
+    tela.fechar()

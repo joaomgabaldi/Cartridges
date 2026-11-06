@@ -16,9 +16,9 @@ Item {
     readonly property string logoDoJogo: detalhes.logo
     readonly property string nomeDoJogo: detalhes.nome
 
-    width: Math.min(conteudo.width, parent ? parent.width * 0.8 : conteudo.width)
+    width: Math.min(conteudo.width, parent ? parent.width * (naColuna ? 0.5 : 0.8) : conteudo.width)
     height: altura
-    x: posicao === "coluna" ? (parent ? parent.width * 0.08 : 0) : (parent ? (parent.width - width) / 2 : 0)
+    x: posicao === "coluna" ? (parent ? parent.width * 0.42 : 0) : (parent ? (parent.width - width) / 2 : 0)
     y: !parent ? 0 : posicao === "alto" ? parent.height * 0.05 : posicao === "relogio" ? parent.height * 0.18 : parent.height * 0.12
     Behavior on x { enabled: logo.animar; NumberAnimation { duration: 800; easing.type: Easing.OutCubic } }
     Behavior on y { enabled: logo.animar; NumberAnimation { duration: 800; easing.type: Easing.OutCubic } }

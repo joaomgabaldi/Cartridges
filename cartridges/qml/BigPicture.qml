@@ -126,12 +126,47 @@ Item {
     }
 
     // O único lugar da troca de etapa: as animações das etapas entram aqui. Um pedido novo cancela o anterior, e só o
-    // último chama `etapaTerminou`. Enquanto não há animação visual, o fim vem num ciclo de espera (a página fica
-    // ocupada nele) ou na hora, sem as animações do Windows.
+    // último chama `etapaTerminou`. A ida aos detalhes e a volta são uma animação só (`progressoDetalhe`); o que não
+    // é animado ainda termina num ciclo de espera (a página fica ocupada nele) ou na hora, sem as animações do Windows.
+    // shortcut: um pedido que corta a animação no meio recomeça dela inteira, sem emendar; só a exclusão do jogo dos
+    // detalhes faz isso, e o carrossel já vem de capas que saíram da tela.
     function mudarDeEtapa(de, para) {
         fimDaEtapa.stop()
-        if (bigPicture.animacoes) fimDaEtapa.start()
-        else bigPicture.etapaTerminou()
+        animacaoDosDetalhes.stop()
+        const alvo = para === "carrossel" ? 0 : 1
+        if (alvo === progressoDetalhe) {
+            if (bigPicture.animacoes) fimDaEtapa.start()
+            else bigPicture.etapaTerminou()
+            return
+        }
+        voltandoDosDetalhes = alvo === 0
+        if (!bigPicture.animacoes) {
+            progressoDetalhe = alvo
+            voltandoDosDetalhes = false
+            bigPicture.etapaTerminou()
+            return
+        }
+        animacaoDosDetalhes.from = alvo === 0 ? 1 : 0
+        animacaoDosDetalhes.to = alvo
+        animacaoDosDetalhes.start()
+    }
+    // O tempo da animação dos detalhes, de 0 a 1 (na volta, de 1 a 0 contado ao contrário no `arranjo`).
+    property real progressoDetalhe: 0
+    property bool voltandoDosDetalhes: false
+    readonly property int duracaoDaCentral: 900
+    readonly property int duracaoDaVizinha: 750
+    readonly property int atrasoDaVizinha: 45
+    readonly property int duracaoDosDetalhes: duracaoDaVizinha + atrasoDaVizinha * (capasDeCadaLado - 1)
+    NumberAnimation {
+        id: animacaoDosDetalhes
+        target: tela
+        property: "progressoDetalhe"
+        duration: tela.duracaoDosDetalhes
+        easing.type: Easing.Linear
+        onFinished: {
+            tela.voltandoDosDetalhes = false
+            bigPicture.etapaTerminou()
+        }
     }
     Timer { id: fimDaEtapa; interval: 0; onTriggered: bigPicture.etapaTerminou() }
 
@@ -195,12 +230,38 @@ Item {
             : lado * (larguraCapa * espacoCentral + (Math.abs(d) - 1) * larguraCapa * espacoLateral)
         const angulo = -lado * a * anguloLateral
         const prof = -a * profundidadeLateral
-        if (virada === 1)
-            return [x, angulo, prof, a]
-        const xFila = d * larguraCapa * espacoLateral * 1.6
-        return [xFila + (x - xFila) * virada,
-                -anguloLateral + (angulo + anguloLateral) * virada,
-                -profundidadeLateral + (prof + profundidadeLateral) * virada, a]
+        let quadro
+        if (virada === 1) {
+            quadro = [x, angulo, prof, a, 1]
+        } else {
+            const xFila = d * larguraCapa * espacoLateral * 1.6
+            quadro = [xFila + (x - xFila) * virada,
+                      -anguloLateral + (angulo + anguloLateral) * virada,
+                      -profundidadeLateral + (prof + profundidadeLateral) * virada, a, 1]
+        }
+        return progressoDetalhe > 0 ? rumoAosDetalhes(i, quadro) : quadro
+    }
+
+    // Da posição do carrossel à dos detalhes (e de volta): as vizinhas saem para o lado, a central vai à esquerda e
+    // cresce. `v` é o quanto da viagem já foi feito; a central passa de 1 (balanço) e depois assenta.
+    function rumoAosDetalhes(i, quadro) {
+        const distancia = Math.abs(i - indice)
+        const tempo = (voltandoDosDetalhes ? 1 - progressoDetalhe : progressoDetalhe) * duracaoDosDetalhes
+        let v
+        if (distancia === 0) {
+            const f = limitar(tempo / duracaoDaCentral) - 1
+            v = 1 + 2.35 * f * f * f + 1.35 * f * f  // OutBack, overshoot 1,35
+        } else {
+            const f = 1 - limitar((tempo - atrasoDaVizinha * (distancia - 1)) / duracaoDaVizinha)
+            v = 1 - f * f * f  // OutCubic
+        }
+        if (voltandoDosDetalhes) v = 1 - v
+        const [x, angulo, prof, a] = quadro
+        if (distancia === 0)
+            return [x + (-0.28 * width - x) * v, angulo * (1 - v), prof * (1 - v), a, 1 + (19 / 15 - 1) * v]
+        const lado = i < indice ? -1 : 1
+        const alvoX = lado * Math.max(Math.abs(x), width * 0.75 + larguraCapa)
+        return [x + (alvoX - x) * v, angulo + (-lado * 75 - angulo) * v, prof, a, 1]
     }
 
     function translacao(x, y, z) {
@@ -208,7 +269,7 @@ Item {
     }
 
     function transformacao(i) {
-        const [x, angulo, prof, a] = arranjo(i)
+        const [x, angulo, prof, a, tamanho] = arranjo(i)
         const r = angulo * Math.PI / 180
         const c = Math.cos(r), s = Math.sin(r)
         // A projeção zera o z para nada ser recortado em profundidade.
@@ -218,7 +279,8 @@ Item {
             .times(projecao)
             .times(translacao(x, 0, prof))
             .times(giro)
-                        .times(translacao(-larguraCapa / 2, -alturaCapa / 2, 0))
+            .times(Qt.matrix4x4(tamanho, 0, 0, 0, 0, tamanho, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1))
+            .times(translacao(-larguraCapa / 2, -alturaCapa / 2, 0))
     }
 
     // O toque do Qt Quick acerta a capa errada sob a projeção: projeta os cantos e testa a caixa que os contém, da capa
@@ -327,7 +389,7 @@ Item {
         }
 
         TapHandler {
-            enabled: !bigPicture.ocupada
+            enabled: bigPicture.etapa === "carrossel" && !bigPicture.ocupada
             onTapped: (ponto) => {
                 const i = tela.capaEm(ponto.position.x, ponto.position.y)
                 if (i === tela.indice) bigPicture.ativar()
@@ -336,7 +398,7 @@ Item {
         }
 
         WheelHandler {
-            enabled: !bigPicture.ocupada
+            enabled: bigPicture.etapa === "carrossel" && !bigPicture.ocupada
             acceptedDevices: PointerDevice.Mouse
             property int acumulado: 0
             onEnabledChanged: acumulado = 0
@@ -353,7 +415,7 @@ Item {
         }
 
         DragHandler {
-            enabled: !bigPicture.ocupada
+            enabled: bigPicture.etapa === "carrossel" && !bigPicture.ocupada
             target: null
             property int passos: 0
             onActiveChanged: passos = 0
@@ -371,13 +433,23 @@ Item {
         animar: bigPicture.animacoes
     }
 
+    DetalhesDoBigPicture {
+        x: tela.width * 0.42
+        y: tela.height * 0.12 + 72 + 20
+        width: tela.width * 0.50
+        height: tela.height * 0.88 - y
+        mostrar: bigPicture.etapa === "detalhes"
+        animar: bigPicture.animacoes
+    }
+
     // A ação que tem botão com glifo na tela não se repete em outro lugar.
     Row {
         id: dicasDoBigPicture
         objectName: "dicasDoBigPicture"
-        readonly property var textos: ["Selecionar", "Voltar"]
-        readonly property var letras: ["A", "B"]
-        visible: bigPicture.etapa === "carrossel" && !bigPicture.vazia
+        readonly property bool soVoltar: bigPicture.etapa === "detalhes"
+        readonly property var textos: soVoltar ? ["Voltar"] : ["Selecionar", "Voltar"]
+        readonly property var letras: soVoltar ? ["B"] : ["A", "B"]
+        visible: (bigPicture.etapa === "carrossel" || soVoltar) && !bigPicture.vazia
         opacity: tela.opacidadeDoRodape
         anchors { right: parent.right; bottom: parent.bottom; rightMargin: 40; bottomMargin: 32 }
         spacing: 28
@@ -387,7 +459,7 @@ Item {
                 required property int index
                 required property string modelData
                 spacing: 10
-                GlifoDoBotao { letra: dicasDoBigPicture.letras[parent.index]; anchors.verticalCenter: parent.verticalCenter }
+                GlifoDoBotao { letra: dicasDoBigPicture.letras[parent.index] ?? ""; anchors.verticalCenter: parent.verticalCenter }
                 Text {
                     anchors.verticalCenter: parent.verticalCenter
                     text: parent.modelData
