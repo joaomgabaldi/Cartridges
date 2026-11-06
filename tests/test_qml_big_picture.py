@@ -1175,16 +1175,20 @@ def test_detalhes_somente_leitura(app_qt):
 def test_um_pedido_novo_durante_a_animacao_termina_a_etapa_uma_vez(app_qt):
     tela = _Tela()
     chamadas = []
-    original = tela.bp._destravar  # noqa: SLF001
-    tela.bp._destravar = lambda: (chamadas.append(1), original())  # noqa: SLF001
+    original = tela.bp.etapaTerminou
+    tela.bp.etapaTerminou = lambda: (chamadas.append(1), original())  # a chamada do QML passa pelo atributo da instância
     tela.bp.ativar()
     assert tela.bp.ocupada
     tela.bp.voltar()  # ocupada: ignorado
     assert tela.bp.etapa == "detalhes"
     _esperar(lambda: False, limite=0.3)  # no meio da animação
+    assert chamadas == []
+    # Sem as animações do Windows o pedido novo vai direto ao fim: a ida cancelada não pode terminar depois dele.
+    tela.bp.definir_animacoes_do_sistema(False)  # noqa: FBT003
     tela.detalhes.sair.emit()
     assert tela.bp.etapa == "carrossel"
-    _aguardar_etapa(tela)
-    _esperar()
     assert len(chamadas) == 1
+    _esperar(lambda: False, limite=1.5)  # além do fim da ida cancelada
+    assert len(chamadas) == 1
+    assert not tela.bp.ocupada
     tela.fechar()
