@@ -735,7 +735,7 @@ Principal {
 
     Connections {
         target: controle
-        enabled: !sessao.emAndamento || bigPicture.visivel
+        enabled: !sessao.emAndamento || (bigPicture.visivel && bigPicture.etapa === "sessao")
         function onMover(dx, dy) {
             if (janela.popupAberto) {
                 if (janela.passoNosPopups(dx, dy)) controle.passar()
