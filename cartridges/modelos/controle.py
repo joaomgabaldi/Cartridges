@@ -50,6 +50,10 @@ def _estado_do_app() -> Qt.ApplicationState:
     return QGuiApplication.applicationState()
 
 
+# Sessão no Big Picture: sem ver a janela inativa, a leitura volta a ser do Kyron depois deste prazo (o jogo não apareceu).
+ARMAR_NA_SESSAO_MS = 15000
+
+
 class ControleDaGrade(QObject):
     mover = Signal(int, int)
     ativar = Signal()
@@ -89,6 +93,10 @@ class ControleDaGrade(QObject):
         self._suspenso = self._com_foco = False
         self._soltura = QTimer(self, singleShot=True, interval=RUMBLE_LAUNCH[2] + 60)
         self._soltura.timeout.connect(self._soltar)
+        # Sessão no Big Picture: a leitura só volta depois de armada (janela vista inativa, ou este prazo).
+        self._armado = False
+        self._armar = QTimer(self, singleShot=True, interval=ARMAR_NA_SESSAO_MS)
+        self._armar.timeout.connect(self._armar_leitura)
         eu = weakref.ref(self)
         shared.schema.connect("changed::gamepad", lambda *_: (c := eu()) and c.sincronizar())
         QGuiApplication.instance().applicationStateChanged.connect(lambda *_: (c := eu()) and c.sincronizar())
@@ -131,7 +139,9 @@ class ControleDaGrade(QObject):
             ativa = self._janela.isActive()
         else:
             ativa = self._estado_do_app() == Qt.ApplicationState.ApplicationActive
-        desejado = (not self._suspenso or self._com_foco) and ativa and shared.schema.get_boolean("gamepad")
+        if self._suspenso and self._com_foco and not ativa:
+            self._armado = True  # o jogo tomou o foco: daqui, o foco de volta é do Kyron
+        desejado = (not self._suspenso or (self._com_foco and self._armado)) and ativa and shared.schema.get_boolean("gamepad")
         if desejado and not self._timer.isActive():
             if self._leitor is None:
                 leitor = self._fabrica()
@@ -144,6 +154,12 @@ class ControleDaGrade(QObject):
             # Só para de ler. A vibração em curso termina sozinha e a DLL fica carregada.
             self._timer.stop()
             self._direcao = None
+            if self._suspenso:
+                self._soltura.start()  # a DLL sai de novo (espera a vibração em curso)
+
+    def _armar_leitura(self) -> None:
+        self._armado = True
+        self.sincronizar()
 
     @Slot()
     def suspender(self, com_foco: bool = False) -> None:
@@ -157,7 +173,9 @@ class ControleDaGrade(QObject):
         self._direcao = None
         self._soltura.start()
         if com_foco:
-            self.sincronizar()  # janela ativa: segue lendo; inativa: para
+            self._armado = False
+            self._armar.start()
+            self.sincronizar()  # janela ativa: ainda não lê (o jogo pode nem ter aparecido); inativa: arma
         else:
             self._timer.stop()
 
@@ -177,6 +195,8 @@ class ControleDaGrade(QObject):
             return
         self._suspenso = self._com_foco = False
         self._soltura.stop()
+        self._armar.stop()
+        self._armado = False
         if self._timer.isActive():
             self._ajustar_base()  # já lia (sessão no Big Picture): o que apertaram no jogo não é comando
         self.sincronizar()  # o que o controle fez durante o jogo não é comando: a base vem do `_ajustar_base`

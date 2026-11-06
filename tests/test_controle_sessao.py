@@ -111,8 +111,58 @@ def test_suspenso_ignora_foco_e_preferencia(m):
     assert m.controle.lendo
 
 
+def _armar_pelo_foco(m):
+    """O jogo toma o foco e o devolve ao Kyron: a leitura está armada e ativa."""
+    m.estado = INATIVO
+    m.controle.sincronizar()
+    m.estado = ATIVO
+    m.controle.sincronizar()
+
+
+def test_a_antes_do_jogo_aparecer_nao_le(m):
+    m.controle.suspender(com_foco=True)
+    m.controle.sincronizar()
+    assert not m.controle.lendo and m.controle._armar.isActive()  # noqa: SLF001
+
+
+def test_armar_depois_do_prazo(m):
+    m.controle.suspender(com_foco=True)
+    armar = m.controle._armar  # noqa: SLF001
+    assert armar.interval() == 15000
+    armar.stop()
+    armar.timeout.emit()
+    assert m.controle.lendo
+
+
+def test_perder_o_foco_solta_a_dll(m):
+    m.controle.suspender(com_foco=True)
+    _armar_pelo_foco(m)
+    assert m.controle.lendo
+    m.controle._soltura.stop()  # noqa: SLF001
+    m.controle._soltar()  # noqa: SLF001
+    assert not m.leitor.solto and m.controle.lendo, "lendo, a DLL fica"
+    m.estado = INATIVO
+    m.controle.sincronizar()
+    assert not m.controle.lendo and m.controle._soltura.isActive()  # noqa: SLF001
+    _vencer_o_prazo(m.controle)
+    assert m.leitor.solto
+    m.estado = ATIVO
+    m.controle.sincronizar()
+    assert m.controle.lendo and m.fabricados == 2, "a DLL volta pela fábrica"
+
+
+def test_retomar_desarma(m):
+    m.controle.suspender(com_foco=True)
+    _armar_pelo_foco(m)
+    m.controle.retomar()
+    assert not m.controle._armar.isActive()  # noqa: SLF001
+    m.controle.suspender(com_foco=True)
+    assert not m.controle.lendo
+
+
 def test_sessao_no_big_picture_le_so_com_foco(m):
     m.controle.suspender(com_foco=True)
+    assert not m.controle.lendo, "ativa ao suspender, ainda não armada"
     m.estado = INATIVO
     m.controle.sincronizar()
     assert not m.controle.lendo
@@ -130,10 +180,7 @@ def test_sessao_fora_do_big_picture_nao_le_com_foco(m):
 
 def test_soltura_com_leitura_ativa_mantem_a_dll(m):
     m.controle.suspender(com_foco=True)
-    m.estado = INATIVO
-    m.controle.sincronizar()
-    m.estado = ATIVO
-    m.controle.sincronizar()
+    _armar_pelo_foco(m)
     m.controle._soltar()  # noqa: SLF001
     assert not m.leitor.solto and m.controle.lendo
 
