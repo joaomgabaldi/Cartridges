@@ -114,6 +114,18 @@ def test_iss_final_nao_apaga_dados_nem_registro_ao_instalar(final, instalacao):
     assert "HKEY_CURRENT_USER" not in instalacao
 
 
+@pytest.mark.parametrize("definidos", [("Repo", "PastaApp"), ("DESENVOLVIMENTO", "Repo", "PastaApp")])
+def test_desinstalacao_silenciosa_nao_pergunta_nem_apaga_dados(renderizado, definidos):
+    codigo = _secao(_ramo(renderizado, *definidos), "Code")
+    _, separador, desinstalador = codigo.partition("procedure CurUninstallStepChanged")
+    assert separador
+    guarda = "if (CurUninstallStep = usPostUninstall) and not UninstallSilent then"
+    assert guarda in desinstalador
+    # A guarda vem antes da pergunta, e os dados só saem depois dela.
+    assert desinstalador.index(guarda) < desinstalador.index("MsgBox(") < desinstalador.index("DelTree(")
+    assert desinstalador.count("DelTree(") == 1
+
+
 def test_iss_final_sem_nvidia_nem_pagina_extra(final, instalacao):
     assert "nvidia" not in final.lower()
     assert not re.search(r"Create\w*Page\b|\bInitializeWizard\b|\bShouldSkipPage\b", final)

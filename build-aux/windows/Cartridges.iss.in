@@ -305,7 +305,8 @@ end;
 // o desinstalador padrão as deixaria para trás.
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 begin
-  if CurUninstallStep = usPostUninstall then
+  // Em silêncio não há quem responda: os dados ficam e nada trava à espera da pergunta.
+  if (CurUninstallStep = usPostUninstall) and not UninstallSilent then
   begin
     // O compilador lê este arquivo como UTF-8 com ou sem BOM, então os acentos funcionam.
     // A pasta dos saves só sai se for a padrão (dentro de {localappdata}); uma
