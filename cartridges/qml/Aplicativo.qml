@@ -737,7 +737,7 @@ Principal {
 
     Connections {
         target: controle
-        enabled: !sessao.emAndamento
+        enabled: !sessao.emAndamento || bigPicture.visivel
         function onMover(dx, dy) {
             if (janela.popupAberto) {
                 if (janela.passoNosPopups(dx, dy)) controle.passar()
@@ -745,7 +745,7 @@ Principal {
                 return
             }
             if (janela.bigPictureNaFrente) {
-                if (bigPicture.ocupada || dx === 0) return
+                if (bigPicture.etapa !== "carrossel" || bigPicture.ocupada || dx === 0) return
                 if (bigPicture.mover(dx)) controle.trocarCapa()
                 else controle.bater()
                 return
@@ -773,7 +773,7 @@ Principal {
             }
         }
         function onPular(delta) {
-            if (janela.popupAberto || !janela.bigPictureNaFrente || bigPicture.ocupada) return
+            if (janela.popupAberto || !janela.bigPictureNaFrente || bigPicture.etapa !== "carrossel" || bigPicture.ocupada) return
             if (bigPicture.mover(delta)) controle.saltar()
             else controle.bater()
         }
@@ -791,7 +791,8 @@ Principal {
                 if (!foco || typeof foco.lineCount !== "number") controle.teclar(Qt.Key_Return)
                 return
             }
-            if (janela.bigPictureNaFrente) { if (!bigPicture.ocupada) bigPicture.ativar(); return }
+            // Na sessão a página está ocupada, mas o A precisa chegar ao "Já terminei de jogar".
+            if (janela.bigPictureNaFrente) { if (bigPicture.etapa === "sessao" || !bigPicture.ocupada) bigPicture.ativar(); return }
             var focado = janela.botaoFocado()
             if (focado) focado.click()
             else if (janela.paginaDoControle) janela.paginaDoControle.abrirDetalhesDoAtual()

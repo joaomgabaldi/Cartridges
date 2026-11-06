@@ -86,7 +86,7 @@ class ControleDaGrade(QObject):
         self._ajustar_base()
         self._geracao_de_vibracao = 0
         # Durante uma sessão o controle é do jogo: nada lê, e a DLL sai depois da vibração de abertura.
-        self._suspenso = False
+        self._suspenso = self._com_foco = False
         self._soltura = QTimer(self, singleShot=True, interval=RUMBLE_LAUNCH[2] + 60)
         self._soltura.timeout.connect(self._soltar)
         eu = weakref.ref(self)
@@ -131,7 +131,7 @@ class ControleDaGrade(QObject):
             ativa = self._janela.isActive()
         else:
             ativa = self._estado_do_app() == Qt.ApplicationState.ApplicationActive
-        desejado = not self._suspenso and ativa and shared.schema.get_boolean("gamepad")
+        desejado = (not self._suspenso or self._com_foco) and ativa and shared.schema.get_boolean("gamepad")
         if desejado and not self._timer.isActive():
             if self._leitor is None:
                 leitor = self._fabrica()
@@ -146,20 +146,24 @@ class ControleDaGrade(QObject):
             self._direcao = None
 
     @Slot()
-    def suspender(self) -> None:
+    def suspender(self, com_foco: bool = False) -> None:
         """Entrega o controle ao jogo da sessão: para de ler na hora e solta a DLL depois do prazo da vibração de abertura
         (soltar antes deixaria os motores ligados: o desligamento agendado dela não acharia a DLL).
+        Com `com_foco` (sessão no Big Picture) o Kyron lê enquanto a janela está ativa; sem foco, o jogo fica com o controle.
         """
         if self._suspenso:
             return
-        self._suspenso = True
-        self._timer.stop()
+        self._suspenso, self._com_foco = True, com_foco
         self._direcao = None
         self._soltura.start()
+        if com_foco:
+            self.sincronizar()  # janela ativa: segue lendo; inativa: para
+        else:
+            self._timer.stop()
 
     def _soltar(self) -> None:
-        if not self._suspenso or self._leitor is None:
-            return  # retomado dentro do prazo: a DLL carregada fica
+        if not self._suspenso or self._leitor is None or self._timer.isActive():
+            return  # retomado dentro do prazo, ou lendo com o Kyron em foco: a DLL carregada fica
         self._leitor.vibrar()  # os motores parados antes de a DLL sair
         self._leitor.soltar()
         self._leitor = None
@@ -171,8 +175,10 @@ class ControleDaGrade(QObject):
         """A sessão acabou: a leitura volta (com a DLL recarregada pela fábrica, se saiu) e a base é refeita."""
         if not self._suspenso:
             return
-        self._suspenso = False
+        self._suspenso = self._com_foco = False
         self._soltura.stop()
+        if self._timer.isActive():
+            self._ajustar_base()  # já lia (sessão no Big Picture): o que apertaram no jogo não é comando
         self.sincronizar()  # o que o controle fez durante o jogo não é comando: a base vem do `_ajustar_base`
 
     @Slot()

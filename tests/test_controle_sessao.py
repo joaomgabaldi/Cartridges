@@ -111,6 +111,62 @@ def test_suspenso_ignora_foco_e_preferencia(m):
     assert m.controle.lendo
 
 
+def test_sessao_no_big_picture_le_so_com_foco(m):
+    m.controle.suspender(com_foco=True)
+    m.estado = INATIVO
+    m.controle.sincronizar()
+    assert not m.controle.lendo
+    m.estado = ATIVO
+    m.controle.sincronizar()
+    assert m.controle.lendo
+
+
+def test_sessao_fora_do_big_picture_nao_le_com_foco(m):
+    m.controle.suspender()
+    m.estado = ATIVO
+    m.controle.sincronizar()
+    assert not m.controle.lendo
+
+
+def test_soltura_com_leitura_ativa_mantem_a_dll(m):
+    m.controle.suspender(com_foco=True)
+    m.estado = INATIVO
+    m.controle.sincronizar()
+    m.estado = ATIVO
+    m.controle.sincronizar()
+    m.controle._soltar()  # noqa: SLF001
+    assert not m.leitor.solto and m.controle.lendo
+
+
+def test_retomar_zera_o_modo_com_foco(m):
+    m.controle.suspender(com_foco=True)
+    m.controle.retomar()
+    m.controle.suspender()
+    m.estado = INATIVO
+    m.controle.sincronizar()
+    m.estado = ATIVO
+    m.controle.sincronizar()
+    assert not m.controle.lendo, "a suspensão seguinte, sem `com_foco`, não herda o modo"
+
+
+def test_volta_do_foco_nao_dispara_o_que_ja_estava_apertado(m):
+    comandos = _lidos(m, "ativar")
+    m.controle.suspender(com_foco=True)
+    m.estado = INATIVO
+    m.controle.sincronizar()
+    m.leitor.botoes = 0x1000  # A segurado enquanto o jogo tinha o foco
+    m.estado = ATIVO
+    m.controle.sincronizar()
+    m.tique()
+    m.tique(33_000)
+    assert comandos == [], "o que já estava apertado é a base, não um comando"
+    m.leitor.botoes = 0
+    m.tique(33_000)
+    m.leitor.botoes = 0x1000
+    m.tique(33_000)
+    assert comandos == [()]
+
+
 @pytest.mark.parametrize("vibrar", [False, True])
 def test_vibrar_abertura_respeita_a_preferencia(m, vibrar):
     shared.schema.set_boolean("gamepad-rumble", vibrar)
@@ -125,7 +181,7 @@ class _ControleQueAnota:
     def vibrarAbertura(self):  # noqa: N802
         self.passos.append("vibrar")
 
-    def suspender(self):
+    def suspender(self, com_foco=False):
         self.passos.append("suspender")
 
     def retomar(self):

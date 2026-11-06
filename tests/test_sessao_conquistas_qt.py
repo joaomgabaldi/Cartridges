@@ -83,7 +83,7 @@ class _Controle:
     def __init__(self, feitas):
         self._feitas = feitas
 
-    def suspender(self):
+    def suspender(self, com_foco=False):
         self._feitas.append("suspender")
 
     def retomar(self):

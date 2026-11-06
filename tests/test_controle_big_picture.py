@@ -374,6 +374,27 @@ def test_ocupada_ignora_tudo(app_qt, monkeypatch):
     app.fechar()
 
 
+def test_na_etapa_sessao_a_termina_e_b_nao_muda_nada(app_qt, monkeypatch):
+    from types import SimpleNamespace  # noqa: PLC0415
+
+    app = _com_big_picture(monkeypatch)
+    terminadas = []
+    sessao = SimpleNamespace(emAndamento=True, jogoId="0", terminar=lambda: terminadas.append(1))
+    monkeypatch.setattr(shared, "sessao", sessao, raising=False)
+    app.big_picture._etapa_bp = "sessao"  # noqa: SLF001
+    app.big_picture._ocupada = True  # noqa: SLF001  (a sessão em curso segura a página)
+    assert app.big_picture.etapa == "sessao" and app.big_picture.ocupada
+    app.controle.voltar.emit()
+    app.controle.mover.emit(1, 0)
+    app.controle.pular.emit(10)
+    assert terminadas == [] and app.big_picture.indice == 0 and app.big_picture.etapa == "sessao"
+    app.controle.ativar.emit()
+    assert terminadas == [1]
+    app.big_picture._etapa_bp = "carrossel"  # noqa: SLF001
+    app.big_picture.encerrar()
+    app.fechar()
+
+
 def test_ocupada_fora_da_vista_engole_o_comando(app_qt, monkeypatch):
     # No escuro da entrada a camada ainda não apareceu, mas a grade também não recebe o comando.
     app = _aberto_com(monkeypatch)

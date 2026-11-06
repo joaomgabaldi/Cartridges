@@ -166,7 +166,8 @@ class ModeloDaSessao(QObject):
         # O vigia das conquistas: daqui, uma conquista que sair no jogo aparece por cima dele e pisca a iluminação. Nunca levanta.
         sessao_conquistas.comecar(game)
         if self._controle is not None:
-            self._controle.suspender()
+            # No Big Picture o Kyron segue lendo o controle com a janela em foco (o "Já terminei de jogar").
+            self._controle.suspender(com_foco=self._big_picture is not None and self._big_picture.visivel)
 
     def hide_session_blocker(self) -> None:
         jogo = self._jogo
