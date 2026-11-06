@@ -9,12 +9,15 @@ Item {
     property bool animar: true
 
     readonly property bool naColuna: posicao === "coluna"
-    readonly property real altura: naColuna ? 72 : 110
+    // A altura anda junto com x e y; a imagem é decodificada uma vez, na maior (`sourceSize` fixo).
+    property real altura: naColuna ? 72 : 110
+    Behavior on altura { enabled: logo.animar; NumberAnimation { duration: 800; easing.type: Easing.OutCubic } }
     // O que está na tela: copia o jogo só depois do fade de saída.
     property string logoExibido: ""
     property string nomeExibido: ""
-    readonly property string logoDoJogo: detalhes.logo
-    readonly property string nomeDoJogo: detalhes.nome
+    // Escondido, nada é lido nem decodificado: a página de detalhes do modo normal também mexe em `detalhes`.
+    readonly property string logoDoJogo: bigPicture.visivel ? detalhes.logo : ""
+    readonly property string nomeDoJogo: bigPicture.visivel ? detalhes.nome : ""
 
     width: Math.min(conteudo.width, parent ? parent.width * (naColuna ? 0.5 : 0.8) : conteudo.width)
     height: altura
@@ -55,7 +58,7 @@ Item {
             width: implicitHeight > 0 ? height * implicitWidth / implicitHeight : 0
             fillMode: Image.PreserveAspectFit
             asynchronous: false
-            sourceSize.height: logo.altura * Screen.devicePixelRatio
+            sourceSize.height: 110 * Screen.devicePixelRatio
         }
         Text {
             id: texto

@@ -381,7 +381,8 @@ class Jogo(QObject):
 
         threading.Thread(target=conferir, name="conferencia-dos-inis", daemon=True).start()
 
-    def launch(self, ao_confirmar: Optional[Callable[[], Any]] = None, inis_conferidos: bool = False, em_tela_cheia: bool = False
+    def launch(
+        self, ao_confirmar: Optional[Callable[[], Any]] = None, inis_conferidos: bool = False, em_tela_cheia: bool = False
     ) -> bool:
         """``ao_confirmar``: como relançar depois da confirmação do comando ou da conferência dos .ini; sem ele, este mesmo ``launch``.
 

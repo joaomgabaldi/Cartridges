@@ -167,12 +167,16 @@ def test_relogio_acompanha_o_tique(app_qt, monkeypatch):
 
     assert relogio.property("text") == "0:02:05"
     app.fechar()
+
+
 def test_relogio_corre_na_sessao_do_big_picture(app_qt):
     app = _app()
-    app.sessao._big_picture = type("BigPicture", (), {"visivel": True})()  # noqa: SLF001
+    app.sessao._big_picture = type("BigPicture", (), {"visivel": True, "voltouDoJogo": lambda self: None})()  # noqa: SLF001
     _comecar(app)
     assert app.sessao._tique.isActive()  # noqa: SLF001
     assert app.sessao.relogioVisivel is False
+    app.sessao.hide_session_blocker()
+    assert not app.sessao._tique.isActive()  # noqa: SLF001  # o relógio para no fim da sessão
     app.fechar()
 
 
@@ -385,7 +389,7 @@ def test_foco_aberto_pelo_teclado_tem_anel_e_pelo_mouse_nao(app_qt):
     assert app.achar("botaoJaTerminei").property("visualFocus") is True
     app.fechar()
 
-    # Com o mouse (outra janela, sem o gesto de teclado de antes): abre os detalhes e clica em "Jogar" (o `launch` é falso), como a pessoa faria.
+    # Com o mouse (outra janela, sem o gesto de teclado de antes): abre os detalhes e clica em "Iniciar" (o `launch` é falso), como a pessoa faria.
     app = _app()
     _abrir_pelo_cartao(app, 0)
     _clicar(app, app.achar("botaoJogarDaPagina"))

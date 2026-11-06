@@ -21,7 +21,7 @@ Item {
     property real posicao: 0
     property real virada: 1
     property real opacidadeCapas: 1
-    property real opacidadeDoRodape: 1
+    property real opacidadeDosTextos: 1
     property bool animarPasso: true
     property bool sessaoEmAndamento: false
 
@@ -72,13 +72,13 @@ Item {
         irDireto(p)
         virada = v
         opacidadeCapas = capas
-        opacidadeDoRodape = rodape
+        opacidadeDosTextos = rodape
     }
     function reporQuadro() {
         irDireto(indice)
         virada = 1
         opacidadeCapas = 1
-        opacidadeDoRodape = 1
+        opacidadeDosTextos = 1
     }
     function iniciarFila(entrar) {
         passo.stop()
@@ -129,7 +129,7 @@ Item {
     // último chama `etapaTerminou`. A ida aos detalhes e a volta são uma animação só (`progressoDetalhe`); o que não
     // é animado ainda termina num ciclo de espera (a página fica ocupada nele) ou na hora, sem as animações do Windows.
     // shortcut: um pedido que corta a animação no meio recomeça dela inteira, sem emendar; só a exclusão do jogo dos
-    // detalhes faz isso, e o carrossel já vem de capas que saíram da tela.
+    // detalhes faz isso, e o carrossel já vem de capas que saíram da tela. Emendar se outro caminho passar a cortar a animação.
     function mudarDeEtapa(de, para) {
         fimDaEtapa.stop()
         animacaoDosDetalhes.stop()
@@ -462,7 +462,7 @@ Item {
 
     LogoDoBigPicture {
         visible: !bigPicture.vazia
-        opacity: tela.opacidadeDoRodape
+        opacity: tela.opacidadeDosTextos
         posicao: bigPicture.etapa === "detalhes" ? "coluna" : bigPicture.etapa === "sessao" ? "relogio" : "alto"
         animar: bigPicture.animacoes
     }
@@ -490,7 +490,7 @@ Item {
         readonly property var textos: bigPicture.etapa === "sessao" ? [] : soVoltar ? ["Voltar"] : ["Selecionar", "Voltar"]
         readonly property var letras: soVoltar ? ["B"] : ["A", "B"]
         visible: (bigPicture.etapa === "carrossel" || soVoltar) && !bigPicture.vazia
-        opacity: tela.opacidadeDoRodape
+        opacity: tela.opacidadeDosTextos
         anchors { right: parent.right; bottom: parent.bottom; rightMargin: 40; bottomMargin: 32 }
         spacing: 28
         Repeater {

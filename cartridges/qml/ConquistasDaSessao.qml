@@ -11,7 +11,7 @@ Rectangle {
     // No Big Picture, o ícone que chega depois de a fileira estar montada entra deslizando da direita.
     property bool animarNovos: false
 
-    readonly property var dados: conquistasDoJogo.sessao
+    property var dados: conquistasDoJogo.sessao
     readonly property int quantos: (dados.icones || []).length
     readonly property int tamanho: 48
     readonly property real larguraDosIcones: quantos * tamanho + Math.max(0, quantos - 1) * lista.spacing

@@ -6,20 +6,20 @@
 
 import math
 import os
+from types import SimpleNamespace
 
 import pytest
 from PIL import Image
 from PySide6.QtCore import QCoreApplication, QObject, QPoint, QPointF, Qt, QUrl
 from PySide6.QtGui import QWheelEvent, QWindow
-from PySide6.QtQml import QQmlComponent, QQmlEngine, QQmlExpression
-from PySide6.QtQuick import QQuickItem, QQuickWindow
+from PySide6.QtQml import QQmlComponent, QQmlEngine
+from PySide6.QtQuick import QQuickItem
 from PySide6.QtTest import QTest
 
 from cartridges import shared
-from cartridges.jogo import Jogo
 from cartridges.modelos import biblioteca as modulo_biblioteca
 from cartridges.modelos import regras_do_big_picture as regras
-from cartridges.modelos.big_picture import BigPicture, ProvedorDoFundo
+from cartridges.modelos.big_picture import BigPicture
 from cartridges.modelos.biblioteca import ModeloDaBiblioteca
 from cartridges.process_session import ProcessSession
 from tests.apoio_qml_biblioteca import QML, _achar, _esperar, _LojaFalsa
@@ -67,7 +67,6 @@ def _referencia_do_gtk(i, posicao, virada, largura_tela, altura_tela):
             -regras.ANGULO_LATERAL + (angulo + regras.ANGULO_LATERAL) * virada,
             -regras.PROFUNDIDADE_LATERAL + (prof + regras.PROFUNDIDADE_LATERAL) * virada,
         )
-    escala = 1
 
     def trans(tx, ty, tz):
         return [[1, 0, 0, tx], [0, 1, 0, ty], [0, 0, 1, tz], [0, 0, 0, 1]]
@@ -76,9 +75,8 @@ def _referencia_do_gtk(i, posicao, virada, largura_tela, altura_tela):
     c, s = math.cos(r), math.sin(r)
     perspectiva = [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, -1 / regras.PERSPECTIVA, 1]]
     giro = [[c, 0, s, 0], [0, 1, 0, 0], [-s, 0, c, 0], [0, 0, 0, 1]]
-    tamanho = [[escala, 0, 0, 0], [0, escala, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]
     m = trans(largura_tela / 2, altura_tela * 0.40, 0)
-    for passo in (perspectiva, trans(x, 0, prof), giro, tamanho, trans(-largura / 2, -altura / 2, 0)):
+    for passo in (perspectiva, trans(x, 0, prof), giro, trans(-largura / 2, -altura / 2, 0)):
         m = _produto(m, passo)
     cantos = []
     for px, py in ((0, 0), (largura, 0), (largura, altura), (0, altura)):
@@ -595,12 +593,12 @@ def test_fila_termina_no_estado_normal(app_qt, monkeypatch):
     _entrar(app)
     tela = app.achar("bigPicture")
     assert (tela.property("posicao"), tela.property("virada")) == (0, 1)
-    assert (tela.property("opacidadeCapas"), tela.property("opacidadeDoRodape")) == (1, 1)
+    assert (tela.property("opacidadeCapas"), tela.property("opacidadeDosTextos")) == (1, 1)
     assert tela.property("naFila") is False
     app.big_picture.sair()
     assert _esperar(lambda: not app.big_picture.visivel, limite=5)
     assert (tela.property("posicao"), tela.property("virada")) == (0, 1)
-    assert (tela.property("opacidadeCapas"), tela.property("opacidadeDoRodape")) == (1, 1)
+    assert (tela.property("opacidadeCapas"), tela.property("opacidadeDosTextos")) == (1, 1)
     app.fechar()
 
 
@@ -610,7 +608,7 @@ def test_fila_comeca_longe_e_corre(app_qt, monkeypatch):
     tela = app.achar("bigPicture")
     assert tela.property("naFila") is True
     assert tela.property("posicao") == pytest.approx(5)  # n = jogos - 1: parte da cauda
-    assert tela.property("opacidadeCapas") == 0 and tela.property("opacidadeDoRodape") == 0
+    assert tela.property("opacidadeCapas") == 0 and tela.property("opacidadeDosTextos") == 0
     assert _esperar(lambda: tela.property("posicao") < 4.9, limite=2)
     assert _esperar(lambda: not app.big_picture.ocupada, limite=5)
     app.fechar()
@@ -1077,9 +1075,14 @@ def test_fundo_so_com_desfoque(app_qt):
     assert tela.js("fundoDoBigPicture.opacidadeVisivel") == 0
     fundo.setProperty("fonte", "image://desfoque/x?v=1")
     assert _esperar(lambda: abs(tela.js("fundoDoBigPicture.opacidadeVisivel") - 0.4) < 0.01, limite=3)
-    fundo.setProperty("animar", False)
-    fundo.setProperty("fonte", "")
-    assert tela.js("fundoDoBigPicture.opacidadeVisivel") == 0  # sem animar, direto
+    fundo.setProperty("fonte", "")  # o desfoque do jogo seguinte ainda calcula: o fundo atual fica, sem esmaecer
+    _esperar()
+    assert tela.js("fundoDoBigPicture.opacidadeVisivel") == pytest.approx(0.4, abs=0.01)
+    fundo.setProperty("visible", False)  # ao sair, as camadas largam a imagem
+    _esperar()
+    imagens = _itens(fundo, lambda i: i.objectName() == "imagemDoFundo")
+    assert tela.js("fundoDoBigPicture.opacidadeVisivel") == 0
+    assert [i.property("source").toString() for i in imagens] == ["", ""]
     tela.fechar()
 
 
@@ -1297,3 +1300,74 @@ def test_sessao_sem_animacoes_vai_direto_ao_fim(app_qt, monkeypatch):
     assert max(x for x, _ in _cantos(tela, 0)) < 0
     tela.sessao.hide_session_blocker()
     tela.fechar()
+
+
+def test_escondido_nao_decodifica_imagem(app_qt, monkeypatch, tmp_path):
+    # D43: nada é decodificado escondido. A página de detalhes do modo normal segue o jogo com o Big Picture fora da tela.
+    tela = _Tela()
+    tela.bp.sair()
+    tela.bp.filaTerminou()
+    assert not tela.bp.visivel
+    png = QUrl.fromLocalFile(str(_png(tmp_path))).toString()
+    monkeypatch.setattr(ProcessSession, "active", SimpleNamespace(elapsed=60))
+    tela.sessao.show_session_blocker(tela.jogos[0])
+    tela.detalhes.mostrar("imported_1")
+    tela.detalhes._mesclar({"logo": png, "larguraDoLogo": 64})  # noqa: SLF001
+    tela.conquistas._guardar({"sessao": {"visivel": True, "contagem": "1/2", "porcentagem": "50%", "fracao": 0.5, "icones": [{"url": png}]}})  # noqa: SLF001
+    tela.conquistas.alterado.emit()
+    _esperar()
+    imagens = tela.itens("QQuickImage") + tela.itens("QQuickAnimatedImage")
+    assert [i.objectName() for i in imagens if i.property("source").toString() != ""] == []
+    tela.sessao.hide_session_blocker()
+    tela.fechar()
+
+
+def _png(pasta):
+    caminho = pasta / "x.png"
+    Image.new("RGBA", (64, 32), (255, 0, 0, 255)).save(caminho)
+    return caminho
+
+
+def test_sessao_que_acaba_mantem_relogio_e_cartao_durante_o_fade(app_qt, monkeypatch):
+    tela = _Tela()
+    monkeypatch.setattr(ProcessSession, "active", SimpleNamespace(elapsed=3725))
+    _ate_a_sessao(tela, monkeypatch)
+    tela.conquistas._guardar({"sessao": {"visivel": True, "contagem": "1/2", "porcentagem": "50%", "fracao": 0.5, "icones": []}})  # noqa: SLF001
+    tela.conquistas.alterado.emit()
+    _esperar()
+    assert tela.achar("relogioDoBigPicture").property("text") == "1:02:05"
+    assert tela.achar("conquistasDaSessao").property("visible") is True
+    monkeypatch.setattr(ProcessSession, "active", None)
+    tela.sessao.hide_session_blocker()  # os rastreadores saem antes de o texto acabar de sumir
+    tela.conquistas._guardar({"sessao": {"visivel": False, "contagem": "", "porcentagem": "", "fracao": 0.0, "icones": []}})  # noqa: SLF001
+    tela.conquistas.alterado.emit()
+    tela.bp.voltouDoJogo()
+    _esperar(lambda: False, limite=0.08)  # no meio do fade de saída (300 ms)
+    sessao = tela.achar("sessaoDoBigPicture")
+    assert 0 < sessao.property("opacity") < 1
+    assert tela.achar("relogioDoBigPicture").property("text") == "1:02:05"
+    assert tela.achar("conquistasDaSessao").property("visible") is True
+    tela.fechar()
+
+
+def test_ponta_a_ponta_com_a_ligacao_real(app_qt, monkeypatch):
+    """`BigPicture` com `detalhes` e `ModeloDaSessao` com `big_picture`, como no app: a sessão de verdade volta ao carrossel."""
+    app = _aberto_com(monkeypatch, animacoes=False)
+    _entrar(app)
+    bp = app.big_picture
+    assert app.detalhes.jogoId == bp.jogos[0]["jogoId"]  # os detalhes seguem o central da entrada
+    bp.mover(1)
+    assert _esperar(lambda: app.detalhes.jogoId == bp.jogos[1]["jogoId"], limite=3)
+    monkeypatch.setattr(shared, "store", app.loja)
+    monkeypatch.setattr(shared, "sessao", app.sessao, raising=False)
+    monkeypatch.setattr(ProcessSession, "active", None)
+    jogo = app.loja.get(bp.jogos[1]["jogoId"])
+    jogo.launch = lambda **_: (app.sessao.show_session_blocker(jogo), True)[1]
+    bp.ativar()  # detalhes
+    bp.ativar()  # Iniciar
+    assert bp.etapa == "sessao" and app.sessao.emAndamento
+    app.sessao.hide_session_blocker()  # o fim da sessão chama `voltouDoJogo`
+    assert _esperar(lambda: bp.etapa == "carrossel" and not bp.ocupada, limite=3)
+    assert bp.jogos[bp.indice]["jogoId"] == jogo.game_id
+    assert app.detalhes.jogoId == jogo.game_id
+

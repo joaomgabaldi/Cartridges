@@ -11,10 +11,22 @@ Item {
     // Sob o logo na posição "relogio" (`LogoDoBigPicture`).
     readonly property real baseDoLogo: height * 0.18 + 110
 
+    // O que o fade de saída ainda mostra: os rastreadores da sessão já foram limpos, mas o texto some só com fade.
+    property string relogioExibido: ""
+    property var conquistas: ({})
+    function guardarRelogio() { if (sessao.emAndamento) relogioExibido = sessao.relogio }
+    function guardarConquistas() { if (sessao.emAndamento) conquistas = conquistasDoJogo.sessao }
+    Connections { target: sessao; function onRelogioMudou() { tela.guardarRelogio() } }
+    Connections { target: conquistasDoJogo; function onAlterado() { tela.guardarConquistas() } }
+
     opacity: 0
     visible: opacity > 0
 
     onMostrarChanged: {
+        if (mostrar) {
+            relogioExibido = sessao.relogio
+            conquistas = conquistasDoJogo.sessao
+        }
         aparecer.stop()
         sumir.stop()
         if (!animar) opacity = mostrar ? 1 : 0
@@ -33,24 +45,30 @@ Item {
         objectName: "relogioDoBigPicture"
         anchors.horizontalCenter: parent.horizontalCenter
         y: tela.baseDoLogo + 24
-        text: sessao.relogio
+        text: tela.relogioExibido
         textFormat: Text.PlainText
         color: "white"
         font { family: Tema.fonte; pixelSize: Math.round(Tema.titulo1 * 2); weight: Tema.pesoTitulo1; features: { "tnum": 1 } }
     }
 
-    ConquistasDaSessao {
+    // Só com o Big Picture à vista: escondido, os ícones das conquistas não são decodificados.
+    Loader {
+        active: bigPicture.visivel
         anchors.horizontalCenter: parent.horizontalCenter
         y: relogio.y + relogio.height + 40
-        larguraMaxima: tela.width * 0.6
-        visible: conquistasDoJogo.sessao.visivel === true
-        animarNovos: tela.mostrar && tela.animar
+        visible: tela.conquistas.visivel === true
+        sourceComponent: ConquistasDaSessao {
+            dados: tela.conquistas
+            larguraMaxima: tela.width * 0.6
+            animarNovos: tela.mostrar && tela.animar
+        }
     }
 
     Rectangle {
         id: pilula
         objectName: "botaoJaTerminei"
-        anchors { horizontalCenter: parent.horizontalCenter; bottom: parent.bottom; bottomMargin: 48 }
+        // Acima do aviso "iniciado" (de h-70 a h-24), que é centrado e a cobriria.
+        anchors { horizontalCenter: parent.horizontalCenter; bottom: parent.bottom; bottomMargin: 96 }
         width: rotulo.x + rotulo.width + 28
         height: 44
         radius: height / 2

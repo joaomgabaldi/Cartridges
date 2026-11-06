@@ -18,7 +18,6 @@ import winsound
 if TYPE_CHECKING:  # `ordem` e `shared` puxam o Qt: aqui só a tipagem, para o módulo ficar sem Qt nem gi
     from cartridges.modelos.ordem import Linha
 
-DURACAO_ABERTURA_MS = 400
 DURACAO_FILA_ENTRADA_MS = 1700
 DURACAO_FILA_SAIDA_MS = 1100
 JOGOS_NA_FILA = 30
@@ -31,7 +30,6 @@ ESPACO_LATERAL = 0.45  # entre laterais
 PROFUNDIDADE_LATERAL = 220
 CAPAS_DE_CADA_LADO = 8
 DURACAO_PASSO_MS = 350
-ESCALA_NA_ABERTURA = 1.6
 REFLEXO_ALCANCE = 0.55  # o reflexo some a esta fração da altura da capa
 REFLEXO_OPACIDADE = 0.35
 

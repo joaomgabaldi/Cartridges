@@ -56,7 +56,7 @@ Item {
         }
         Linha {
             objectName: "linhaDeDestaques"
-            text: coluna.unir([detalhes.tempoDeJogo, detalhes.jogadoPorUltimo, detalhes.rotuloDoStatus])
+            text: coluna.unir([detalhes.tempoDeJogo, detalhes.jogadoPorUltimo, detalhes.status])
         }
         Column {
             objectName: "resumoDeConquistas"
@@ -84,6 +84,10 @@ Item {
         Linha {
             objectName: "linhaDeAvaliacoes"
             text: coluna.unir([detalhes.nota, detalhes.metacritic, detalhes.avaliacoes, detalhes.controle])
+        }
+        Linha {
+            objectName: "controleRecomendado"
+            text: detalhes.controleRecomendado ? "★ Os desenvolvedores recomendam o uso de um controle." : ""
         }
         Linha {
             objectName: "linhaDoHltb"
