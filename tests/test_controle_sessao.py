@@ -160,6 +160,13 @@ def test_retomar_desarma(m):
     assert not m.controle.lendo
 
 
+def test_encerrar_para_o_prazo_de_armar(m):
+    m.controle.suspender(com_foco=True)
+    assert m.controle._armar.isActive()  # noqa: SLF001
+    m.controle.encerrar()
+    assert not m.controle._armar.isActive()  # noqa: SLF001
+
+
 def test_sessao_no_big_picture_le_so_com_foco(m):
     m.controle.suspender(com_foco=True)
     assert not m.controle.lendo, "ativa ao suspender, ainda não armada"

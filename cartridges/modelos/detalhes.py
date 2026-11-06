@@ -179,7 +179,7 @@ _PADRAO: dict[str, Any] = {
         (
             "jogoId", "nome", "capa", "capaAnimada", "logo", "desenvolvedora", "publicadora",
             "dataDeLancamento", "nota", "metacritic", "avaliacoes", "genero", "controle", "descricao",
-            "adicionado", "jogadoPorUltimo", "tempoDeJogo", "tamanho", "rotuloDoStatus",
+            "adicionado", "jogadoPorUltimo", "tempoDeJogo", "tamanho", "rotuloDoStatus", "status",
             "dicaDaAnotacao", "anotacao", "fundo",
         ),
         "",
@@ -258,6 +258,7 @@ class DetalhesDoJogo(QObject):
     tempoDeJogo = _p(str, "tempoDeJogo")  # noqa: N815
     tamanho = _p(str, "tamanho")
     rotuloDoStatus = _p(str, "rotuloDoStatus")  # noqa: N815
+    status = _p(str, "status")  # vazio sem status: o dado da tela somente leitura, não o rótulo do botão
     zerado = _p(bool, "zerado")
     carregando = _p(bool, "carregando")
     temAtualizacao = _p(bool, "temAtualizacao")  # noqa: N815
@@ -381,7 +382,7 @@ class DetalhesDoJogo(QObject):
             "controleRecomendado": bool(jogo.gamepad_recommended), "descricao": jogo.description or "",
             "hltb": hltb(jogo), "adicionado": adicionado(jogo), "jogadoPorUltimo": jogado_por_ultimo(jogo),
             "tempoDeJogo": tempo_de_jogo(jogo), "tamanho": tamanho(jogo),
-            "rotuloDoStatus": rotulo_do_status(jogo), "zerado": jogo.zerado, "carregando": jogo.loading > 0,
+            "rotuloDoStatus": rotulo_do_status(jogo), "status": status_label(jogo.status), "zerado": jogo.zerado, "carregando": jogo.loading > 0,
             "temAtualizacao": bool(jogo.has_update and not jogo.zerado),
             "mostraAnotacao": mostra_anotacao(jogo), "dicaDaAnotacao": dica_da_anotacao(jogo),
             "anotacao": jogo.notes or "", "anotacaoEditavel": not jogo.zerado,

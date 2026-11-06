@@ -12,6 +12,7 @@ import pytest
 from PySide6.QtCore import QEasingCurve, QEventLoop, QObject, QSize, QTimer, Signal
 from PySide6.QtGui import QImage, QWindow
 from PySide6.QtQuick import QSGRendererInterface
+from PySide6.QtTest import QTest
 
 from cartridges.jogo import Jogo
 from cartridges.modelos import big_picture as modulo
@@ -19,6 +20,7 @@ from cartridges.modelos import regras_do_big_picture as regras
 from cartridges.modelos.big_picture import BigPicture, ProvedorDoFundo
 from cartridges.modelos.biblioteca import ModeloDaBiblioteca
 from cartridges.utils import restauracao
+from cartridges.xinput import REPEAT_DELAY_US
 
 
 def _esperar():
@@ -49,6 +51,11 @@ def _montar(*jogos):
     return modelo, bp
 
 
+def _nome(bp):
+    """O nome do jogo central, lido da lista (o QML lê do `detalhes`)."""
+    return bp.jogos[bp.indice]["nome"] if bp.jogos else ""
+
+
 def _ids(bp):
     return [j["jogoId"] for j in bp.jogos]
 
@@ -62,7 +69,7 @@ def tres(app_qt, tiques):
 def test_lista_do_mais_recente_ao_mais_antigo(tres):
     _, bp = tres
     assert _ids(bp) == ["a", "b", "c"]
-    assert (bp.indice, bp.nome, bp.vazia) == (0, "A", False)
+    assert (bp.indice, _nome(bp), bp.vazia) == (0, "A", False)
     assert set(bp.jogos[0]) == {"jogoId", "nome", "desenvolvedora", "capa", "capaAnimada"}
 
 
@@ -103,13 +110,13 @@ def test_central_que_some_cai_no_vizinho(tres):
     modelo.retirar("b")
     _esperar()
     assert _ids(bp) == ["a", "c"]
-    assert (bp.indice, bp.nome) == (1, "C")
+    assert (bp.indice, _nome(bp)) == (1, "C")
     modelo.retirar("c")
     _esperar()
-    assert (bp.indice, bp.nome) == (0, "A")
+    assert (bp.indice, _nome(bp)) == (0, "A")
     modelo.retirar("a")
     _esperar()
-    assert (bp.jogos, bp.indice, bp.nome, bp.vazia) == ([], 0, "", True)
+    assert (bp.jogos, bp.indice, _nome(bp), bp.vazia) == ([], 0, "", True)
 
 
 def test_central_que_continua_la_mantem_o_centro(tres):
@@ -118,29 +125,22 @@ def test_central_que_continua_la_mantem_o_centro(tres):
     modelo.atualizar(_jogo("n", 99))  # entra na frente
     _esperar()
     assert _ids(bp) == ["n", "a", "b", "c"]
-    assert (bp.indice, bp.nome) == (2, "B")
+    assert (bp.indice, _nome(bp)) == (2, "B")
 
 
 def test_atualizar_com_centro_explicito(tres):
     _, bp = tres
     bp.atualizar("c")
-    assert (bp.indice, bp.nome) == (2, "C")
+    assert (bp.indice, _nome(bp)) == (2, "C")
     bp.atualizar("fantasma")  # desconhecido: fica no índice preso
     assert bp.indice == 2
     bp.atualizar()
     assert bp.indice == 2
 
 
-def test_rotulos_seguem_o_central(app_qt, tiques):
-    _, bp = _montar(_jogo("a", 30, developer="Estúdio A"), _jogo("b", 20))
-    assert (bp.nome, bp.desenvolvedora) == ("A", "Estúdio A")
-    bp.mover(1)
-    assert (bp.nome, bp.desenvolvedora) == ("B", "")
-
-
 def test_vazia_sem_jogos(app_qt, tiques):
     _, bp = _montar()
-    assert (bp.vazia, bp.nome, bp.desenvolvedora, bp.jogos, bp.indice) == (True, "", "", [], 0)
+    assert (bp.vazia, _nome(bp), bp.jogos, bp.indice) == (True, "", [], 0)
     assert not (bp.mover(1) or bp.irPara(3) or bp.inicio() or bp.fim())
 
 
@@ -300,7 +300,7 @@ def test_entrar_poe_o_ultimo_jogado_no_centro(aberta):
     _, bp, _, _ = aberta
     bp.atualizar("c")  # invisível: não vale
     bp.entrar()
-    assert (bp.indice, bp.nome) == (0, "A")
+    assert (bp.indice, _nome(bp)) == (0, "A")
     bp.filaTerminou()
     bp.irPara(2)
     bp.sair()
@@ -385,7 +385,7 @@ def test_atualizar_durante_a_fila_fica_pendente(aberta):
     assert bp.ocupada
     bp.filaTerminou()
     assert _ids(bp) == ["n", "a", "b", "c"]
-    assert (bp.indice, bp.nome) == (1, "A")  # manteve o central
+    assert (bp.indice, _nome(bp)) == (1, "A")  # manteve o central
 
 
 def test_atualizar_pendente_guarda_o_ultimo_centro(aberta):
@@ -395,7 +395,7 @@ def test_atualizar_pendente_guarda_o_ultimo_centro(aberta):
     bp.atualizar("c")
     assert bp.indice == 0
     bp.filaTerminou()
-    assert (bp.indice, bp.nome) == (2, "C")
+    assert (bp.indice, _nome(bp)) == (2, "C")
 
 
 def test_atualizar_pendente_some_se_saiu(aberta):
@@ -837,7 +837,7 @@ def test_mudanca_da_biblioteca_no_escuro_fica_pendente(fade):
     concluir_pausa(bp)
     concluir_cortina(bp)
     bp.filaTerminou()
-    assert _ids(bp) == ["n", "a", "b", "c"] and bp.nome == "A"
+    assert _ids(bp) == ["n", "a", "b", "c"] and _nome(bp) == "A"
 
 
 # --- abrir o jogo ---------------------------------------------------------------------------------
@@ -868,7 +868,8 @@ class _Launch:
 def abrivel(app_qt, tiques, monkeypatch):
     """a, b e c com o Big Picture aberto e o `launch` falso; `shared.store` os acha pelo id."""
     jogos = {j.game_id: j for j in (_jogo("a", 30), _jogo("b", 20), _jogo("c", 10))}
-    modelo, bp, janela, pedidos = _com_janela(*jogos.values(), detalhes=_DetalhesFalsos())
+    detalhes = _DetalhesFalsos()
+    modelo, bp, janela, pedidos = _com_janela(*jogos.values(), detalhes=detalhes)
     monkeypatch.setattr(modulo.shared, "store", SimpleNamespace(get=jogos.get))
     for jogo in jogos.values():
         jogo.launch = _Launch(modelo, jogo)
@@ -880,18 +881,26 @@ def abrivel(app_qt, tiques, monkeypatch):
     bp.ativar()  # o jogo central, nos detalhes: de onde o Iniciar parte
     bp.etapaTerminou()
     aberturas.clear()
-    return SimpleNamespace(jogos=jogos, modelo=modelo, bp=bp, janela=janela, aberturas=aberturas, focos=focos)
+    return SimpleNamespace(
+        jogos=jogos, modelo=modelo, bp=bp, janela=janela, aberturas=aberturas, focos=focos, detalhes=detalhes,
+    )
+
+
+def _centrar(a, jogo_id):
+    """Leva o central (e os detalhes, que o seguem) a `jogo_id`: nos detalhes os dois nunca divergem."""
+    a.detalhes.jogoId = jogo_id
+    a.bp.atualizar(jogo_id)
 
 
 def _ida(a, jogo_id="b"):
-    a.bp.atualizar(jogo_id)
+    _centrar(a, jogo_id)
     a.bp.abrirJogo()
     a.bp.etapaTerminou()
 
 
 def test_abrir_jogo_pede_a_abertura_e_so_lanca_no_fim_dela(abrivel):
     a = abrivel
-    a.bp.atualizar("b")
+    _centrar(a, "b")
     a.bp.abrirJogo()
     assert a.bp.ocupada and a.aberturas == [("detalhes", "sessao")]
     assert a.jogos["b"].launch.chamadas == 0 and a.janela.chamadas == ["tela cheia"]
@@ -902,7 +911,7 @@ def test_abrir_jogo_pede_a_abertura_e_so_lanca_no_fim_dela(abrivel):
 
 def test_abertura_nao_sai_da_tela_cheia(abrivel):
     a = abrivel
-    a.bp.atualizar("b")
+    _centrar(a, "b")
     a.bp.abrirJogo()
     a.bp.etapaTerminou()
     assert a.janela.chamadas.count("normal") == 0
@@ -911,7 +920,7 @@ def test_abertura_nao_sai_da_tela_cheia(abrivel):
 
 def test_dois_a_seguidos_abrem_o_jogo_uma_vez(abrivel):
     a = abrivel
-    a.bp.atualizar("b")
+    _centrar(a, "b")
     a.bp.abrirJogo()
     a.bp.abrirJogo()
     a.bp.etapaTerminou()
@@ -987,7 +996,7 @@ def test_conferencia_com_dialogo_devolve_a_capa(abrivel):
     a.bp.etapaTerminou()
     assert not a.bp.ocupada and a.aberturas == [("detalhes", "sessao"), ("sessao", "detalhes")]
     launch.devolve, launch.efeito = True, None
-    jogo._inis_conferidos = True  # "Jogar mesmo assim"
+    jogo._inis_conferidos = True  # "Iniciar mesmo assim"
     launch.ao_confirmar()
     jogo._inis_conferidos = False
     assert a.aberturas[-1] == ("detalhes", "sessao")
@@ -1014,7 +1023,7 @@ def test_launch_que_levanta_volta_ao_normal_e_propaga(abrivel):
         raise RuntimeError("falhou")
 
     a.jogos["b"].launch.efeito = estoura
-    a.bp.atualizar("b")
+    _centrar(a, "b")
     a.bp.abrirJogo()
     with pytest.raises(RuntimeError):
         a.bp.etapaTerminou()
@@ -1048,14 +1057,6 @@ def test_sem_sessao_sem_minimizar_poe_tela_cheia_na_hora(abrivel, schema):
     assert a.janela.chamadas == ["tela cheia"]
 
 
-
-
-
-
-
-
-
-
 def test_maximizada_so_volta_maximizada_na_saida_do_big_picture(app_qt, tiques, monkeypatch):
     jogos = {"a": _jogo("a", 30)}
     modelo, bp, janela, _ = _com_janela(*jogos.values(), maximizada=True)
@@ -1079,7 +1080,7 @@ def test_voltou_do_jogo_sem_estar_ocupada_nao_faz_nada(abrivel):
 
 
 def test_voltou_do_jogo_com_a_janela_minimizada_restaura_antes_da_tela_cheia(abrivel):
-    # O "Jogar" minimiza a janela e, sem restaurá-la antes, o Windows a devolvia em modo janela com o Big Picture aberto.
+    # O "Iniciar" minimiza a janela e, sem restaurá-la antes, o Windows a devolvia em modo janela com o Big Picture aberto.
     a = abrivel
     a.bp.abrirJogo()
     a.janela.minimizada = True
@@ -1090,13 +1091,13 @@ def test_voltou_do_jogo_com_a_janela_minimizada_restaura_antes_da_tela_cheia(abr
 
 def test_voltou_do_jogo_reabre_com_o_jogo_no_centro(abrivel):
     a = abrivel
-    a.bp.atualizar("b")
+    _centrar(a, "b")
     a.bp.abrirJogo()  # ocupada, como com uma sessão em curso
     a.bp.voltouDoJogo()
     a.bp.etapaTerminou()
     assert not a.bp.ocupada and a.aberturas[-1] == ("sessao", "carrossel")
     assert a.janela.chamadas[-1] == "tela cheia" and a.focos == [1]
-    assert (a.bp.indice, a.bp.nome) == (1, "B")
+    assert (a.bp.indice, _nome(a.bp)) == (1, "B")
 
 
 def test_abrir_volta_com_o_jogo_aberto_no_centro(abrivel, schema):
@@ -1105,19 +1106,21 @@ def test_abrir_volta_com_o_jogo_aberto_no_centro(abrivel, schema):
     schema.set_boolean("minimize-after-launch", False)
     _ida(a, "c")
     a.bp.etapaTerminou()
-    assert _ids(a.bp)[0] == "c" and (a.bp.indice, a.bp.nome) == (0, "C")
+    assert _ids(a.bp)[0] == "c" and (a.bp.indice, _nome(a.bp)) == (0, "C")
 
 
-def test_lista_refeita_durante_a_abertura_fica_para_a_volta(abrivel):
+def test_lista_refeita_durante_a_abertura_refaz_no_inicio_da_volta(abrivel):
+    # As capas estão fora da tela na sessão: refazer ao começar a volta evita o salto depois da animação.
     a = abrivel
-    a.bp.atualizar("b")
+    _centrar(a, "b")
     a.bp.abrirJogo()
     a.modelo.atualizar(_jogo("n", 99))
     _esperar()
     assert _ids(a.bp) == ["a", "b", "c"]  # ocupada: pendente
     a.bp.voltouDoJogo()
+    assert _ids(a.bp) == ["n", "a", "b", "c"] and _nome(a.bp) == "B"  # antes do `etapaTerminou`
     a.bp.etapaTerminou()
-    assert _ids(a.bp) == ["n", "a", "b", "c"] and a.bp.nome == "B"
+    assert _ids(a.bp) == ["n", "a", "b", "c"] and _nome(a.bp) == "B"
 
 
 # --- a sessão de jogo ---------------------------------------------------
@@ -1157,7 +1160,7 @@ def test_fim_da_sessao_reabre_com_o_jogo_no_centro(com_sessao):
     assert not a.sessao.emAndamento and not a.bp.ocupada
     assert a.aberturas == [("detalhes", "sessao"), ("sessao", "carrossel")] and a.focos == [1]
     assert a.janela.chamadas == ["tela cheia", "tela cheia"]
-    assert (a.bp.indice, a.bp.nome) == (0, "C")  # o jogado agora vem à frente e fica no centro
+    assert (a.bp.indice, _nome(a.bp)) == (0, "C")  # o jogado agora vem à frente e fica no centro
 
 
 def test_fim_da_sessao_com_queda_para_a_manual_reabre_o_big_picture(com_sessao):
@@ -1219,14 +1222,17 @@ class _DetalhesFalsos(QObject):
 
     def __init__(self):
         super().__init__()
-        self.mostrados, self.esquecidos, self.aceita = [], 0, True
+        self.mostrados, self.esquecidos, self.aceita, self.jogoId = [], 0, True, ""
 
     def mostrar(self, jogo_id):
         self.mostrados.append(jogo_id)
+        if self.aceita:
+            self.jogoId = jogo_id
         return self.aceita
 
     def esquecer(self):
         self.esquecidos += 1
+        self.jogoId = ""
 
 
 @pytest.fixture
@@ -1361,8 +1367,21 @@ def test_seguir_central_so_depois_de_parar(etapas):
     for _ in range(2):
         e.bp.mover(1)
     assert e.detalhes.mostrados == ["a"]
-    for _ in range(15):  # 300 ms > ESPERA_DO_CENTRAL_MS
-        _esperar()
+    QTest.qWait(modulo.ESPERA_DO_CENTRAL_MS + 100)
+    assert e.detalhes.mostrados == ["a", "c"]
+
+
+def test_repeticao_do_direcional_nao_troca_o_fundo_ate_parar(etapas):
+    # A repetição real do controle: o 2º passo vem 400 ms depois do 1º, os seguintes a cada ~120 ms.
+    e = etapas
+    assert modulo.ESPERA_DO_CENTRAL_MS > REPEAT_DELAY_US / 1000
+    e.bp.mover(1)
+    QTest.qWait(REPEAT_DELAY_US // 1000)
+    for _ in range(3):
+        e.bp.mover(1)
+        QTest.qWait(120)
+    assert e.detalhes.mostrados == ["a"]
+    QTest.qWait(modulo.ESPERA_DO_CENTRAL_MS + 100)
     assert e.detalhes.mostrados == ["a", "c"]
 
 
@@ -1382,6 +1401,17 @@ def test_jogo_excluido_na_sessao_e_ignorado(etapas):
     antes = list(e.pedidas)
     e.detalhes.sair.emit()
     assert e.pedidas == antes
+
+
+def test_sair_para_a_espera_do_central(etapas):
+    e = etapas
+    e.bp.mover(1)
+    assert e.bp._espera_do_central.isActive()  # noqa: SLF001
+    e.bp.sair()
+    e.bp.filaTerminou()
+    assert not e.bp._espera_do_central.isActive()  # noqa: SLF001
+    QTest.qWait(modulo.ESPERA_DO_CENTRAL_MS + 100)
+    assert e.detalhes.mostrados == ["a"]
 
 
 def test_sair_esquece_os_detalhes(etapas):
@@ -1441,3 +1471,54 @@ def test_confirmacao_pendente_cai_se_a_etapa_muda(etapas):
     e.bp._pedir_etapa("carrossel")  # noqa: SLF001  # a etapa vai a outro lugar
     e.bp.etapaTerminou()
     assert ("detalhes", "sessao") not in e.pedidas[2:] and e.jogos["a"].launch.chamadas == 1
+
+
+def test_carrossel_que_muda_de_central_segue_com_os_detalhes(etapas):
+    # O central sumiu da lista refeita: o logo e o fundo do jogo antigo não podem ficar.
+    e = etapas
+    e.bp.irPara(1)
+    e.bp._mostrar_central()  # noqa: SLF001
+    assert e.detalhes.jogoId == "b"
+    e.modelo.retirar("b")
+    _esperar()
+    assert e.bp.jogos[e.bp.indice]["jogoId"] == "c" and e.bp._espera_do_central.isActive()  # noqa: SLF001
+    e.bp._espera_do_central.timeout.emit()  # noqa: SLF001
+    assert e.detalhes.mostrados[-1] == "c"
+
+
+def test_detalhes_cujo_jogo_saiu_da_lista_voltam_ao_carrossel(etapas):
+    # Sem `removed`, o jogo sai da lista e o vizinho iria ao centro: o Iniciar lançaria outro jogo.
+    e = etapas
+    _nos_detalhes(e)
+    assert e.detalhes.jogoId == "a"
+    e.modelo.retirar("a")
+    _esperar()
+    assert e.pedidas[-1] == ("detalhes", "carrossel")
+
+
+def test_jogo_removido_na_conferencia_dos_inis_devolve_a_capa(etapas):
+    e = etapas
+    jogo, launch = e.jogos["a"], e.jogos["a"].launch
+    launch.devolve, launch.efeito = False, lambda: jogo.__dict__.update(_conferindo=True, _launch_iniciou=True)
+    _nos_detalhes(e)
+    e.bp.ativar()
+    e.bp.etapaTerminou()
+    assert e.bp._esperando_inis and e.pedidas[-1] == ("detalhes", "sessao")  # noqa: SLF001
+    e.detalhes.sair.emit()  # o jogo foi excluído durante a conferência
+    assert e.pedidas[-1] == ("sessao", "detalhes") and not e.bp._esperando_inis  # noqa: SLF001
+
+
+def test_confirmacao_durante_a_volta_guarda_a_marca_dos_inis(etapas):
+    e = etapas
+    jogo, launch = e.jogos["a"], e.jogos["a"].launch
+    launch.devolve = False
+    _nos_detalhes(e)
+    e.bp.ativar()
+    e.bp.etapaTerminou()
+    launch.devolve = True
+    jogo._inis_conferidos = True  # noqa: SLF001  # a conferência terminou e relança
+    e.bp._continuar_abertura("a")  # noqa: SLF001  # com a volta ainda rodando
+    jogo._inis_conferidos = False  # noqa: SLF001  # a marca do jogo some antes do `launch`
+    e.bp.etapaTerminou()  # fim da volta: recomeça a abertura
+    e.bp.etapaTerminou()  # fim da abertura: lança
+    assert launch.chamadas == 2 and launch.inis_conferidos is True

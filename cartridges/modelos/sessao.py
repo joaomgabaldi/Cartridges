@@ -230,7 +230,8 @@ class ModeloDaSessao(QObject):
     def session_toast(self, game: Any, seconds: int) -> None:
         """O aviso do fim da sessão, com atalho para a anotação quando há onde anotar."""
         texto = _("{}: {} de jogo").format(game.name, format_playtime(seconds))
-        if not pode_anotar(game):
+        # Com o Big Picture à vista "Anotar" abriria os detalhes por baixo da tela cheia: sem ação.
+        if not pode_anotar(game) or (self._big_picture is not None and self._big_picture.visivel):
             self._avisos.adicionar(texto)
         else:
             eu, jogo_id = weakref.ref(self), game.game_id

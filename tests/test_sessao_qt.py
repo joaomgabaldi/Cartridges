@@ -4,6 +4,8 @@
 
 """O `ModeloDaSessao`: o que os rastreadores pedem no lugar do `shared.win`."""
 
+from types import SimpleNamespace
+
 import pytest
 from PySide6.QtTest import QTest
 from PySide6.QtCore import Qt
@@ -97,6 +99,14 @@ def test_anotar_pede_os_detalhes_do_jogo(modelo, make_game):
     modelo.fila.clicar()
 
     assert pedidos == ["shortcuts_9"]
+
+
+def test_aviso_do_fim_sem_anotar_com_o_big_picture_visivel(app_qt, make_game):
+    # "Anotar" abriria a página de detalhes por baixo da tela cheia: com o Big Picture à vista não há ação.
+    fila = FilaDeAvisos()
+    bp = SimpleNamespace(visivel=True, voltouDoJogo=lambda: None)
+    ModeloDaSessao(fila, big_picture=bp).session_toast(make_game(status="playing"), 3600)
+    assert fila.botao == ""
 
 
 def test_mesma_sessao_trocando_de_rastreador_nao_reveste(modelo, make_game, relogio):

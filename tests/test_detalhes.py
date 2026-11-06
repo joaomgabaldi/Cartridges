@@ -118,6 +118,15 @@ def test_hltb_capitulos_trocam_o_cartao(app_qt):
     ]
 
 
+def test_status_so_existe_com_status_definido(app_qt, store):
+    # O Big Picture mostra o status como dado: sem status a linha some, nunca "Definir status".
+    detalhes = _modelo(store, _jogo(), _jogo("b", status="playing"))
+    detalhes.mostrar("a")
+    assert detalhes.status == ""
+    detalhes.mostrar("b")
+    assert detalhes.status == "Jogando"
+
+
 def test_anotacao_em_jogando_ou_com_texto(app_qt):
     assert modulo.mostra_anotacao(_jogo(status="playing")) is True
     assert modulo.mostra_anotacao(_jogo(notes="fase 3")) is True

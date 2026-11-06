@@ -142,7 +142,8 @@ class _App:
         self.preferencias = shared.preferencias = Preferencias(self.ponte.fila, lambda: True)
         # Sem `cortina`, a troca é direta (o offscreen tem HWND falso).
         self.big_picture = BigPicture(
-            self.modelo, fabrica_da_cortina=cortina or (lambda _hwnd: None), animacoes_do_sistema=animacoes
+            self.modelo, detalhes=self.detalhes, fabrica_da_cortina=cortina or (lambda _hwnd: None),
+            animacoes_do_sistema=animacoes,
         )
         self.painel_das_tarefas = PainelDasTarefas()
         self.restauracao = ContinuacaoDaRestauracao(self.aplicativo)
@@ -152,7 +153,7 @@ class _App:
         self.zerados_manuais = SeletorDeZerados()
         self.caixa_da_anotacao = CaixaDaAnotacao()
         self.leitor = _LeitorFalso()
-        self.sessao = ModeloDaSessao(self.ponte.fila)
+        self.sessao = ModeloDaSessao(self.ponte.fila, big_picture=self.big_picture)  # a ligação real do app.py
         self.conquistas = ConquistasDoJogo(self.detalhes, self.sessao)
         leitor = self.leitor  # o lambda não captura `self`: senão `_App` <-> controle é um ciclo
         shared.schema.set_boolean("gamepad", True)

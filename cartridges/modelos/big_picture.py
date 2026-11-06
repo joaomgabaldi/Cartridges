@@ -36,8 +36,9 @@ PAUSA_NO_ESCURO_MS = 120
 CLAREAR_MS = 350
 # No escuro, a troca espera as capas da fila decodificadas, mas não mais que isto.
 ESPERA_MAXIMA_DAS_CAPAS_MS = 700
-# O painel de detalhes só segue o jogo central depois de o carrossel parar este tempo.
-ESPERA_DO_CENTRAL_MS = 250
+# O painel de detalhes só segue o jogo central depois de o carrossel parar este tempo. Fica acima do atraso da primeira
+# repetição do direcional (`REPEAT_DELAY_US`, 400 ms): senão segurar o direcional trocaria o fundo uma vez, contra o design.
+ESPERA_DO_CENTRAL_MS = 450
 
 
 class ProvedorDoFundo(QQuickImageProvider):
@@ -129,7 +130,8 @@ class BigPicture(QObject):
         self._jogos: list[dict[str, str]] = []
         self._agendado = False
         self._ocupada = False
-        self._reabertura: str | None = None  # confirmação que chegou durante a volta da sessão aos detalhes
+        # Confirmação que chegou durante a volta da sessão aos detalhes: (jogo, .ini já conferidos).
+        self._reabertura: tuple[str, bool] | None = None
         self._visivel = False
         self._montada = False  # a lista existe: da entrada (antes de escurecer) ao fim da saída
         self._saindo = False
@@ -159,14 +161,6 @@ class BigPicture(QObject):
 
     def _central(self) -> dict[str, str] | None:
         return self._jogos[self._carrossel.indice] if self._jogos else None
-
-    @Property(str, notify=alterado)
-    def nome(self) -> str:
-        return (self._central() or {}).get("nome", "")
-
-    @Property(str, notify=alterado)
-    def desenvolvedora(self) -> str:
-        return (self._central() or {}).get("desenvolvedora", "")
 
     @Property(str, constant=True)
     def placeholder(self) -> str:
@@ -234,6 +228,19 @@ class BigPicture(QObject):
         self._jogos = [_dados(linha) for linha in linhas]
         self.jogosMudaram.emit()
         self.alterado.emit()
+        self._seguir_lista_refeita()
+
+    def _seguir_lista_refeita(self) -> None:
+        """Se o central da lista refeita não é o jogo dos detalhes, o logo, o fundo e o Iniciar não podem ficar com o antigo."""
+        if self._detalhes is None or self._etapa_bp == "sessao":
+            return
+        central = self._central()
+        if central is not None and central["jogoId"] == self._detalhes.jogoId:
+            return
+        if self._etapa_bp == "detalhes":
+            self._pedir_etapa("carrossel")  # o Iniciar lançaria o vizinho, não o jogo mostrado
+        elif central is not None:
+            self._espera_do_central.start()
 
     @Slot()
     @Slot(str)
@@ -434,6 +441,10 @@ class BigPicture(QObject):
         """O jogo dos detalhes foi excluído."""
         if self._etapa_bp == "detalhes":
             self._pedir_etapa("carrossel")
+        elif self._esperando_inis:
+            # O jogo sumiu durante a conferência dos .ini: sem isto a capa ficaria aberta para sempre.
+            self._esperando_inis = False
+            self._desistir_da_abertura()
 
     @Slot()
     def ativar(self) -> None:
@@ -465,7 +476,7 @@ class BigPicture(QObject):
             if transicao == ("sessao", "detalhes") and (pendente := self._reabertura) is not None:
                 self._reabertura = None
                 if self._visivel and self._etapa_bp == "detalhes":
-                    self._continuar_abertura(pendente)
+                    self._continuar_abertura(*pendente)
 
     @Slot()
     def abrirJogo(self) -> None:  # noqa: N802
@@ -482,7 +493,7 @@ class BigPicture(QObject):
 
     def _voltar_a_tela_cheia(self) -> None:
         if self._janela is not None:
-            # Minimizada pelo "Iniciar", a janela precisa ser restaurada antes: pedir a tela cheia a uma janela minimizada a devolvia em modo janela.
+            # Se a janela ficou minimizada durante o jogo, ela precisa ser restaurada antes: pedir a tela cheia a uma janela minimizada a devolvia em modo janela.
             if self._janela.visibility() == QWindow.Visibility.Minimized:
                 self._janela.showNormal()
             self._janela.showFullScreen()
@@ -512,13 +523,14 @@ class BigPicture(QObject):
         elif shared.sessao is None or not shared.sessao.jogoId:
             self._voltar_sem_sessao()
 
-    def _continuar_abertura(self, jogo_id: str) -> None:
-        """O relançamento pedido pelo jogo (comando confirmado ou .ini conferidos)."""
+    def _continuar_abertura(self, jogo_id: str, conferidos: bool | None = None) -> None:  # noqa: FBT001
+        """O relançamento pedido pelo jogo (comando confirmado ou .ini conferidos); `conferidos` vem de um pedido adiado."""
+        if conferidos is None:  # a marca do jogo some no `launch`: lida já, ela vai junto se o pedido esperar
+            jogo = shared.store.get(jogo_id) if shared.store is not None else None
+            conferidos = jogo is not None and jogo.inis_conferidos
         if self._transicao == ("sessao", "detalhes"):
-            self._reabertura = jogo_id  # a capa ainda volta: o pedido não se perde, recomeça no fim da volta
+            self._reabertura = (jogo_id, conferidos)  # a capa ainda volta: o pedido não se perde, recomeça no fim da volta
             return
-        jogo = shared.store.get(jogo_id) if shared.store is not None else None
-        conferidos = jogo is not None and jogo.inis_conferidos
         if self._esperando_inis and jogo_id == self._jogo_aberto:
             self._esperando_inis, self._indo, self._inis_conferidos = False, True, conferidos
             self._lancar()
@@ -542,6 +554,10 @@ class BigPicture(QObject):
 
     def _reabrir(self, para: str = "detalhes") -> None:
         self._pendente, self._centro_pendente = True, self._jogo_aberto
+        if para == "carrossel":
+            # As capas estão fora da tela durante a sessão: refazer agora evita o salto do carrossel no fim da volta.
+            self._pendente = False
+            self._refazer(self._jogo_aberto)
         self._pedir_etapa(para)
         self.focoPedido.emit()  # o bloqueio do jogo levou o foco; sem ele o teclado não chega aqui
 

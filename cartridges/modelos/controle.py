@@ -165,7 +165,8 @@ class ControleDaGrade(QObject):
     def suspender(self, com_foco: bool = False) -> None:
         """Entrega o controle ao jogo da sessão: para de ler na hora e solta a DLL depois do prazo da vibração de abertura
         (soltar antes deixaria os motores ligados: o desligamento agendado dela não acharia a DLL).
-        Com `com_foco` (sessão no Big Picture) o Kyron lê enquanto a janela está ativa; sem foco, o jogo fica com o controle.
+        Com `com_foco` (sessão no Big Picture) o Kyron lê enquanto a janela está ativa e a leitura já está armada (o foco foi
+        perdido uma vez ou passaram `ARMAR_NA_SESSAO_MS`); sem foco, o jogo fica com o controle.
         """
         if self._suspenso:
             return
@@ -328,6 +329,7 @@ class ControleDaGrade(QObject):
         """O app fecha: para a leitura e os motores; uma vibração em curso não sobrevive."""
         self._timer.stop()
         self._soltura.stop()
+        self._armar.stop()
         self._geracao_de_vibracao += 1  # o desligamento agendado de uma vibração antiga não vale mais
         if self._leitor is not None:
             self._leitor.vibrar()
