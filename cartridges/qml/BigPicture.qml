@@ -133,22 +133,48 @@ Item {
     function mudarDeEtapa(de, para) {
         fimDaEtapa.stop()
         animacaoDosDetalhes.stop()
-        const alvo = para === "carrossel" ? 0 : 1
-        if (alvo === progressoDetalhe) {
+        animacaoDaSessao.stop()
+        terminaPelaSessao = false
+        const alvoDetalhe = para === "carrossel" ? 0 : 1
+        const alvoSessao = para === "sessao" ? 1 : 0
+        if (alvoDetalhe === progressoDetalhe && alvoSessao === progressoSessao) {
             if (bigPicture.animacoes) fimDaEtapa.start()
             else bigPicture.etapaTerminou()
             return
         }
-        voltandoDosDetalhes = alvo === 0
+        voltandoDosDetalhes = alvoDetalhe === 0 && progressoDetalhe !== 0
         if (!bigPicture.animacoes) {
-            progressoDetalhe = alvo
+            progressoDetalhe = alvoDetalhe
+            progressoSessao = alvoSessao
             voltandoDosDetalhes = false
             bigPicture.etapaTerminou()
             return
         }
-        animacaoDosDetalhes.from = alvo === 0 ? 1 : 0
-        animacaoDosDetalhes.to = alvo
-        animacaoDosDetalhes.start()
+        if (alvoSessao !== progressoSessao) {
+            animacaoDaSessao.to = alvoSessao
+            animacaoDaSessao.start()
+        }
+        if (alvoDetalhe !== progressoDetalhe) {
+            animacaoDosDetalhes.from = alvoDetalhe === 0 ? 1 : 0
+            animacaoDosDetalhes.to = alvoDetalhe
+            animacaoDosDetalhes.start()
+        } else {
+            terminaPelaSessao = true  // só a central anda: a sessão é quem termina a etapa
+        }
+    }
+    // A central saindo pela esquerda (ida à sessão) e voltando: 0 → 1 → 0, à parte do tempo dos detalhes.
+    property real progressoSessao: 0
+    property bool terminaPelaSessao: false
+    NumberAnimation {
+        id: animacaoDaSessao
+        target: tela
+        property: "progressoSessao"
+        duration: tela.duracaoDaVizinha
+        easing.type: Easing.OutCubic
+        onFinished: if (tela.terminaPelaSessao) {
+            tela.terminaPelaSessao = false
+            bigPicture.etapaTerminou()
+        }
     }
     // O tempo da animação dos detalhes, de 0 a 1 (na volta, de 1 a 0 contado ao contrário no `arranjo`).
     property real progressoDetalhe: 0
@@ -239,7 +265,8 @@ Item {
                       -anguloLateral + (angulo + anguloLateral) * virada,
                       -profundidadeLateral + (prof + profundidadeLateral) * virada, a, 1]
         }
-        return progressoDetalhe > 0 ? rumoAosDetalhes(i, quadro) : quadro
+        const nosDetalhes = progressoDetalhe > 0 ? rumoAosDetalhes(i, quadro) : quadro
+        return progressoSessao > 0 && i === indice ? centralRumoAEsquerda(nosDetalhes) : nosDetalhes
     }
 
     // Da posição do carrossel à dos detalhes (e de volta): as vizinhas saem para o lado, a central vai à esquerda e
@@ -262,6 +289,13 @@ Item {
         const lado = i < indice ? -1 : 1
         const alvoX = lado * Math.max(Math.abs(x), width * 0.75 + larguraCapa)
         return [x + (alvoX - x) * v, angulo + (-lado * 75 - angulo) * v, prof, a, 1]
+    }
+
+    // A central sai toda pela esquerda, girando até 25°; a margem cobre o giro e a perspectiva.
+    function centralRumoAEsquerda(quadro) {
+        const [x, angulo, prof, a, tamanho] = quadro
+        const alvoX = -(width / 2 + larguraCapa * tamanho * 0.75 + 0.05 * width)
+        return [x + (alvoX - x) * progressoSessao, angulo + 25 * progressoSessao, prof, a, tamanho]
     }
 
     function translacao(x, y, z) {
@@ -442,12 +476,18 @@ Item {
         animar: bigPicture.animacoes
     }
 
+    SessaoDoBigPicture {
+        anchors.fill: parent
+        mostrar: bigPicture.etapa === "sessao"
+        animar: bigPicture.animacoes
+    }
+
     // A ação que tem botão com glifo na tela não se repete em outro lugar.
     Row {
         id: dicasDoBigPicture
         objectName: "dicasDoBigPicture"
         readonly property bool soVoltar: bigPicture.etapa === "detalhes"
-        readonly property var textos: soVoltar ? ["Voltar"] : ["Selecionar", "Voltar"]
+        readonly property var textos: bigPicture.etapa === "sessao" ? [] : soVoltar ? ["Voltar"] : ["Selecionar", "Voltar"]
         readonly property var letras: soVoltar ? ["B"] : ["A", "B"]
         visible: (bigPicture.etapa === "carrossel" || soVoltar) && !bigPicture.vazia
         opacity: tela.opacidadeDoRodape

@@ -483,7 +483,7 @@ Principal {
         visible: bigPicture.visivel
         animarPasso: bigPicture.animacoes
         sessaoEmAndamento: sessao.emAndamento
-        enabled: !camadaDeAvisos.dialogoAberto && !sessao.emAndamento
+        enabled: !camadaDeAvisos.dialogoAberto && (!sessao.emAndamento || (bigPicture.visivel && bigPicture.etapa === "sessao"))
         onVisibleChanged: if (visible) forceActiveFocus()
         onEnabledChanged: if (enabled && visible) forceActiveFocus()
     }
@@ -509,14 +509,15 @@ Principal {
     CamadaDaSessao {
         id: camadaDaSessao
         anchors.fill: parent
-        visible: sessao.emAndamento
+        // A etapa da sessão do Big Picture tem a própria tela; em qualquer outra a camada normal cobre.
+        visible: sessao.emAndamento && !janela.sessaoNoBigPicture
     }
 
     onClosing: (fechar) => fechar.accepted = painelDasTarefas.principalFechando()
 
     Loader {
         objectName: "carregadorDaJanelaManual"
-        active: sessao.janelaManual
+        active: sessao.janelaManual && !janela.sessaoNoBigPicture
         sourceComponent: Component { JanelaDaSessao { semAgente: janela.semAgente } }
     }
 
@@ -729,6 +730,7 @@ Principal {
         return false
     }
 
+    readonly property bool sessaoNoBigPicture: bigPicture.visivel && bigPicture.etapa === "sessao"
     readonly property bool bigPictureNaFrente: bigPicture.visivel || bigPicture.ocupada
 
     Binding { target: controle; property: "modoBigPicture"; value: bigPicture.visivel && !janela.popupAberto }

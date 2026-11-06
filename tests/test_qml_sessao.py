@@ -11,6 +11,7 @@ from PySide6.QtGui import QFont, QFontMetricsF
 from PySide6.QtQml import QQmlEngine, QQmlExpression
 from PySide6.QtTest import QTest
 
+from cartridges import shared
 from cartridges.jogo import Jogo
 from cartridges.modelos import sessao as modulo_da_sessao
 from cartridges.process_session import ProcessSession
@@ -454,4 +455,23 @@ def test_anotacao_da_camada_grava_em_jogo_zerado(app_qt):
     _achar(balao.property("contentItem"), "campoDaAnotacao").setProperty("text", "no último chefe")
     balao.close()
     assert _esperar(lambda: app.jogos[0].notes == "no último chefe")
+    app.fechar()
+
+
+def test_camada_e_janela_da_sessao_escondidas_no_big_picture(app_qt, monkeypatch):
+    app = _aberto_com(monkeypatch)
+    _entrar(app)
+    monkeypatch.setattr(shared, "sessao", app.sessao, raising=False)
+    jogo = app.jogos[0]
+    jogo.launch = lambda **_: (app.sessao.show_session_blocker(jogo), True)[1]
+    app.big_picture.ativar()
+    assert _esperar(lambda: not app.big_picture.ocupada, limite=3)
+    app.big_picture.abrirJogo()
+    assert _esperar(lambda: app.big_picture.etapa == "sessao" and app.sessao.emAndamento, limite=5)
+    assert app.achar("camadaDaSessao").property("visible") is False
+    assert app.achar("bigPicture").property("enabled") is True
+    app.sessao.abrir_janela_manual(object())  # a janela manual não abre por cima do Big Picture
+    assert app.achar("carregadorDaJanelaManual").property("active") is False
+    app.sessao._manual = None  # noqa: SLF001
+    app.sessao.hide_session_blocker()
     app.fechar()

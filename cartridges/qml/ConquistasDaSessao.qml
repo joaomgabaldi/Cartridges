@@ -8,6 +8,8 @@ Rectangle {
     objectName: "conquistasDaSessao"
 
     property real larguraMaxima: 600
+    // No Big Picture, o ícone que chega depois de a fileira estar montada entra deslizando da direita.
+    property bool animarNovos: false
 
     readonly property var dados: conquistasDoJogo.sessao
     readonly property int quantos: (dados.icones || []).length
@@ -75,7 +77,10 @@ Rectangle {
             model: cartao.quantos
 
             readonly property string jogo: sessao.jogoId
-            onJogoChanged: positionViewAtBeginning()
+            onJogoChanged: { positionViewAtBeginning(); montada = false }
+            // Verdadeiro um instante depois da primeira leva de ícones: os que já estavam não animam.
+            property bool montada: false
+            onCountChanged: if (count > 0 && !montada) Qt.callLater(() => montada = count > 0)
 
             delegate: IconeDaConquista {
                 id: icone
@@ -88,6 +93,20 @@ Rectangle {
                 url: dados.url || ""
                 cinza: dados.cinza === true
                 oculta: dados.oculta === true
+
+                transform: Translate { id: deslize }
+                NumberAnimation {
+                    id: entrada
+                    target: deslize
+                    property: "x"
+                    from: lista.width - icone.x
+                    to: 0
+                    duration: 600
+                    easing.type: Easing.OutBack
+                }
+                Component.onCompleted: if (cartao.animarNovos && lista.montada) entrada.restart()
+                // Um ícone que acabou de ser desbloqueado.
+                onCinzaChanged: if (!cinza && cartao.animarNovos && lista.montada) entrada.restart()
 
                 HoverHandler { id: sobre }
                 Dica {

@@ -21,7 +21,8 @@ from cartridges.modelos import biblioteca as modulo_biblioteca
 from cartridges.modelos import regras_do_big_picture as regras
 from cartridges.modelos.big_picture import BigPicture, ProvedorDoFundo
 from cartridges.modelos.biblioteca import ModeloDaBiblioteca
-from tests.apoio_qml_biblioteca import QML, _achar, _esperar
+from cartridges.process_session import ProcessSession
+from tests.apoio_qml_biblioteca import QML, _achar, _esperar, _LojaFalsa
 from tests.apoio_qml_big_picture import (
     ALTURA,
     LARGURA,
@@ -896,6 +897,7 @@ def test_confirmacao_do_comando_na_frente_e_cancelar_volta(app_qt, monkeypatch):
     jogo.comando_a_conferir = True
     _abrir_jogo(app)
     assert _esperar(lambda: avisos.property("dialogoAberto") is True, limite=3)
+    assert _esperar(lambda: not app.big_picture.ocupada, limite=3)  # a capa ainda volta da esquerda: o Iniciar espera
     _clicar_no_texto(app, "Iniciar")
     assert _esperar(lambda: jogo.launch.chamadas == 1, limite=3)
     assert _esperar(lambda: not app.big_picture.ocupada, limite=3)
@@ -1191,4 +1193,108 @@ def test_um_pedido_novo_durante_a_animacao_termina_a_etapa_uma_vez(app_qt):
     _esperar(lambda: False, limite=1.5)  # além do fim da ida cancelada
     assert len(chamadas) == 1
     assert not tela.bp.ocupada
+    tela.fechar()
+
+
+class _ProcessoFalso:
+    def __init__(self):
+        self.parou = []
+
+    def stop(self, record=False):
+        self.parou.append(record)
+
+
+def _ate_a_sessao(tela, monkeypatch):
+    """Do carrossel à etapa da sessão, com um lançamento de mentira que inicia a sessão do primeiro jogo."""
+    monkeypatch.setattr(shared, "store", _LojaFalsa(tela.jogos))
+    monkeypatch.setattr(shared, "sessao", tela.sessao, raising=False)
+    jogo = tela.jogos[0]
+    jogo.launch = lambda **_: (tela.sessao.show_session_blocker(jogo), True)[1]
+    tela.bp.ativar()
+    _aguardar_etapa(tela)
+    tela.bp.abrirJogo()
+    assert _esperar(lambda: tela.sessao.emAndamento, limite=5)
+    assert _esperar(lambda: tela.achar("sessaoDoBigPicture").property("opacity") == 1, limite=5)
+
+
+def test_sessao_mostra_relogio_e_botao(app_qt, monkeypatch):
+    tela = _Tela()
+    _ate_a_sessao(tela, monkeypatch)
+    assert tela.achar("logoDoBigPicture").property("posicao") == "relogio"
+    assert tela.js("dicasDoBigPicture.textos") == []
+    assert tela.achar("relogioDoBigPicture").property("text") == tela.sessao.relogio
+    assert tela.achar("botaoJaTerminei") is not None
+    assert tela.js("progressoSessao") == 1
+    tela.sessao.hide_session_blocker()
+    tela.fechar()
+
+
+def test_central_sai_pela_esquerda(app_qt, monkeypatch):
+    tela = _Tela()
+    _ate_a_sessao(tela, monkeypatch)
+    assert max(x for x, _ in _cantos(tela, 0)) < 0
+    for i in range(1, 5):
+        xs = [x for x, _ in _cantos(tela, i)]
+        assert min(xs) >= LARGURA, i
+    tela.sessao.hide_session_blocker()
+    tela.fechar()
+
+
+def test_ja_terminei_chama_terminar(app_qt, monkeypatch):
+    tela = _Tela()
+    _ate_a_sessao(tela, monkeypatch)
+    processo = _ProcessoFalso()
+    monkeypatch.setattr(ProcessSession, "active", processo)
+    botao = tela.achar("botaoJaTerminei")
+    centro = botao.mapToScene(QPointF(botao.width() / 2, botao.height() / 2))
+    _clicar(tela, centro.x(), centro.y())
+    assert processo.parou == [True]
+    tela.sessao.hide_session_blocker()
+    tela.fechar()
+
+
+def test_sem_onde_eu_parei(app_qt, monkeypatch):
+    tela = _Tela()
+    _ate_a_sessao(tela, monkeypatch)
+    assert _achar(tela.tela, "botaoAnotacaoDaSessao") is None
+    tela.sessao.hide_session_blocker()
+    tela.fechar()
+
+
+def test_enter_na_sessao_nao_faz_nada(app_qt, monkeypatch):
+    tela = _Tela()
+    _ate_a_sessao(tela, monkeypatch)
+    processo = _ProcessoFalso()
+    monkeypatch.setattr(ProcessSession, "active", processo)
+    QTest.keyClick(tela.janela, Qt.Key.Key_Return)
+    QTest.keyClick(tela.janela, Qt.Key.Key_Escape)
+    assert processo.parou == [] and tela.bp.etapa == "sessao"
+    tela.sessao.hide_session_blocker()
+    tela.fechar()
+
+
+def test_volta_da_sessao_restaura_o_carrossel(app_qt, monkeypatch):
+    tela = _Tela()
+    antes = [_cantos(tela, i) for i in range(5)]
+    _ate_a_sessao(tela, monkeypatch)
+    tela.sessao.hide_session_blocker()
+    tela.bp.voltouDoJogo()
+    assert tela.achar("logoDoBigPicture").property("posicao") == "alto"
+    _aguardar_etapa(tela)
+    assert tela.bp.etapa == "carrossel" and tela.js("progressoSessao") == 0
+    assert tela.achar("sessaoDoBigPicture").property("opacity") == 0
+    for i in range(5):
+        for (ox, oy), (ex, ey) in zip(_cantos(tela, i), antes[i], strict=True):
+            assert ox == pytest.approx(ex, abs=0.01)
+            assert oy == pytest.approx(ey, abs=0.01)
+    tela.fechar()
+
+
+def test_sessao_sem_animacoes_vai_direto_ao_fim(app_qt, monkeypatch):
+    tela = _Tela()
+    tela.bp.definir_animacoes_do_sistema(False)  # noqa: FBT003
+    _ate_a_sessao(tela, monkeypatch)
+    assert tela.js("progressoSessao") == 1
+    assert max(x for x, _ in _cantos(tela, 0)) < 0
+    tela.sessao.hide_session_blocker()
     tela.fechar()

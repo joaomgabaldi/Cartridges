@@ -32,6 +32,7 @@ GlifoDoBotao 1.0 GlifoDoBotao.qml
 FundoDoBigPicture 1.0 FundoDoBigPicture.qml
 LogoDoBigPicture 1.0 LogoDoBigPicture.qml
 DetalhesDoBigPicture 1.0 DetalhesDoBigPicture.qml
+SessaoDoBigPicture 1.0 SessaoDoBigPicture.qml
 CapaDoBigPicture 1.0 CapaDoBigPicture.qml
 BalaoDaAnotacao 1.0 BalaoDaAnotacao.qml
 CamadaDaSessao 1.0 CamadaDaSessao.qml
