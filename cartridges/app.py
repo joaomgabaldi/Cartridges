@@ -348,7 +348,7 @@ def _abrir(app: AplicacaoQt, argv: list[str], abertura: _Abertura) -> int | None
     zerados_manuais = SeletorDeZerados()
     caixa_da_anotacao = CaixaDaAnotacao()
     abertura.cortina = cortina_da_abertura = CortinaDaAbertura()
-    abertura.big_picture = big_picture = BigPicture(modelo, animacoes_do_sistema=aplicativo.animacoesDoSistema)
+    abertura.big_picture = big_picture = BigPicture(modelo, detalhes=detalhes, animacoes_do_sistema=aplicativo.animacoesDoSistema)
     _seguir_animacoes(aplicativo, big_picture)
     abertura.geometria = geometria = GeometriaDaJanela()
     painel_das_tarefas.gravar_geometria = geometria.gravar

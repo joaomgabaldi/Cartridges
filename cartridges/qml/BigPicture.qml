@@ -111,7 +111,6 @@ Item {
     }
     // Na saída o quadro só volta com a camada já escondida, no escuro: antes o carrossel reapareceria.
     onVisibleChanged: if (!visible) {
-        abertura.stop()
         progressoAbertura = 0
         reporQuadro()
         soltarPreparo()
@@ -125,29 +124,9 @@ Item {
     }
     onTChanged: if (naFila) aplicarQuadro(t)
 
-    function animarAbertura(de, para) {
-        abertura.stop()
-        progressoAbertura = de
-        if (!bigPicture.animacoes) {
-            progressoAbertura = para
-            bigPicture.aberturaTerminou()
-            return
-        }
-        abertura.from = de
-        abertura.to = para
-        abertura.start()
-    }
-    NumberAnimation {
-        id: abertura
-        target: tela
-        property: "progressoAbertura"
-        duration: tela.duracaoDaAbertura
-        easing.type: Easing.OutCubic
-        onFinished: bigPicture.aberturaTerminou()
-    }
     Connections {
         target: bigPicture
-        function onAberturaPedida(de, para) { tela.animarAbertura(de, para) }
+        function onEtapaPedida(de, para) { Qt.callLater(() => bigPicture.etapaTerminou()) }  // provisório: a Task 4 anima as etapas
         function onFocoPedido() { tela.forceActiveFocus() }
         function onFilaPedida(entrar) { tela.iniciarFila(entrar) }
         function onPrepararCapas() { tela.preparar() }

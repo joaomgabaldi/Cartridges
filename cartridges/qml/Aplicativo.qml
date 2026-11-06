@@ -486,8 +486,8 @@ Principal {
         enabled: !camadaDeAvisos.dialogoAberto && !sessao.emAndamento
         onVisibleChanged: if (visible) forceActiveFocus()
         onEnabledChanged: if (enabled && visible) forceActiveFocus()
-        onAbrir: bigPicture.abrirJogo()
-        onSair: bigPicture.sair()
+        onAbrir: bigPicture.ativar()
+        onSair: bigPicture.voltar()
     }
 
     Connections {
@@ -791,14 +791,14 @@ Principal {
                 if (!foco || typeof foco.lineCount !== "number") controle.teclar(Qt.Key_Return)
                 return
             }
-            if (janela.bigPictureNaFrente) { if (!bigPicture.ocupada) bigPicture.abrirJogo(); return }
+            if (janela.bigPictureNaFrente) { if (!bigPicture.ocupada) bigPicture.ativar(); return }
             var focado = janela.botaoFocado()
             if (focado) focado.click()
             else if (janela.paginaDoControle) janela.paginaDoControle.abrirDetalhesDoAtual()
         }
         function onVoltar() {
             if (janela.popupAberto) { controle.teclar(Qt.Key_Escape); return }
-            if (janela.bigPictureNaFrente) { if (!bigPicture.ocupada) bigPicture.sair(); return }
+            if (janela.bigPictureNaFrente) { if (!bigPicture.ocupada) bigPicture.voltar(); return }
             if (janela.paginaAtual !== "todos") janela.voltar()
             else if (todos.buscaAberta) todos.buscaAberta = false
         }

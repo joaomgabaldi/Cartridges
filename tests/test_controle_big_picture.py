@@ -31,7 +31,7 @@ from cartridges.xinput import (
     LeitorXInput,
 )
 from tests.apoio_controle_grade import ATIVO, Montagem
-from tests.apoio_qml_big_picture import _aberto_com, _entrar
+from tests.apoio_qml_big_picture import _abrir_jogo, _aberto_com, _entrar
 from tests.apoio_qml_biblioteca import _esperar
 
 
@@ -326,8 +326,13 @@ def test_a_abre_e_b_sai(app_qt, monkeypatch):
     jogo = _com_launch_falso(app, monkeypatch)
     _entrar(app)
     app.controle.ativar.emit()
-    assert app.big_picture.ocupada, "A abre o jogo do centro"
+    assert app.big_picture.ocupada and app.big_picture.etapa == "detalhes", "A abre os detalhes do centro"
+    assert _esperar(lambda: not app.big_picture.ocupada, limite=3)
+    app.controle.ativar.emit()
+    assert app.big_picture.ocupada, "A de novo inicia o jogo"
     assert _esperar(lambda: jogo.launch.chamadas == 1, limite=3)
+    assert _esperar(lambda: not app.big_picture.ocupada, limite=3)
+    app.controle.voltar.emit()  # sem sessão o jogo devolve aos detalhes; B volta ao carrossel
     assert _esperar(lambda: not app.big_picture.ocupada, limite=3)
     app.controle.voltar.emit()
     assert app.big_picture.ocupada
@@ -354,7 +359,7 @@ def test_ocupada_ignora_tudo(app_qt, monkeypatch):
     app = _aberto_com(monkeypatch)
     jogo = _com_launch_falso(app, monkeypatch)
     _entrar(app)
-    app.big_picture.abrirJogo()
+    _abrir_jogo(app)
     assert app.big_picture.ocupada
     app.leitor.vibracoes.clear()
     shared.schema.set_boolean("gamepad-rumble", True)

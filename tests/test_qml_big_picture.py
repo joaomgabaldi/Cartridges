@@ -25,6 +25,7 @@ from tests.apoio_qml_biblioteca import QML, _achar, _esperar
 from tests.apoio_qml_big_picture import (
     ALTURA,
     LARGURA,
+    _abrir_jogo,
     _Tela,
     _aberto_com,
     _avaliar,
@@ -833,32 +834,6 @@ def test_entrada_com_fade_no_app(app_qt, monkeypatch):
 # --- abrir o jogo (Aplicativo inteiro; nenhum jogo é iniciado: o `launch` é falso) ------------------
 
 
-def test_abertura_cresce_a_central_e_esmaece_as_outras(app_qt, monkeypatch):
-    app = _aberto_com(monkeypatch)
-    jogo = _com_launch_falso(app, monkeypatch)
-    _entrar(app)
-    tela = app.achar("bigPicture")
-    largura_antes = {i: _largura(tela, i) for i in (0, 1)}
-    app.big_picture.abrirJogo()
-    assert app.big_picture.ocupada
-    assert _esperar(lambda: tela.property("progressoAbertura") > 0.4, limite=3)
-    if os.environ.get("CARTRIDGES_CAPTURA"):
-        app.janela.grabWindow().save(os.environ["CARTRIDGES_CAPTURA"])
-    assert _esperar(lambda: tela.property("progressoAbertura") > 0.9, limite=3)
-    progresso = tela.property("progressoAbertura")
-    fator = 1 + (regras.ESCALA_NA_ABERTURA - 1) * progresso
-    assert _largura(tela, 0) == pytest.approx(largura_antes[0] * fator, rel=0.01)  # a central cresce
-    assert _largura(tela, 1) == pytest.approx(largura_antes[1], rel=0.01)  # as outras ficam
-    capas = _itens(tela, lambda i: i.objectName() == "capaDoBigPicture")
-    assert capas and all(c.property("opacity") < 0.2 for c in capas)  # tudo esmaece junto
-    assert _esperar(lambda: jogo.launch.chamadas == 1, limite=3)
-    progresso_no_launch, visibilidade = jogo.launch.no_instante
-    assert progresso_no_launch == 1 and visibilidade != QWindow.Visibility.FullScreen  # saiu da tela cheia antes
-    assert _esperar(lambda: not app.big_picture.ocupada and tela.property("progressoAbertura") == 0, limite=3)
-    assert app.janela.visibility() == QWindow.Visibility.FullScreen and tela.property("activeFocus") is True
-    app.fechar()
-
-
 def _largura(tela, i):
     cantos = _cantos_de(tela, i)
     return max(x for x, _ in cantos) - min(x for x, _ in cantos)
@@ -889,7 +864,7 @@ def test_confirmacao_do_comando_na_frente_e_cancelar_volta(app_qt, monkeypatch):
     app.ponte.ligar(jogo)
     _entrar(app)
     tela, avisos = app.achar("bigPicture"), app.achar("camadaDeAvisos")
-    app.big_picture.abrirJogo()
+    _abrir_jogo(app)
     assert _esperar(lambda: avisos.property("dialogoAberto") is True, limite=3)
     # A camada do Big Picture volta à tela cheia e fica atrás do diálogo, sem receber teclas nem toques.
     assert _esperar(lambda: not app.big_picture.ocupada, limite=3)
@@ -907,7 +882,7 @@ def test_confirmacao_do_comando_na_frente_e_cancelar_volta(app_qt, monkeypatch):
     assert app.janela.visibility() == QWindow.Visibility.FullScreen
     # Iniciar: o mesmo caminho da abertura, e o jogo é iniciado uma única vez.
     jogo.comando_a_conferir = True
-    app.big_picture.abrirJogo()
+    _abrir_jogo(app)
     assert _esperar(lambda: avisos.property("dialogoAberto") is True, limite=3)
     _clicar_no_texto(app, "Iniciar")
     assert _esperar(lambda: jogo.launch.chamadas == 1, limite=3)
@@ -924,7 +899,7 @@ def _com_confirmacao_aberta(monkeypatch, animacoes=False):
     app.ponte.ligar(jogo)
     _entrar(app)
     app.janela.requestActivate()
-    app.big_picture.abrirJogo()
+    _abrir_jogo(app)
     avisos = app.achar("camadaDeAvisos")
     assert _esperar(lambda: avisos.property("dialogoAberto") is True, limite=3)
     assert _esperar(lambda: not app.big_picture.ocupada, limite=3)
@@ -995,7 +970,7 @@ def test_confirmacao_pelo_controle_b_cancela_e_a_inicia(app_qt, monkeypatch):
     assert _esperar(lambda: tela.property("activeFocus") is True, limite=3)
     assert app.big_picture.visivel and app.big_picture.indice == 0
     jogo.comando_a_conferir = True
-    app.big_picture.abrirJogo()
+    _abrir_jogo(app)
     assert _esperar(lambda: avisos.property("dialogoAberto") is True, limite=3)
     assert _esperar(lambda: not app.big_picture.ocupada, limite=3)
     app.controle.mover.emit(1, 0)  # → vai a "Iniciar"

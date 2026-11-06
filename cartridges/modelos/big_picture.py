@@ -23,6 +23,7 @@ from PySide6.QtQuick import QQuickImageProvider, QSGRendererInterface
 from cartridges import shared
 from cartridges.modelos import regras_do_big_picture as regras
 from cartridges.modelos.biblioteca import ModeloDaBiblioteca
+from cartridges.modelos.detalhes import DetalhesDoJogo
 from cartridges.modelos.ordem import Linha
 from cartridges.utils.cortina_monitor import CortinaMonitor
 
@@ -35,6 +36,8 @@ PAUSA_NO_ESCURO_MS = 120
 CLAREAR_MS = 350
 # No escuro, a troca espera as capas da fila decodificadas, mas não mais que isto.
 ESPERA_MAXIMA_DAS_CAPAS_MS = 700
+# O painel de detalhes só segue o jogo central depois de o carrossel parar este tempo.
+ESPERA_DO_CENTRAL_MS = 250
 
 
 class ProvedorDoFundo(QQuickImageProvider):
@@ -82,7 +85,7 @@ class BigPicture(QObject):
     filaPedida = Signal(bool)  # noqa: N815  # True: a fila de entrada; False: a de saída (o QML a anima)
     saiu = Signal(str)  # o jogo central na saída: o foco volta ao cartão dele na grade
     prepararCapas = Signal()  # noqa: N815  # P1: o QML decodifica as capas da fila e responde `capasProntas`
-    aberturaPedida = Signal(float, float)  # noqa: N815  # (de, para): o QML anima `progressoAbertura` e responde `aberturaTerminou`
+    etapaPedida = Signal(str, str)  # noqa: N815  # (de, para): o QML anima a troca de etapa e responde `etapaTerminou`
     focoPedido = Signal()  # noqa: N815  # o bloqueio do jogo levou o foco: a camada o retoma
 
     def __init__(
@@ -90,6 +93,7 @@ class BigPicture(QObject):
         modelo: ModeloDaBiblioteca,
         parent: QObject | None = None,
         *,
+        detalhes: DetalhesDoJogo | None = None,
         animacoes_do_sistema: bool = True,
         fabrica_da_cortina: Callable[[int], CortinaMonitor | None] = CortinaMonitor,
     ) -> None:
@@ -114,6 +118,13 @@ class BigPicture(QObject):
         eu = weakref.ref(self)
         shared.schema.connect("changed::cover-autoplay", lambda *_: (b := eu()) and b._religar_animar_central())
         self._modelo = modelo
+        self._detalhes = detalhes
+        self._etapa_bp = "carrossel"  # "carrossel", "detalhes" ou "sessao"
+        self._transicao: tuple[str, str] | None = None  # a troca de etapa que o QML está animando
+        self._espera_do_central = QTimer(self, singleShot=True, interval=ESPERA_DO_CENTRAL_MS)
+        self._espera_do_central.timeout.connect(self._mostrar_central)
+        if detalhes is not None:
+            detalhes.sair.connect(self._detalhes_pediu_saida)
         self._carrossel = regras.Carrossel([])
         self._jogos: list[dict[str, str]] = []
         self._agendado = False
@@ -160,6 +171,10 @@ class BigPicture(QObject):
     def placeholder(self) -> str:
         """A imagem da capa que falta: a mesma da grade."""
         return self._modelo.placeholder
+
+    @Property(str, notify=alterado)
+    def etapa(self) -> str:
+        return self._etapa_bp
 
     @Property(bool, notify=alterado)
     def vazia(self) -> bool:
@@ -257,6 +272,7 @@ class BigPicture(QObject):
     def _foi_para(self, mudou: bool) -> bool:  # noqa: FBT001
         if mudou:
             regras.tocar_tique()
+            self._espera_do_central.start()  # reinicia a cada passo
             self.alterado.emit()
         return mudou
 
@@ -299,8 +315,10 @@ class BigPicture(QObject):
         if self._visivel or self._ocupada or not self._disponivel:
             return
         self._carrossel = regras.Carrossel([])
+        self._etapa_bp, self._transicao, self._indo = "carrossel", None, False
         self._montada = True
         self._refazer()
+        self._mostrar_central()
         self._pendente = False
         self._ocupada = self._em_fade = True
         self._capas_prontas = not self._jogos
@@ -325,7 +343,7 @@ class BigPicture(QObject):
 
     def _destravar(self) -> None:
         """Fila e fade acabaram: a página volta a aceitar entrada e aplica o `atualizar` pendente."""
-        if self._na_fila or self._em_fade:
+        if self._na_fila or self._em_fade or self._transicao is not None:
             return
         self._ocupada = False
         pendente, centro = self._pendente, self._centro_pendente
@@ -359,6 +377,9 @@ class BigPicture(QObject):
 
     def _sair_de_fato(self) -> None:
         jogo = (self._central() or {}).get("jogoId", "")
+        self._espera_do_central.stop()
+        if self._detalhes is not None:
+            self._detalhes.esquecer()
         try:
             if self._janela is not None:
                 if self._estava_maximizada:
@@ -389,19 +410,68 @@ class BigPicture(QObject):
         ):
             self.entrar()
 
+    def _pedir_etapa(self, para: str) -> None:
+        """Muda de etapa: a página fica ocupada até o QML terminar a animação (`etapaTerminou`)."""
+        de, self._etapa_bp = self._etapa_bp, para
+        self._transicao, self._ocupada = (de, para), True
+        if para != "sessao":
+            self._indo = False
+        self.alterado.emit()
+        self.etapaPedida.emit(de, para)
+
+    def _mostrar_central(self) -> bool:
+        """Mostra o jogo central nos detalhes (sem esperar o timer) e devolve se havia o que mostrar."""
+        self._espera_do_central.stop()
+        central = self._central()
+        if central is None:
+            return False
+        return self._detalhes is None or self._detalhes.mostrar(central["jogoId"])
+
+    def _detalhes_pediu_saida(self) -> None:
+        """O jogo dos detalhes foi excluído."""
+        if self._etapa_bp == "detalhes":
+            self._pedir_etapa("carrossel")
+
+    @Slot()
+    def ativar(self) -> None:
+        if self._etapa_bp == "sessao":
+            if shared.sessao is not None and shared.sessao.emAndamento:
+                shared.sessao.terminar()
+        elif self._ocupada or not self._visivel:
+            return
+        elif self._etapa_bp == "carrossel":
+            if self._mostrar_central():  # `selecionar`: os detalhes do central, já
+                self._pedir_etapa("detalhes")
+        else:
+            self.abrirJogo()
+
+    @Slot()
+    def voltar(self) -> None:
+        if self._etapa_bp == "carrossel":
+            self.sair()
+        elif self._etapa_bp == "detalhes" and not self._ocupada:
+            self._pedir_etapa("carrossel")
+
+    @Slot()
+    def etapaTerminou(self) -> None:  # noqa: N802
+        transicao, self._transicao = self._transicao, None
+        if transicao == ("detalhes", "sessao"):
+            self._lancar()
+        elif transicao is not None:
+            self._destravar()
+
     @Slot()
     def abrirJogo(self) -> None:  # noqa: N802
-        if (central := self._central()) is not None:
+        if self._etapa_bp == "detalhes" and (central := self._central()) is not None:
             self._abrir(central["jogoId"])
 
     def _abrir(self, jogo_id: str) -> None:
-        if self._ocupada or not self._visivel:
+        if self._ocupada or not self._visivel or self._etapa_bp != "detalhes":
             return
-        self._ocupada = self._indo = True
+        self._indo = True
         self._jogo_aberto = jogo_id
         self._inis_conferidos = False
-        self.alterado.emit()
-        self.aberturaPedida.emit(0.0, 1.0)
+        self._pedir_etapa("sessao")
 
     def _voltar_a_tela_cheia(self) -> None:
         if self._janela is not None:
@@ -410,8 +480,7 @@ class BigPicture(QObject):
                 self._janela.showNormal()
             self._janela.showFullScreen()
 
-    @Slot()
-    def aberturaTerminou(self) -> None:  # noqa: N802
+    def _lancar(self) -> None:
         if not self._indo:
             return
         self._indo = False
@@ -442,7 +511,7 @@ class BigPicture(QObject):
         conferidos = jogo is not None and jogo.inis_conferidos
         if self._esperando_inis and jogo_id == self._jogo_aberto:
             self._esperando_inis, self._indo, self._inis_conferidos = False, True, conferidos
-            self.aberturaTerminou()
+            self._lancar()
             return
         self._abrir(jogo_id)
         if self._indo and self._jogo_aberto == jogo_id:
@@ -458,14 +527,12 @@ class BigPicture(QObject):
 
     def _desistir_da_abertura(self) -> None:
         """O jogo não abriu (comando a conferir, erro, sumiu): a capa volta e a tela cheia também."""
-        self.aberturaPedida.emit(1.0, 0.0)
+        self._pedir_etapa("detalhes")
         self._voltar_a_tela_cheia()
-        self._destravar()
 
-    def _reabrir(self) -> None:
+    def _reabrir(self, para: str = "detalhes") -> None:
         self._pendente, self._centro_pendente = True, self._jogo_aberto
-        self.aberturaPedida.emit(1.0, 0.0)
-        self._destravar()
+        self._pedir_etapa(para)
         self.focoPedido.emit()  # o bloqueio do jogo levou o foco; sem ele o teclado não chega aqui
 
     @Slot()
@@ -474,7 +541,7 @@ class BigPicture(QObject):
         if not self._ocupada or self._em_fade or self._na_fila or self._saindo:
             return
         self._voltar_a_tela_cheia()
-        self._reabrir()
+        self._reabrir("carrossel")
 
     def _voltar_sem_sessao(self) -> None:
         self._reabrir()

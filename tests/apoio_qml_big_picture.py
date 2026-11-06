@@ -114,6 +114,14 @@ def _entrar(app):
     assert _esperar(lambda: not app.big_picture.ocupada, limite=5)
 
 
+def _abrir_jogo(app):
+    """Do carrossel aos detalhes (se ainda não estiver neles) e então o Iniciar."""
+    if app.big_picture.etapa == "carrossel":
+        app.big_picture.ativar()
+        assert _esperar(lambda: not app.big_picture.ocupada, limite=3)
+    app.big_picture.abrirJogo()
+
+
 class _LaunchQueAnota:
     """Conta as chamadas e guarda o estado da tela no instante em que o jogo seria iniciado."""
 

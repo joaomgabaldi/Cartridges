@@ -270,11 +270,11 @@ class _JanelaFalsa(QObject):
         return None if api is None else type("Renderizador", (), {"graphicsApi": lambda _s: api})()
 
 
-def _com_janela(*jogos, **kw):
+def _com_janela(*jogos, detalhes=None, **kw):
     modelo = ModeloDaBiblioteca()
     for jogo in jogos:
         modelo.atualizar(jogo)
-    bp = BigPicture(modelo)
+    bp = BigPicture(modelo, detalhes=detalhes)
     janela = _JanelaFalsa(**kw)
     bp.definir_janela(janela)
     pedidos = []
@@ -868,31 +868,34 @@ class _Launch:
 def abrivel(app_qt, tiques, monkeypatch):
     """a, b e c com o Big Picture aberto e o `launch` falso; `shared.store` os acha pelo id."""
     jogos = {j.game_id: j for j in (_jogo("a", 30), _jogo("b", 20), _jogo("c", 10))}
-    modelo, bp, janela, pedidos = _com_janela(*jogos.values())
+    modelo, bp, janela, pedidos = _com_janela(*jogos.values(), detalhes=_DetalhesFalsos())
     monkeypatch.setattr(modulo.shared, "store", SimpleNamespace(get=jogos.get))
     for jogo in jogos.values():
         jogo.launch = _Launch(modelo, jogo)
     aberturas, focos = [], []
-    bp.aberturaPedida.connect(lambda de, para: aberturas.append((de, para)))
+    bp.etapaPedida.connect(lambda de, para: aberturas.append((de, para)))
     bp.focoPedido.connect(lambda: focos.append(1))
     bp.entrar()
     bp.filaTerminou()
+    bp.ativar()  # o jogo central, nos detalhes: de onde o Iniciar parte
+    bp.etapaTerminou()
+    aberturas.clear()
     return SimpleNamespace(jogos=jogos, modelo=modelo, bp=bp, janela=janela, aberturas=aberturas, focos=focos)
 
 
 def _ida(a, jogo_id="b"):
     a.bp.atualizar(jogo_id)
     a.bp.abrirJogo()
-    a.bp.aberturaTerminou()
+    a.bp.etapaTerminou()
 
 
 def test_abrir_jogo_pede_a_abertura_e_so_lanca_no_fim_dela(abrivel):
     a = abrivel
     a.bp.atualizar("b")
     a.bp.abrirJogo()
-    assert a.bp.ocupada and a.aberturas == [(0.0, 1.0)]
+    assert a.bp.ocupada and a.aberturas == [("detalhes", "sessao")]
     assert a.jogos["b"].launch.chamadas == 0 and a.janela.chamadas == ["tela cheia"]
-    a.bp.aberturaTerminou()
+    a.bp.etapaTerminou()
     assert a.jogos["b"].launch.chamadas == 1
     assert a.janela.chamadas == ["tela cheia"]
 
@@ -901,7 +904,7 @@ def test_abertura_nao_sai_da_tela_cheia(abrivel):
     a = abrivel
     a.bp.atualizar("b")
     a.bp.abrirJogo()
-    a.bp.aberturaTerminou()
+    a.bp.etapaTerminou()
     assert a.janela.chamadas.count("normal") == 0
     assert a.jogos["b"].launch.em_tela_cheia is True
 
@@ -911,15 +914,15 @@ def test_dois_a_seguidos_abrem_o_jogo_uma_vez(abrivel):
     a.bp.atualizar("b")
     a.bp.abrirJogo()
     a.bp.abrirJogo()
-    a.bp.aberturaTerminou()
-    a.bp.aberturaTerminou()  # o fim da volta (ou um segundo aviso) não lança de novo
-    assert a.jogos["b"].launch.chamadas == 1 and a.aberturas[0] == (0.0, 1.0)
+    a.bp.etapaTerminou()
+    a.bp.etapaTerminou()  # o fim da volta (ou um segundo aviso) não lança de novo
+    assert a.jogos["b"].launch.chamadas == 1 and a.aberturas[0] == ("detalhes", "sessao")
 
 
 def test_abrir_sem_jogos_nao_faz_nada(app_qt, tiques):
     _, bp, _, _ = _com_janela()
     avisos = []
-    bp.aberturaPedida.connect(lambda *_: avisos.append(1))
+    bp.etapaPedida.connect(lambda *_: avisos.append(1))
     bp.entrar()
     bp.abrirJogo()
     assert (bp.ocupada, avisos) == (False, [])
@@ -929,7 +932,9 @@ def test_launch_recusado_volta_ao_normal(abrivel):
     a = abrivel
     a.jogos["b"].launch.devolve = False
     _ida(a)
-    assert not a.bp.ocupada and a.aberturas == [(0.0, 1.0), (1.0, 0.0)]
+    assert a.aberturas == [("detalhes", "sessao"), ("sessao", "detalhes")] and a.bp.ocupada
+    a.bp.etapaTerminou()
+    assert not a.bp.ocupada and a.bp.etapa == "detalhes"
     assert a.janela.chamadas == ["tela cheia", "tela cheia"]
     assert a.bp.indice == 1
 
@@ -939,10 +944,11 @@ def test_confirmar_o_comando_abre_pelo_mesmo_caminho(abrivel):
     launch = a.jogos["b"].launch
     launch.devolve = False
     _ida(a)
+    a.bp.etapaTerminou()  # a capa voltou aos detalhes
     confirmar, launch.devolve = launch.ao_confirmar, True  # o jogo restaurado teve o comando confirmado
     confirmar()
-    assert a.bp.ocupada and a.aberturas[-1] == (0.0, 1.0)
-    a.bp.aberturaTerminou()
+    assert a.bp.ocupada and a.aberturas[-1] == ("detalhes", "sessao")
+    a.bp.etapaTerminou()
     assert launch.chamadas == 2
 
 
@@ -952,12 +958,12 @@ def test_conferencia_rapida_dos_inis_anima_uma_vez(abrivel):
     launch = jogo.launch
     launch.devolve, launch.efeito = False, lambda: jogo.__dict__.update(_conferindo=True, _launch_iniciou=True)
     _ida(a)
-    assert a.bp.ocupada and a.aberturas == [(0.0, 1.0)]  # a capa fica aberta esperando a conferência
+    assert a.bp.ocupada and a.aberturas == [("detalhes", "sessao")]  # a capa fica aberta esperando a conferência
     launch.devolve, launch.efeito = True, None
     jogo._conferindo, jogo._inis_conferidos = False, True  # o fim da conferência relança
     launch.ao_confirmar()
     assert launch.chamadas == 2 and launch.inis_conferidos
-    assert a.aberturas.count((0.0, 1.0)) == 1
+    assert a.aberturas.count(("detalhes", "sessao")) == 1
 
 
 def test_launch_ignorado_durante_outra_conferencia_nao_deixa_esperando(abrivel):
@@ -967,7 +973,8 @@ def test_launch_ignorado_durante_outra_conferencia_nao_deixa_esperando(abrivel):
     launch = jogo.launch
     launch.devolve, launch.efeito = False, lambda: jogo.__dict__.update(_conferindo=True, _launch_iniciou=False)
     _ida(a)
-    assert not a.bp.ocupada and a.aberturas == [(0.0, 1.0), (1.0, 0.0)]
+    a.bp.etapaTerminou()
+    assert not a.bp.ocupada and a.aberturas == [("detalhes", "sessao"), ("sessao", "detalhes")]
 
 
 def test_conferencia_com_dialogo_devolve_a_capa(abrivel):
@@ -977,13 +984,14 @@ def test_conferencia_com_dialogo_devolve_a_capa(abrivel):
     launch.devolve, launch.efeito = False, lambda: jogo.__dict__.update(_conferindo=True, _launch_iniciou=True)
     _ida(a)
     jogo.procurando_inis.emit(lambda: None, lambda: None)
-    assert not a.bp.ocupada and a.aberturas == [(0.0, 1.0), (1.0, 0.0)]
+    a.bp.etapaTerminou()
+    assert not a.bp.ocupada and a.aberturas == [("detalhes", "sessao"), ("sessao", "detalhes")]
     launch.devolve, launch.efeito = True, None
     jogo._inis_conferidos = True  # "Jogar mesmo assim"
     launch.ao_confirmar()
     jogo._inis_conferidos = False
-    assert a.aberturas[-1] == (0.0, 1.0)
-    a.bp.aberturaTerminou()
+    assert a.aberturas[-1] == ("detalhes", "sessao")
+    a.bp.etapaTerminou()
     assert launch.chamadas == 2 and launch.inis_conferidos
 
 
@@ -992,6 +1000,7 @@ def test_confirmar_depois_de_sair_nao_abre(abrivel):
     a.jogos["b"].launch.devolve = False
     _ida(a)
     confirmar = a.jogos["b"].launch.ao_confirmar
+    a.bp.etapaTerminou()
     a.bp.sair()
     a.bp.filaTerminou()
     confirmar()
@@ -1008,8 +1017,9 @@ def test_launch_que_levanta_volta_ao_normal_e_propaga(abrivel):
     a.bp.atualizar("b")
     a.bp.abrirJogo()
     with pytest.raises(RuntimeError):
-        a.bp.aberturaTerminou()
-    assert not a.bp.ocupada and a.aberturas[-1] == (1.0, 0.0)
+        a.bp.etapaTerminou()
+    a.bp.etapaTerminou()
+    assert not a.bp.ocupada and a.aberturas[-1] == ("sessao", "detalhes")
     assert a.janela.chamadas == ["tela cheia", "tela cheia"]
 
 
@@ -1017,7 +1027,8 @@ def test_jogo_que_sumiu_da_loja_volta_ao_normal(abrivel, monkeypatch):
     a = abrivel
     a.bp.abrirJogo()
     monkeypatch.setattr(modulo.shared, "store", SimpleNamespace(get=lambda _id: None))
-    a.bp.aberturaTerminou()
+    a.bp.etapaTerminou()
+    a.bp.etapaTerminou()
     assert not a.bp.ocupada and a.janela.chamadas[-1] == "tela cheia"
 
 
@@ -1025,8 +1036,9 @@ def test_sem_sessao_volta_sozinho(abrivel, schema):
     a = abrivel
     schema.set_boolean("minimize-after-launch", False)
     _ida(a)
+    a.bp.etapaTerminou()
     assert not a.bp.ocupada and a.janela.chamadas.count("tela cheia") == 1
-    assert a.aberturas == [(0.0, 1.0), (1.0, 0.0)] and a.focos == [1]
+    assert a.aberturas == [("detalhes", "sessao"), ("sessao", "detalhes")] and a.focos == [1]
 
 
 def test_sem_sessao_sem_minimizar_poe_tela_cheia_na_hora(abrivel, schema):
@@ -1053,7 +1065,7 @@ def test_maximizada_so_volta_maximizada_na_saida_do_big_picture(app_qt, tiques, 
     bp.filaTerminou()
     janela.maximizada = False  # em tela cheia a janela não conta como maximizada
     bp.abrirJogo()
-    bp.aberturaTerminou()
+    bp.etapaTerminou()
     bp.sair()
     bp.filaTerminou()
     # Abrir o jogo não mexe na janela; a maximização volta só na saída.
@@ -1081,7 +1093,8 @@ def test_voltou_do_jogo_reabre_com_o_jogo_no_centro(abrivel):
     a.bp.atualizar("b")
     a.bp.abrirJogo()  # ocupada, como com uma sessão em curso
     a.bp.voltouDoJogo()
-    assert not a.bp.ocupada and a.aberturas[-1] == (1.0, 0.0)
+    a.bp.etapaTerminou()
+    assert not a.bp.ocupada and a.aberturas[-1] == ("sessao", "carrossel")
     assert a.janela.chamadas[-1] == "tela cheia" and a.focos == [1]
     assert (a.bp.indice, a.bp.nome) == (1, "B")
 
@@ -1091,6 +1104,7 @@ def test_abrir_volta_com_o_jogo_aberto_no_centro(abrivel, schema):
     a = abrivel
     schema.set_boolean("minimize-after-launch", False)
     _ida(a, "c")
+    a.bp.etapaTerminou()
     assert _ids(a.bp)[0] == "c" and (a.bp.indice, a.bp.nome) == (0, "C")
 
 
@@ -1102,6 +1116,7 @@ def test_lista_refeita_durante_a_abertura_fica_para_a_volta(abrivel):
     _esperar()
     assert _ids(a.bp) == ["a", "b", "c"]  # ocupada: pendente
     a.bp.voltouDoJogo()
+    a.bp.etapaTerminou()
     assert _ids(a.bp) == ["n", "a", "b", "c"] and a.bp.nome == "B"
 
 
@@ -1130,7 +1145,7 @@ def test_abrir_com_sessao_espera_o_fim(com_sessao):
     a = com_sessao
     _ida(a)
     assert a.sessao.emAndamento and a.bp.ocupada
-    assert a.aberturas == [(0.0, 1.0)] and a.focos == []
+    assert a.aberturas == [("detalhes", "sessao")] and a.focos == []
     assert a.janela.chamadas == ["tela cheia"]
 
 
@@ -1138,8 +1153,9 @@ def test_fim_da_sessao_reabre_com_o_jogo_no_centro(com_sessao):
     a = com_sessao
     _ida(a, "c")
     a.sessao.terminar()
+    a.bp.etapaTerminou()
     assert not a.sessao.emAndamento and not a.bp.ocupada
-    assert a.aberturas == [(0.0, 1.0), (1.0, 0.0)] and a.focos == [1]
+    assert a.aberturas == [("detalhes", "sessao"), ("sessao", "carrossel")] and a.focos == [1]
     assert a.janela.chamadas == ["tela cheia", "tela cheia"]
     assert (a.bp.indice, a.bp.nome) == (0, "C")  # o jogado agora vem à frente e fica no centro
 
@@ -1151,9 +1167,10 @@ def test_fim_da_sessao_com_queda_para_a_manual_reabre_o_big_picture(com_sessao):
     a = com_sessao
     _ida(a)
     ProcessSession.active.stop(record=False, fall_back=True)  # o jogo nunca apareceu: passa à janela manual
-    assert a.sessao.emAndamento and a.bp.ocupada and a.aberturas == [(0.0, 1.0)], "a queda não reabre"
+    assert a.sessao.emAndamento and a.bp.ocupada and a.aberturas == [("detalhes", "sessao")], "a queda não reabre"
     SessionWindow.active.close()
-    assert not a.bp.ocupada and a.aberturas == [(0.0, 1.0), (1.0, 0.0)] and a.focos == [1]
+    a.bp.etapaTerminou()
+    assert not a.bp.ocupada and a.aberturas == [("detalhes", "sessao"), ("sessao", "carrossel")] and a.focos == [1]
     assert a.janela.chamadas.count("tela cheia") == 2  # a entrada e uma volta só
     a.sessao.hide_session_blocker()  # um fim repetido não reabre de novo
     assert len(a.aberturas) == 2 and a.janela.chamadas.count("tela cheia") == 2
@@ -1176,7 +1193,7 @@ def test_fim_da_sessao_no_meio_de_um_fade_nao_cria_outra_cortina(fade):
 
     bp = fade.bp
     aberturas = []
-    bp.aberturaPedida.connect(lambda de, para: aberturas.append((de, para)))
+    bp.etapaPedida.connect(lambda de, para: aberturas.append((de, para)))
     bp.entrar()
     bp.capasProntas()
     concluir_cortina(bp)  # no escuro, já trocada: visível, ocupada e com a pausa correndo
@@ -1190,3 +1207,196 @@ def test_fim_da_sessao_no_meio_de_um_fade_nao_cria_outra_cortina(fade):
     concluir_cortina(bp)
     bp.filaTerminou()
     assert not bp.ocupada and fade.registro.count("abriu 42") == 1 and fade.registro[-1] == "fechou"
+
+
+# --- as etapas: carrossel, detalhes e sessão ------------------------------------------------------
+
+
+class _DetalhesFalsos(QObject):
+    """Grava as chamadas a `mostrar` e `esquecer`; `sair` é o sinal do jogo excluído."""
+
+    sair = Signal()
+
+    def __init__(self):
+        super().__init__()
+        self.mostrados, self.esquecidos, self.aceita = [], 0, True
+
+    def mostrar(self, jogo_id):
+        self.mostrados.append(jogo_id)
+        return self.aceita
+
+    def esquecer(self):
+        self.esquecidos += 1
+
+
+@pytest.fixture
+def etapas(app_qt, tiques, monkeypatch):
+    """a, b e c com o Big Picture aberto (carrossel), `detalhes` e `launch` falsos e uma sessão falsa."""
+    jogos = {j.game_id: j for j in (_jogo("a", 30), _jogo("b", 20), _jogo("c", 10))}
+    detalhes = _DetalhesFalsos()
+    modelo, bp, janela, _ = _com_janela(*jogos.values(), detalhes=detalhes)
+    sessao = SimpleNamespace(jogoId="", emAndamento=False, terminadas=0)
+    sessao.terminar = lambda: setattr(sessao, "terminadas", sessao.terminadas + 1)
+    monkeypatch.setattr(modulo.shared, "store", SimpleNamespace(get=jogos.get))
+    monkeypatch.setattr(modulo.shared, "sessao", sessao, raising=False)
+    for jogo in jogos.values():
+        jogo.launch = _Launch(modelo, jogo)
+    pedidas, saidas = [], []
+    bp.etapaPedida.connect(lambda de, para: pedidas.append((de, para)))
+    bp.saiu.connect(saidas.append)
+    bp.entrar()
+    bp.filaTerminou()
+    return SimpleNamespace(
+        jogos=jogos, modelo=modelo, bp=bp, janela=janela, detalhes=detalhes, sessao=sessao, pedidas=pedidas, saidas=saidas,
+    )
+
+
+def _nos_detalhes(e):
+    e.bp.ativar()
+    e.bp.etapaTerminou()
+
+
+def test_comeca_no_carrossel(etapas):
+    assert etapas.bp.etapa == "carrossel"
+
+
+def test_ativar_no_carrossel_vai_aos_detalhes(etapas):
+    e = etapas
+    e.bp.ativar()
+    assert e.pedidas == [("carrossel", "detalhes")] and e.bp.etapa == "detalhes" and e.bp.ocupada
+    e.bp.etapaTerminou()
+    assert not e.bp.ocupada and e.detalhes.mostrados[-1] == "a"
+
+
+def test_ativar_ocupada_e_ignorado(etapas):
+    e = etapas
+    e.bp.ativar()
+    e.bp.ativar()  # ainda na transição
+    assert e.pedidas == [("carrossel", "detalhes")]
+
+
+def test_ativar_com_detalhes_recusando_fica_no_carrossel(etapas):
+    e = etapas
+    e.detalhes.aceita = False
+    e.bp.ativar()
+    assert e.pedidas == [] and e.bp.etapa == "carrossel" and not e.bp.ocupada
+
+
+def test_voltar_por_etapa(etapas):
+    e = etapas
+    _nos_detalhes(e)
+    e.bp.voltar()
+    assert e.pedidas[-1] == ("detalhes", "carrossel") and e.bp.etapa == "carrossel"
+    e.bp.etapaTerminou()
+    e.bp.voltar()  # do carrossel: sai
+    assert e.bp.ocupada and e.bp._saindo  # noqa: SLF001
+    e.bp.filaTerminou()
+
+
+def test_voltar_na_sessao_nao_faz_nada(etapas):
+    e = etapas
+    e.sessao.jogoId = "a"
+    _nos_detalhes(e)
+    e.bp.ativar()
+    e.bp.etapaTerminou()
+    antes = list(e.pedidas)
+    e.bp.voltar()
+    assert e.pedidas == antes and e.bp.etapa == "sessao"
+
+
+def test_iniciar_vai_a_sessao_e_lanca_no_fim_da_animacao(etapas):
+    e = etapas
+    e.sessao.jogoId = "a"
+    _nos_detalhes(e)
+    e.bp.ativar()  # Iniciar
+    assert e.pedidas[-1] == ("detalhes", "sessao") and e.jogos["a"].launch.chamadas == 0
+    e.bp.etapaTerminou()
+    assert e.jogos["a"].launch.chamadas == 1 and e.jogos["a"].launch.em_tela_cheia is True
+    assert e.bp.ocupada  # a sessão em curso segura a página
+
+
+def test_abrir_jogo_fora_dos_detalhes_nao_faz_nada(etapas):
+    etapas.bp.abrirJogo()
+    assert etapas.pedidas == []
+
+
+@pytest.mark.parametrize("devolve", [True, False])
+def test_iniciar_sem_sessao_volta_aos_detalhes(etapas, devolve):
+    e = etapas
+    e.jogos["a"].launch.devolve = devolve
+    _nos_detalhes(e)
+    e.bp.ativar()
+    e.bp.etapaTerminou()
+    assert e.pedidas[-1] == ("sessao", "detalhes")
+    e.bp.etapaTerminou()
+    assert e.bp.etapa == "detalhes" and not e.bp.ocupada
+
+
+def test_fim_da_sessao_volta_ao_carrossel_com_o_mesmo_central(etapas):
+    e = etapas
+    e.sessao.jogoId = "b"
+    e.bp.atualizar("b")
+    _nos_detalhes(e)
+    e.bp.ativar()
+    e.bp.etapaTerminou()
+    e.bp.voltouDoJogo()
+    assert e.pedidas[-1] == ("sessao", "carrossel") and e.bp.jogos[e.bp.indice]["jogoId"] == "b"
+    e.bp.etapaTerminou()
+    assert e.bp.etapa == "carrossel" and not e.bp.ocupada
+
+
+def test_ativar_na_sessao_termina(etapas):
+    e = etapas
+    e.sessao.jogoId, e.sessao.emAndamento = "a", True
+    _nos_detalhes(e)
+    e.bp.ativar()
+    e.bp.etapaTerminou()
+    e.bp.ativar()
+    assert e.sessao.terminadas == 1
+
+
+def test_seguir_central_so_depois_de_parar(etapas):
+    e = etapas
+    assert e.detalhes.mostrados == ["a"]  # o central da entrada, na hora
+    for _ in range(2):
+        e.bp.mover(1)
+    assert e.detalhes.mostrados == ["a"]
+    for _ in range(15):  # 300 ms > ESPERA_DO_CENTRAL_MS
+        _esperar()
+    assert e.detalhes.mostrados == ["a", "c"]
+
+
+def test_jogo_excluido_nos_detalhes_volta_ao_carrossel(etapas):
+    e = etapas
+    _nos_detalhes(e)
+    e.detalhes.sair.emit()
+    assert e.pedidas[-1] == ("detalhes", "carrossel")
+
+
+def test_jogo_excluido_na_sessao_e_ignorado(etapas):
+    e = etapas
+    e.sessao.jogoId = "a"
+    _nos_detalhes(e)
+    e.bp.ativar()
+    e.bp.etapaTerminou()
+    antes = list(e.pedidas)
+    e.detalhes.sair.emit()
+    assert e.pedidas == antes
+
+
+def test_sair_esquece_os_detalhes(etapas):
+    e = etapas
+    e.bp.sair()
+    e.bp.filaTerminou()
+    assert e.detalhes.esquecidos == 1
+
+
+def test_entrar_de_novo_volta_ao_carrossel(etapas):
+    e = etapas
+    _nos_detalhes(e)
+    e.bp.etapaTerminou()
+    e.bp._etapa_bp = "detalhes"  # noqa: SLF001
+    e.bp.sair()
+    e.bp.filaTerminou()
+    e.bp.entrar()
+    assert e.bp.etapa == "carrossel"
