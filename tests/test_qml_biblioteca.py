@@ -972,7 +972,7 @@ def test_cartao_halo_carregando_e_botoes_da_main(app_qt):
     assert _achar(por_nome["Alfa"], "carregando").property("running") is True
     assert _achar(por_nome["Gama"], "capaParada").parentItem().property("opacity") == 1
     jogar = _achar(por_nome["Gama"], "botaoJogar")
-    assert (jogar.width(), jogar.height()) == (34, 34) and jogar.property("dica") == "Jogar"
+    assert (jogar.width(), jogar.height()) == (34, 34) and jogar.property("dica") == "Iniciar"
     assert _achar(jogar, "dica") is None  # os botões do cartão não têm dica
     mais = _achar(por_nome["Gama"], "botaoMais")
     assert mais.x() == 200 - 34 - 6 and mais.y() == 6

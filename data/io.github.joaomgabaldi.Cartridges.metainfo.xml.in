@@ -38,6 +38,8 @@
           <li>Agora o Kyron aplica o idioma e o nome do jogador nos jogos que guardam essas informações em arquivos de configuração. Defina-os em Preferências.</li>
           <li>Os jogos instalados fora da Steam passaram a ser reconhecidos com mais precisão.</li>
           <li>As Preferências foram reorganizadas em seções, com a lista à esquerda, para facilitar encontrar cada opção.</li>
+          <li>O Big Picture foi redesenhado: agora mostra o logo e os detalhes de cada jogo, e acompanha a sessão sem sair da tela cheia.</li>
+          <li>O botão Jogar passou a se chamar Iniciar.</li>
         </ul>
       </description>
     </release>

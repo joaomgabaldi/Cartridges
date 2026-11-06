@@ -216,7 +216,7 @@ Rectangle {
                 objectName: "botaoJogar"
                 x: 6; y: 6
                 icone: "media-playback-start"
-                dica: "Jogar"
+                dica: "Iniciar"
                 onClicado: if (cartao.modelo) cartao.modelo.iniciar(cartao.jogoId)
             }
             BotaoRedondo {

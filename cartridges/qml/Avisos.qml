@@ -140,7 +140,7 @@ Item {
         id: preparo
         objectName: "dialogoDoPreparo"
         respostas: [{ id: "cancelar", rotulo: "Cancelar", objeto: "botaoCancelarPreparo" },
-                    { id: "jogar", rotulo: "Jogar mesmo assim", objeto: "botaoJogarMesmoAssim" }]
+                    { id: "jogar", rotulo: "Iniciar mesmo assim", objeto: "botaoJogarMesmoAssim" }]
         respostaDeEscape: "cancelar"
         respostaInicial: "cancelar"
         onRespondido: resposta => resposta === "jogar" ? camada.ponte.jogarMesmoAssim() : camada.ponte.cancelarPreparo()

@@ -633,14 +633,14 @@ Item {
                         visible: !detalhes.zerado
                         focusPolicy: Qt.StrongFocus
                         hoverEnabled: true
-                        text: "Jogar"
+                        text: "Iniciar"
                         leftPadding: 32
                         rightPadding: 32
                         topPadding: 0
                         bottomPadding: 0
                         implicitHeight: 44
                         implicitWidth: contentItem.implicitWidth + 64
-                        Accessible.name: "Jogar"
+                        Accessible.name: "Iniciar"
                         Keys.onReturnPressed: click()
                         Keys.onEnterPressed: click()
                         onClicked: raiz.jogar()
