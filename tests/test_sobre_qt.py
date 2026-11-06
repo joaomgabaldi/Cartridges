@@ -23,8 +23,8 @@ from tests.apoio_janela_atualizacao import Janela, achar, avaliar, esperar
 
 METAINFO = Path(__file__).resolve().parent.parent / "data" / "io.github.joaomgabaldi.Cartridges.metainfo.xml.in"
 GPL = "https://www.gnu.org/licenses/gpl-3.0.html"
-# Três grupos: Novidades; Solução de problemas; Créditos e Aviso legal. Sem "Detalhes" (o gabarito não o mostra).
-LINHAS = ("linhaNovidades", "linhaProblemas", "linhaCreditos", "linhaLegal")
+# Três grupos: Novidades; Solução de problemas; Aviso legal. Sem "Detalhes" (o gabarito não o mostra).
+LINHAS = ("linhaNovidades", "linhaProblemas", "linhaLegal")
 
 
 @pytest.fixture(autouse=True)
@@ -153,12 +153,10 @@ def test_textos_do_sobre_sao_os_da_main():
     assert modulo_sobre.TITULOS == {
         "principal": "Sobre",
         "novidades": "Novidades",
-        "creditos": "Créditos",
         "legal": "Aviso legal",
         "problemas": "Solução de problemas",
         "depuracao": "Informações de depuração",
     }
-    assert modulo_sobre.ABOUT_THANKS_TITLE == "O autor original agradece às pessoas abaixo pelas suas contribuições:"
     assert modulo_sobre.COPYRIGHT == "© 2022-2024 kramo\n© 2026 joaomgabaldi"
     assert modulo_sobre.DESENVOLVEDOR == "joaomgabaldi"
     assert modulo_sobre.ABOUT_LICENSE == (
@@ -166,29 +164,19 @@ def test_textos_do_sobre_sao_os_da_main():
         '<a href="https://www.gnu.org/licenses/gpl-3.0.html">Licença Pública '
         "Geral GNU, versão 3 ou posterior</a> para mais detalhes."
     )
-    assert modulo_sobre.CREDITOS == [
-        {"titulo": "", "nomes": ["Copyright (C) 2022-2024 kramo", "Copyright (C) 2026 joaomgabaldi"]},
-        {
-            "titulo": modulo_sobre.ABOUT_THANKS_TITLE,
-            "nomes": [
-                "Geoffrey Coulaud", "Rilic", "Arcitec", "Paweł Lidwin", "Domenico", "Rafael Mardojai CM",
-                "Clara Hobbs", "Sabri Ünal",
-            ],
-        },
-    ]  # fmt: skip
     assert modulo_sobre.TEXTO_DE_SUPORTE == (
         "As informações de depuração abaixo ajudam a diagnosticar problemas. Inclua-as ao solicitar suporte."
     )
     assert modulo_sobre.NOME_DO_LOG == "cartridges.log"
 
 
-def test_navegacao_so_aceita_as_seis_paginas(app_qt):  # noqa: ARG001
+def test_navegacao_so_aceita_as_cinco_paginas(app_qt):  # noqa: ARG001
     sobre = Sobre(None)
     sobre.abrir()
-    sobre.irPara("creditos")
-    assert sobre.pagina == "creditos"
+    sobre.irPara("legal")
+    assert sobre.pagina == "legal"
     sobre.irPara("qualquer-coisa")
-    assert sobre.pagina == "creditos"
+    assert sobre.pagina == "legal"
     sobre.voltar()
     assert sobre.pagina == "principal"
     sobre.irPara("problemas")
@@ -298,7 +286,7 @@ def test_pagina_principal_mostra_nome_versao_e_linhas(janela):
     assert janela.achar("versaoDoApp").property("text") == "2026.10.26"
     assert all(janela.achar(n).property("visible") is True for n in LINHAS)
     assert [janela.achar(n).property("titulo") for n in LINHAS] == [
-        "Novidades", "Solução de problemas", "Créditos", "Aviso legal",
+        "Novidades", "Solução de problemas", "Aviso legal",
     ]  # fmt: skip
     # Sem título na principal; "Kyron" só aparece ao rolar (opacidade 0).
     assert janela.achar("tituloDaPaginaDoSobre").property("opacity") == 0
@@ -331,17 +319,6 @@ def test_pagina_de_novidades_tem_titulo_versao_e_itens(janela):
     assert janela.achar("cabecalhoDaVersao").property("text") == "Versão 2026.10.26"
     assert janela.achar("itemDeNovidade-0").property("text").startswith("Agora é possível arrastar atalhos")
     assert janela.achar("itemDeNovidade-1") is not None
-
-
-def test_creditos_em_texto_puro_e_com_os_oito_nomes(janela):
-    _abrir(janela)
-    _clique(janela, "linhaCreditos")
-    assert esperar(lambda: janela.sobre.pagina == "creditos")
-    assert janela.achar("tituloDaPaginaDoSobre").property("text") == "Créditos"
-    agradecimento = janela.achar("tituloDosAgradecimentos")
-    assert agradecimento.property("text") == modulo_sobre.ABOUT_THANKS_TITLE
-    assert avaliar(agradecimento, "wrapMode !== Text.NoWrap") is True  # quebra linha, sem "…"
-    assert janela.achar("nomeDoCredito-Sabri Ünal") is not None
 
 
 def test_licenca_com_um_unico_link_e_so_ele_abre(janela, _sem_navegador):
@@ -380,8 +357,8 @@ def test_paginas_longas_rolam_pelo_teclado(janela):
     """Setas e PageUp/PageDown rolam as páginas fora da principal; Tab e Esc seguem."""
     janela.janela.setHeight(260)
     _abrir(janela)
-    _clique(janela, "linhaCreditos")
-    assert esperar(lambda: janela.sobre.pagina == "creditos")
+    _clique(janela, "linhaNovidades")
+    assert esperar(lambda: janela.sobre.pagina == "novidades")
     assert esperar(lambda: janela.achar("botaoVoltarDoSobre").property("activeFocus") is True)
     rolagem = janela.achar("rolagemDoSobre")
     assert rolagem.property("contentHeight") > rolagem.property("height")
@@ -433,8 +410,8 @@ def test_esc_volta_e_depois_fecha_e_o_foco_volta_a_grade(janela):
     assert esperar(lambda: dialogo.property("visible") is True)
     assert esperar(lambda: janela.achar("linhaNovidadesBotao").property("activeFocus") is True)  # foco inicial por callLater
 
-    _clique(janela, "linhaCreditos")
-    assert esperar(lambda: janela.sobre.pagina == "creditos")
+    _clique(janela, "linhaLegal")
+    assert esperar(lambda: janela.sobre.pagina == "legal")
     assert esperar(lambda: janela.achar("botaoVoltarDoSobre").property("activeFocus") is True)
 
     QTest.keyClick(janela.janela, Qt.Key.Key_Escape)
@@ -489,19 +466,19 @@ def test_sem_sobre_no_contexto_nao_ha_item_nem_dialogo(app_qt):  # noqa: ARG001
 def test_anel_de_foco_so_aparece_com_o_teclado_ao_trocar_de_pagina(janela):
     """Entrar numa página pelo mouse não mostra o anel no botão de voltar; pelo teclado, sim."""
     _abrir(janela)
-    janela.achar("linhaCreditosBotao").forceActiveFocus(Qt.FocusReason.MouseFocusReason)
-    _clique(janela, "linhaCreditos")
+    janela.achar("linhaLegalBotao").forceActiveFocus(Qt.FocusReason.MouseFocusReason)
+    _clique(janela, "linhaLegal")
     voltar = janela.achar("botaoVoltarDoSobre")
     assert esperar(lambda: voltar.property("activeFocus") is True)
     assert voltar.property("visualFocus") is False
     QTest.keyClick(janela.janela, Qt.Key.Key_Escape)
     assert esperar(lambda: janela.sobre.pagina == "principal")
-    linha = janela.achar("linhaCreditosBotao")
+    linha = janela.achar("linhaLegalBotao")
     assert esperar(lambda: linha.property("activeFocus") is True)
     _no_sobre(janela, "botaoDaVersao").forceActiveFocus(Qt.FocusReason.TabFocusReason)
     linha.forceActiveFocus(Qt.FocusReason.TabFocusReason)  # o foco veio do teclado: com anel
     QTest.keyClick(janela.janela, Qt.Key.Key_Return)
-    assert esperar(lambda: janela.sobre.pagina == "creditos")
+    assert esperar(lambda: janela.sobre.pagina == "legal")
     assert esperar(lambda: voltar.property("visualFocus") is True)
 
 
@@ -514,9 +491,9 @@ def test_clique_real_no_botao_da_versao_copia_o_numero_e_avisa(janela, area):
 
 
 def test_alt_mais_letra_abre_as_linhas_e_aciona_os_botoes(janela, area):
-    """Os mnemônicos (N, S, C, A; I no log; C e S na barra do log), pelo teclado."""
+    """Os mnemônicos (N, S, A; I no log; C e S na barra do log), pelo teclado."""
     alt = Qt.KeyboardModifier.AltModifier
-    for tecla, pagina in ((Qt.Key.Key_N, "novidades"), (Qt.Key.Key_S, "problemas"), (Qt.Key.Key_C, "creditos"), (Qt.Key.Key_A, "legal")):
+    for tecla, pagina in ((Qt.Key.Key_N, "novidades"), (Qt.Key.Key_S, "problemas"), (Qt.Key.Key_A, "legal")):
         _abrir(janela)
         QTest.keyClick(janela.janela, tecla, alt)
         assert esperar(lambda pagina=pagina: janela.sobre.pagina == pagina), pagina
@@ -588,13 +565,11 @@ def test_o_cartao_nao_encolhe_nas_subpaginas_e_a_capsula_tem_30_px(janela):
     assert esperar(lambda: cartao.property("height") > 300)
     altura = cartao.property("height")
     assert _no_sobre(janela, "botaoDaVersao").property("height") == 30
-    for destino in ("linhaCreditos", "linhaProblemas"):
+    for destino in ("linhaLegal", "linhaProblemas"):
         _clique(janela, destino)
         assert esperar(lambda: janela.sobre.pagina != "principal")
         QTest.qWait(50)
-        assert cartao.property("height") >= altura  # nunca encolhe; uma página mais alta que a principal a alonga
-        if destino == "linhaProblemas":
-            assert cartao.property("height") == altura
+        assert cartao.property("height") == altura
         QTest.keyClick(janela.janela, Qt.Key.Key_Escape)
         assert esperar(lambda: janela.sobre.pagina == "principal")
 
@@ -603,12 +578,12 @@ def test_alt_seta_esquerda_volta_com_o_foco_na_linha_e_o_anel(janela):
     _abrir(janela)
     voltar = janela.achar("botaoVoltarDoSobre")
     assert voltar.property("estilo") == "plano"
-    _clique(janela, "linhaCreditos")
-    assert esperar(lambda: janela.sobre.pagina == "creditos")
+    _clique(janela, "linhaLegal")
+    assert esperar(lambda: janela.sobre.pagina == "legal")
     assert esperar(lambda: voltar.property("activeFocus") is True)
     QTest.keyClick(janela.janela, Qt.Key.Key_Left, Qt.KeyboardModifier.AltModifier)
     assert esperar(lambda: janela.sobre.pagina == "principal")
-    linha = janela.achar("linhaCreditosBotao")
+    linha = janela.achar("linhaLegalBotao")
     assert esperar(lambda: linha.property("activeFocus") is True)
     assert linha.property("visualFocus") is True
     # Na principal o atalho não faz nada.

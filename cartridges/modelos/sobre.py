@@ -23,30 +23,19 @@ ICONE = Path(__file__).resolve().parent.parent.parent / "data" / "icons" / "hico
 TITULOS = {
     "principal": "Sobre",
     "novidades": "Novidades",
-    "creditos": "Créditos",
     "legal": "Aviso legal",
     "problemas": "Solução de problemas",
     "depuracao": "Informações de depuração",
 }
 DESENVOLVEDOR = "joaomgabaldi"
+# A GPLv3 (seção 5d) pede o aviso de copyright na interface, por isso a linha do autor original fica aqui.
 COPYRIGHT = "© 2022-2024 kramo\n© 2026 joaomgabaldi"
-ABOUT_THANKS_TITLE = "O autor original agradece às pessoas abaixo pelas suas contribuições:"
 URL_DA_LICENCA = "https://www.gnu.org/licenses/gpl-3.0.html"
 ABOUT_LICENSE = (
     "Este aplicativo é fornecido sem nenhuma garantia. Veja a "
     f'<a href="{URL_DA_LICENCA}">Licença Pública '
     "Geral GNU, versão 3 ou posterior</a> para mais detalhes."
 )
-CREDITOS = [
-    {"titulo": "", "nomes": ["Copyright (C) 2022-2024 kramo", "Copyright (C) 2026 joaomgabaldi"]},
-    {
-        "titulo": ABOUT_THANKS_TITLE,
-        "nomes": [
-            "Geoffrey Coulaud", "Rilic", "Arcitec", "Paweł Lidwin", "Domenico", "Rafael Mardojai CM",
-            "Clara Hobbs", "Sabri Ünal",
-        ],
-    },
-]  # fmt: skip
 TEXTO_DE_SUPORTE = "As informações de depuração abaixo ajudam a diagnosticar problemas. Inclua-as ao solicitar suporte."
 NOME_DO_LOG = "cartridges.log"
 
@@ -145,10 +134,6 @@ class Sobre(QObject):
     @Property("QVariantMap", constant=True)
     def titulos(self) -> dict:
         return TITULOS
-
-    @Property("QVariantList", constant=True)
-    def creditos(self) -> list:
-        return CREDITOS
 
     @Property(str, constant=True)
     def desenvolvedor(self) -> str:

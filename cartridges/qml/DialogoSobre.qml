@@ -16,14 +16,14 @@ MolduraDoDialogo {
     readonly property string pagina: modelo ? modelo.pagina : "principal"
     property string paginaAnterior: "principal"
     property bool avisoAberto: false
-    readonly property var linhas: ({ novidades: linhaNovidades, creditos: linhaCreditos, legal: linhaLegal,
+    readonly property var linhas: ({ novidades: linhaNovidades, legal: linhaLegal,
                                      problemas: linhaProblemas, depuracao: linhaDepuracao })
 
     aberto: !!modelo && modelo.aberto
     largura: 360
     setasMovemOFoco: true
     rolagemDasSetas: rolagem
-    focoInicial: linhaNovidades.aparece ? linhaNovidades.botaoDaLinha : linhaCreditos.botaoDaLinha
+    focoInicial: linhaNovidades.aparece ? linhaNovidades.botaoDaLinha : linhaProblemas.botaoDaLinha
     nomeAcessivel: "Sobre o Kyron"
     onFecharPedido: pagina === "principal" ? modelo.fechar() : modelo.voltar()
     onAbertoChanged: if (aberto) { paginaAnterior = "principal"; rolagem.contentY = 0 }
@@ -138,7 +138,7 @@ MolduraDoDialogo {
             width: rolagem.width
             property real alturaDaPrincipal: 0
             implicitHeight: Math.max(alturaDaPrincipal, principal.visible ? principal.implicitHeight : 0, novidades.visible ? novidades.implicitHeight : 0,
-                creditos.visible ? creditos.implicitHeight : 0, legal.visible ? legal.implicitHeight : 0,
+                legal.visible ? legal.implicitHeight : 0,
                 problemas.visible ? problemas.implicitHeight : 0, depuracao.visible ? depuracao.implicitHeight : 0)
 
             ColumnLayout {
@@ -242,7 +242,6 @@ MolduraDoDialogo {
                     GrupoDeLinhas {
                         Layout.fillWidth: true
                         visible: true
-                        LinhaDoSobre { id: linhaCreditos; objectName: "linhaCreditos"; destino: "creditos"; mnemonico: "C" }
                         LinhaDoSobre { id: linhaLegal; objectName: "linhaLegal"; destino: "legal"; mnemonico: "A" }
                     }
                 }
@@ -298,51 +297,6 @@ MolduraDoDialogo {
                             selectionColor: Tema.destaque
                             selectedTextColor: Tema.textoDoDestaque
                             font { family: Tema.fonte; pixelSize: Tema.corpo }
-                        }
-                    }
-                }
-            }
-
-            ColumnLayout {
-                id: creditos
-                visible: dialogo.pagina === "creditos"
-                x: 12
-                width: parent.width - 24
-                spacing: 18
-
-                Item { Layout.preferredHeight: 0 }
-                Repeater {
-                    model: dialogo.modelo ? dialogo.modelo.creditos : []
-                    ColumnLayout {
-                        id: secao
-                        required property var modelData
-                        required property int index
-                        Layout.fillWidth: true
-                        Layout.bottomMargin: index === (dialogo.modelo ? dialogo.modelo.creditos.length : 0) - 1 ? 18 : 0
-                        spacing: 12
-                        Text {
-                            objectName: secao.modelData.titulo !== "" ? "tituloDosAgradecimentos" : ""
-                            Layout.fillWidth: true
-                            visible: text !== ""
-                            text: secao.modelData.titulo
-                            textFormat: Text.PlainText
-                            wrapMode: Text.Wrap
-                            color: Tema.texto
-                            font { family: Tema.fonte; pixelSize: Tema.corpo; weight: Tema.pesoForte }
-                            Accessible.role: Accessible.Heading
-                            Accessible.name: text
-                        }
-                        GrupoDeLinhas {
-                            Layout.fillWidth: true
-                            visible: true
-                            Repeater {
-                                model: secao.modelData.nomes
-                                LinhaDoGrupo {
-                                    required property string modelData
-                                    objectName: "nomeDoCredito-" + modelData
-                                    titulo: modelData
-                                }
-                            }
                         }
                     }
                 }

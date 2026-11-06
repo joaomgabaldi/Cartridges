@@ -109,7 +109,7 @@ def test_sobre_o_direcional_alcanca_as_linhas(app):
     assert _esperar(lambda: app.achar("dialogoSobre").property("visible") is True)
     _com_foco_em(app, "linhaProblemas")
     app.controle.mover.emit(0, 1)
-    assert app.achar("linhaCreditos").property("activeFocus") is True
+    assert app.achar("linhaLegal").property("activeFocus") is True
     app.controle.mover.emit(0, -1)
     assert app.achar("linhaProblemas").property("activeFocus") is True
     assert app.leitor.vibracoes == [MOVE, MOVE]
