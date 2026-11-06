@@ -28,6 +28,9 @@ SeletorDaSteam 1.0 SeletorDaSteam.qml
 SeletorDoLudusavi 1.0 SeletorDoLudusavi.qml
 SeletorDePapelDeParede 1.0 SeletorDePapelDeParede.qml
 BigPicture 1.0 BigPicture.qml
+GlifoDoBotao 1.0 GlifoDoBotao.qml
+FundoDoBigPicture 1.0 FundoDoBigPicture.qml
+LogoDoBigPicture 1.0 LogoDoBigPicture.qml
 CapaDoBigPicture 1.0 CapaDoBigPicture.qml
 BalaoDaAnotacao 1.0 BalaoDaAnotacao.qml
 CamadaDaSessao 1.0 CamadaDaSessao.qml

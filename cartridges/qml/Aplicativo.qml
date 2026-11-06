@@ -486,8 +486,6 @@ Principal {
         enabled: !camadaDeAvisos.dialogoAberto && !sessao.emAndamento
         onVisibleChanged: if (visible) forceActiveFocus()
         onEnabledChanged: if (enabled && visible) forceActiveFocus()
-        onAbrir: bigPicture.ativar()
-        onSair: bigPicture.voltar()
     }
 
     Connections {

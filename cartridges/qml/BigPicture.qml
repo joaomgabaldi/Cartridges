@@ -6,9 +6,6 @@ Item {
     id: tela
     objectName: "bigPicture"
 
-    signal abrir()
-    signal sair()
-
     readonly property var jogos: bigPicture.jogos
     readonly property int indice: bigPicture.indice
     readonly property int perspectiva: 900
@@ -18,15 +15,12 @@ Item {
     readonly property real profundidadeLateral: 220
     readonly property int capasDeCadaLado: 8
     readonly property int duracaoDoPasso: 350
-    readonly property real escalaNaAbertura: 1.6
-    readonly property int duracaoDaAbertura: 400
     readonly property real reflexoAlcance: 0.55
     readonly property real reflexoOpacidade: 0.35
 
     property real posicao: 0
     property real virada: 1
     property real opacidadeCapas: 1
-    property real progressoAbertura: 0
     property real opacidadeDoRodape: 1
     property bool animarPasso: true
     property bool sessaoEmAndamento: false
@@ -111,7 +105,6 @@ Item {
     }
     // Na saída o quadro só volta com a camada já escondida, no escuro: antes o carrossel reapareceria.
     onVisibleChanged: if (!visible) {
-        progressoAbertura = 0
         reporQuadro()
         soltarPreparo()
     }
@@ -126,11 +119,21 @@ Item {
 
     Connections {
         target: bigPicture
-        function onEtapaPedida(de, para) { Qt.callLater(() => bigPicture.etapaTerminou()) }  // provisório: a Task 4 anima as etapas
+        function onEtapaPedida(de, para) { tela.mudarDeEtapa(de, para) }
         function onFocoPedido() { tela.forceActiveFocus() }
         function onFilaPedida(entrar) { tela.iniciarFila(entrar) }
         function onPrepararCapas() { tela.preparar() }
     }
+
+    // O único lugar da troca de etapa: as animações das etapas entram aqui. Um pedido novo cancela o anterior, e só o
+    // último chama `etapaTerminou`. Enquanto não há animação visual, o fim vem num ciclo de espera (a página fica
+    // ocupada nele) ou na hora, sem as animações do Windows.
+    function mudarDeEtapa(de, para) {
+        fimDaEtapa.stop()
+        if (bigPicture.animacoes) fimDaEtapa.start()
+        else bigPicture.etapaTerminou()
+    }
+    Timer { id: fimDaEtapa; interval: 0; onTriggered: bigPicture.etapaTerminou() }
 
     // Capas da fila decodificadas antes de escurecer, no tamanho das vagas: o cache do Qt Quick só acerta com a mesma
     // URL, `sourceSize` e `fillMode`.
@@ -206,19 +209,16 @@ Item {
 
     function transformacao(i) {
         const [x, angulo, prof, a] = arranjo(i)
-        const fator = 1 + (escalaNaAbertura - 1) * progressoAbertura * (1 - a)
         const r = angulo * Math.PI / 180
         const c = Math.cos(r), s = Math.sin(r)
         // A projeção zera o z para nada ser recortado em profundidade.
         const projecao = Qt.matrix4x4(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, -1 / perspectiva, 1)
         const giro = Qt.matrix4x4(c, 0, s, 0, 0, 1, 0, 0, -s, 0, c, 0, 0, 0, 0, 1)
-        const tamanho = Qt.matrix4x4(fator, 0, 0, 0, 0, fator, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1)
         return translacao(width / 2, height * 0.40, 0)
             .times(projecao)
             .times(translacao(x, 0, prof))
             .times(giro)
-            .times(tamanho)
-            .times(translacao(-larguraCapa / 2, -alturaCapa / 2, 0))
+                        .times(translacao(-larguraCapa / 2, -alturaCapa / 2, 0))
     }
 
     // O toque do Qt Quick acerta a capa errada sob a projeção: projeta os cantos e testa a caixa que os contém, da capa
@@ -247,10 +247,10 @@ Item {
             [Qt.Key_PageDown]: () => bigPicture.mover(10),
             [Qt.Key_Home]: () => bigPicture.inicio(),
             [Qt.Key_End]: () => bigPicture.fim(),
-            [Qt.Key_Return]: () => tela.abrir(),
-            [Qt.Key_Enter]: () => tela.abrir(),
-            [Qt.Key_Space]: () => tela.abrir(),
-            [Qt.Key_Escape]: () => tela.sair(),
+            [Qt.Key_Return]: () => bigPicture.ativar(),
+            [Qt.Key_Enter]: () => bigPicture.ativar(),
+            [Qt.Key_Space]: () => bigPicture.ativar(),
+            [Qt.Key_Escape]: () => bigPicture.voltar(),
         }
         const acao = acoes[evento.key]
         if (!acao) return
@@ -269,6 +269,14 @@ Item {
         smooth: false
         cache: false
         asynchronous: false  // provedor Python na thread de imagens trava: ela espera o GIL segurando o mutex do cache
+    }
+
+    FundoDoBigPicture {
+        id: fundoDoBigPicture
+        objectName: "fundoDoBigPicture"
+        anchors.fill: parent
+        fonte: bigPicture.visivel ? detalhes.fundo : ""
+        animar: bigPicture.animacoes
     }
 
     Rectangle {
@@ -312,7 +320,7 @@ Item {
                     // Só no fim do passo: segurando a tecla, nenhuma capa de passagem carrega a cópia em alta.
                     central: vaga.i === tela.centralExibida
                     animar: bigPicture.animarCentral && bigPicture.visivel && !tela.sessaoEmAndamento
-                    opacity: (1 - tela.progressoAbertura) * tela.opacidadeCapas
+                    opacity: tela.opacidadeCapas
                     transform: Matrix4x4 { matrix: tela.transformacao(vaga.i) }
                 }
             }
@@ -322,7 +330,7 @@ Item {
             enabled: !bigPicture.ocupada
             onTapped: (ponto) => {
                 const i = tela.capaEm(ponto.position.x, ponto.position.y)
-                if (i === tela.indice) tela.abrir()
+                if (i === tela.indice) bigPicture.ativar()
                 else if (i >= 0) bigPicture.irPara(i)
             }
         }
@@ -356,35 +364,39 @@ Item {
         }
     }
 
-    Column {
-        objectName: "rodape"
+    LogoDoBigPicture {
         visible: !bigPicture.vazia
-        anchors.horizontalCenter: parent.horizontalCenter
-        anchors.bottom: parent.bottom
-        anchors.bottomMargin: 48
-        spacing: 6
         opacity: tela.opacidadeDoRodape
-        Text {
-            objectName: "nomeDoRodape"
-            anchors.horizontalCenter: parent.horizontalCenter
-            width: Math.min(implicitWidth, tela.width)
-            text: bigPicture.nome
-            textFormat: Text.PlainText
-            color: "white"
-            font { family: Tema.fonte; pixelSize: Tema.titulo1; weight: Tema.pesoTitulo1 }
-            wrapMode: Text.Wrap
-            horizontalAlignment: Text.AlignHCenter
-        }
-        Text {
-            objectName: "desenvolvedoraDoRodape"
-            anchors.horizontalCenter: parent.horizontalCenter
-            width: Math.min(implicitWidth, tela.width)
-            text: bigPicture.desenvolvedora
-            textFormat: Text.PlainText
-            color: "white"
-            opacity: 0.55
-            font { family: Tema.fonte; pixelSize: Tema.corpo }
-            horizontalAlignment: Text.AlignHCenter
+        posicao: bigPicture.etapa === "detalhes" ? "coluna" : bigPicture.etapa === "sessao" ? "relogio" : "alto"
+        animar: bigPicture.animacoes
+    }
+
+    // A ação que tem botão com glifo na tela não se repete em outro lugar.
+    Row {
+        id: dicasDoBigPicture
+        objectName: "dicasDoBigPicture"
+        readonly property var textos: ["Selecionar", "Voltar"]
+        readonly property var letras: ["A", "B"]
+        visible: bigPicture.etapa === "carrossel" && !bigPicture.vazia
+        opacity: tela.opacidadeDoRodape
+        anchors { right: parent.right; bottom: parent.bottom; rightMargin: 40; bottomMargin: 32 }
+        spacing: 28
+        Repeater {
+            model: dicasDoBigPicture.textos
+            delegate: Row {
+                required property int index
+                required property string modelData
+                spacing: 10
+                GlifoDoBotao { letra: dicasDoBigPicture.letras[parent.index]; anchors.verticalCenter: parent.verticalCenter }
+                Text {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: parent.modelData
+                    textFormat: Text.PlainText
+                    color: "white"
+                    opacity: 0.8
+                    font { family: Tema.fonte; pixelSize: Tema.corpo }
+                }
+            }
         }
     }
 

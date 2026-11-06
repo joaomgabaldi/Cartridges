@@ -46,7 +46,7 @@ def _produto(a, b):
 
 # A convenção do giro (sinal) e da perspectiva é a mesma do QML: a equivalência com o `rotate_3d` do
 # Graphene vem das capturas do protótipo; aqui pega-se regressão e erro de encadeamento.
-def _referencia_do_gtk(i, posicao, virada, abertura, largura_tela, altura_tela):
+def _referencia_do_gtk(i, posicao, virada, largura_tela, altura_tela):
     """Os cantos projetados da capa `i`, pela cadeia de transformação e de arranjo."""
     altura = altura_tela * 0.55
     largura = altura * 2 / 3
@@ -66,7 +66,7 @@ def _referencia_do_gtk(i, posicao, virada, abertura, largura_tela, altura_tela):
             -regras.ANGULO_LATERAL + (angulo + regras.ANGULO_LATERAL) * virada,
             -regras.PROFUNDIDADE_LATERAL + (prof + regras.PROFUNDIDADE_LATERAL) * virada,
         )
-    escala = 1 + (regras.ESCALA_NA_ABERTURA - 1) * abertura * (1 - a)
+    escala = 1
 
     def trans(tx, ty, tz):
         return [[1, 0, 0, tx], [0, 1, 0, ty], [0, 0, 1, tz], [0, 0, 0, 1]]
@@ -145,18 +145,14 @@ def test_capa_em_fora_de_tudo(app_qt):
     tela.fechar()
 
 
-@pytest.mark.parametrize(
-    ("posicao", "virada", "abertura"),
-    [(2.0, 1.0, 0.0), (1.5, 1.0, 0.0), (2.0, 0.6, 0.0), (2.3, 0.4, 0.5), (2.0, 1.0, 1.0)],
-)
-def test_transformacao_igual_a_do_gtk(app_qt, posicao, virada, abertura):
+@pytest.mark.parametrize(("posicao", "virada"), [(2.0, 1.0), (1.5, 1.0), (2.0, 0.6), (2.3, 0.4)])
+def test_transformacao_igual_a_do_gtk(app_qt, posicao, virada):
     tela = _Tela()
     tela.tela.setProperty("virada", virada)
-    tela.tela.setProperty("progressoAbertura", abertura)
     tela.tela.setProperty("posicao", posicao)
     for i in (1, 2, 3):
         obtido = _cantos(tela, i)
-        esperado = _referencia_do_gtk(i, posicao, virada, abertura, LARGURA, ALTURA)
+        esperado = _referencia_do_gtk(i, posicao, virada, LARGURA, ALTURA)
         for (ox, oy), (ex, ey) in zip(obtido, esperado, strict=True):
             assert ox == pytest.approx(ex, abs=0.01)
             assert oy == pytest.approx(ey, abs=0.01)
@@ -169,7 +165,7 @@ def test_constantes_iguais_as_das_regras(app_qt):
         ("perspectiva", regras.PERSPECTIVA), ("anguloLateral", regras.ANGULO_LATERAL),
         ("espacoCentral", regras.ESPACO_CENTRAL), ("espacoLateral", regras.ESPACO_LATERAL),
         ("profundidadeLateral", regras.PROFUNDIDADE_LATERAL), ("capasDeCadaLado", regras.CAPAS_DE_CADA_LADO),
-        ("duracaoDoPasso", regras.DURACAO_PASSO_MS), ("escalaNaAbertura", regras.ESCALA_NA_ABERTURA),
+        ("duracaoDoPasso", regras.DURACAO_PASSO_MS),
         ("reflexoAlcance", regras.REFLEXO_ALCANCE), ("reflexoOpacidade", regras.REFLEXO_OPACIDADE),
     ):  # fmt: skip
         assert tela.tela.property(qml) == pytest.approx(valor), qml
@@ -196,7 +192,7 @@ def test_dezessete_vagas_qualquer_tamanho(app_qt, quantidade):
     tela.fechar()
 
 
-def test_teclas_movem_e_esc_sai(app_qt):
+def test_teclas_movem(app_qt):
     tela = _Tela()
     for tecla, esperado in (
         (Qt.Key.Key_Right, 1), (Qt.Key.Key_Right, 2), (Qt.Key.Key_Left, 1),
@@ -204,11 +200,27 @@ def test_teclas_movem_e_esc_sai(app_qt):
     ):  # fmt: skip
         QTest.keyClick(tela.janela, tecla)
         assert tela.bp.indice == esperado, tecla
+    tela.fechar()
+
+
+def test_enter_ativa_e_esc_volta(app_qt):
+    tela = _Tela()
+    tela.bp.definir_animacoes_do_sistema(False)  # noqa: FBT003
     for tecla in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Space):
         QTest.keyClick(tela.janela, tecla)
-    assert tela.eventos == ["abrir"] * 3
-    QTest.keyClick(tela.janela, Qt.Key.Key_Escape)
-    assert tela.eventos[-1] == "sair"
+        assert tela.bp.etapa == "detalhes", tecla
+        QTest.keyClick(tela.janela, Qt.Key.Key_Escape)
+        assert tela.bp.etapa == "carrossel", tecla
+    QTest.keyClick(tela.janela, Qt.Key.Key_Escape)  # no carrossel, o Esc sai do Big Picture
+    assert tela.bp.jaSaiu  # sem animações a saída termina na hora
+    tela.fechar()
+
+
+def test_sem_animacoes_troca_de_etapa_direto(app_qt):
+    tela = _Tela()
+    tela.bp.definir_animacoes_do_sistema(False)  # noqa: FBT003
+    tela.bp.ativar()
+    assert (tela.bp.etapa, tela.bp.ocupada) == ("detalhes", False)  # `etapaTerminou` no mesmo ciclo
     tela.fechar()
 
 
@@ -219,12 +231,14 @@ def _clicar(tela, x, y):
 def test_toque_na_central_abre_e_na_lateral_vai(app_qt):
     tela = _Tela()
     tela.bp.irPara(2)
+    tela.bp.definir_animacoes_do_sistema(False)  # noqa: FBT003
     _clicar(tela, LARGURA / 2, ALTURA * 0.40)
-    assert tela.eventos == ["abrir"]
+    assert tela.bp.etapa == "detalhes"
+    tela.bp.voltar()
     cantos = _cantos(tela, 3)
     _clicar(tela, sum(x for x, _ in cantos) / 4, sum(y for _, y in cantos) / 4)
     assert tela.bp.indice == 3
-    assert tela.eventos == ["abrir"]
+    assert tela.bp.etapa == "carrossel"
     _clicar(tela, 1, 1)
     assert tela.bp.indice == 3
     tela.fechar()
@@ -242,7 +256,7 @@ def test_toque_depois_de_arrastar_nao_conta(app_qt):
         tela.janela, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, QPoint(round(x0 + 210), round(y))
     )
     _esperar()
-    assert "abrir" not in tela.eventos
+    assert tela.bp.etapa == "carrossel"
     # Arrastar para a direita traz as capas anteriores: dx / (0,45 · larguraCapa) passos.
     passos = int(210 / (regras.ESPACO_LATERAL * (ALTURA * 0.55 * 2 / 3)))
     assert passos >= 1
@@ -272,7 +286,7 @@ def test_ocupada_ignora_entrada(app_qt):
         QTest.keyClick(tela.janela, tecla)
     _clicar(tela, LARGURA / 2, ALTURA * 0.40)
     _clicar(tela, 1, 1)
-    assert (tela.bp.indice, tela.eventos) == (0, [])
+    assert (tela.bp.indice, tela.bp.etapa) == (0, "carrossel")
     tela.fechar()
 
 
@@ -388,21 +402,19 @@ def test_vazio_mostra_o_aviso(app_qt):
     assert vazio.property("visible") is True
     assert vazio.property("titulo") == "Nenhum jogo"
     assert vazio.property("descricao") == "Pressione B ou Esc para voltar à biblioteca."
-    assert tela.achar("rodape").property("visible") is False
     QTest.keyClick(tela.janela, Qt.Key.Key_Right)  # sem jogos, nada quebra
     tela.fechar()
     cheia = _Tela()
     assert cheia.achar("estadoVazioDoBigPicture").property("visible") is False
-    assert cheia.achar("rodape").property("visible") is True
     cheia.fechar()
 
 
 def test_nome_em_texto_puro(app_qt, tmp_path):
     tela = _Tela(1, nome="A & <b>B</b>")
-    nome = tela.achar("nomeDoRodape")
+    nome = tela.achar("nomeDoLogoDoBigPicture")
     assert nome.property("text") == "A & <b>B</b>"
     textos = _itens(tela.tela, lambda i: i.metaObject().className().startswith("QQuickText"))
-    assert len(textos) >= 3  # nome, desenvolvedora e o do placeholder da capa
+    assert len(textos) >= 3  # o nome no logo, as letras dos glifos e as dicas da barra
     for texto in textos:
         assert _avaliar(texto, "textFormat") == 0, texto.property("text")  # Text.PlainText
     tela.fechar()
@@ -886,7 +898,7 @@ def test_confirmacao_do_comando_na_frente_e_cancelar_volta(app_qt, monkeypatch):
     assert _esperar(lambda: avisos.property("dialogoAberto") is True, limite=3)
     _clicar_no_texto(app, "Iniciar")
     assert _esperar(lambda: jogo.launch.chamadas == 1, limite=3)
-    assert _esperar(lambda: not app.big_picture.ocupada and tela.property("progressoAbertura") == 0, limite=3)
+    assert _esperar(lambda: not app.big_picture.ocupada, limite=3)
     assert jogo.launch.chamadas == 1
     app.fechar()
 
@@ -1025,16 +1037,56 @@ def _textos_de(raiz):
     return [i.property("text") for i in _itens(raiz, lambda i: i.metaObject().className().startswith("QQuickText"))]
 
 
-def test_rodape_tem_os_tamanhos_da_main_e_so_quebra_na_largura_da_tela(app_qt):
-    # Nome em `title-1`, desenvolvedora no corpo, largura natural.
-    tela = _Tela(1, nome="Zelda")
-    nome, dev = tela.achar("nomeDoRodape"), tela.achar("desenvolvedoraDoRodape")
-    assert _avaliar(nome, "font.pixelSize") == _avaliar(nome, "Tema.titulo1") and _avaliar(nome, "font.weight") == 800
-    assert _avaliar(dev, "font.pixelSize") == _avaliar(dev, "Tema.corpo")
-    assert nome.property("width") == pytest.approx(nome.property("implicitWidth"))
-    assert nome.property("width") < LARGURA * 0.8, "o nome curto não ocupa 80% da tela"
+def test_rodape_saiu_e_logo_no_alto(app_qt):
+    tela = _Tela()
+    assert _achar(tela.tela, "rodape") is None
+    assert tela.achar("logoDoBigPicture").property("posicao") == "alto"
     tela.fechar()
-    longa = _Tela(1, nome="Um nome de jogo muito longo " * 12)
-    nome = longa.achar("nomeDoRodape")
-    assert nome.property("width") == pytest.approx(LARGURA) and nome.property("lineCount") > 1
-    longa.fechar()
+
+
+def test_sem_logo_mostra_o_nome(app_qt):
+    tela = _Tela(1, nome="Zelda")
+    nome = tela.achar("nomeDoLogoDoBigPicture")
+    assert nome.property("visible") is True and nome.property("text") == "Zelda"
+    assert _avaliar(nome, "font.pixelSize") == _avaliar(nome, "Tema.titulo1")
+    tela.fechar()
+
+
+def test_dicas_do_carrossel(app_qt):
+    tela = _Tela()
+    assert tela.js("dicasDoBigPicture.textos") == ["Selecionar", "Voltar"]
+    assert tela.achar("dicasDoBigPicture").property("visible") is True
+    tela.fechar()
+
+
+def test_glifos_com_as_cores_dos_botoes(app_qt):
+    tela = _Tela()
+    glifos = _itens(tela.tela, lambda i: i.objectName() == "glifoDoBotao")
+    cores = {i.property("letra"): _avaliar(i, "color.toString()") for i in glifos}
+    assert cores == {"A": "#5fbf3f", "B": "#e0453a"}
+    assert _avaliar(glifos[0], "width") == 22
+    tela.fechar()
+
+
+def test_fundo_so_com_desfoque(app_qt):
+    tela = _Tela()
+    fundo = tela.achar("fundoDoBigPicture")
+    fundo.setProperty("fonte", "file:///x.svg")
+    _esperar()
+    assert tela.js("fundoDoBigPicture.opacidadeVisivel") == 0
+    fundo.setProperty("fonte", "image://desfoque/x?v=1")
+    assert _esperar(lambda: abs(tela.js("fundoDoBigPicture.opacidadeVisivel") - 0.4) < 0.01, limite=3)
+    fundo.setProperty("animar", False)
+    fundo.setProperty("fonte", "")
+    assert tela.js("fundoDoBigPicture.opacidadeVisivel") == 0  # sem animar, direto
+    tela.fechar()
+
+
+def test_fundo_com_saturacao_menor(app_qt):
+    tela = _Tela()
+    fundo = tela.achar("fundoDoBigPicture")
+    assert fundo.property("saturacao") == -0.25  # os dois `MultiEffect` leem este valor
+    imagens = _itens(fundo, lambda i: i.objectName() == "imagemDoFundo")
+    assert len(imagens) == 2
+    assert all(i.property("asynchronous") is False for i in imagens)  # D45
+    tela.fechar()

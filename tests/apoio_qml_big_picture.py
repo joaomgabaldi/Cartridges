@@ -14,8 +14,12 @@ from PySide6.QtQuick import QQuickItem, QQuickWindow
 from cartridges import shared
 from cartridges.jogo import Jogo
 from cartridges.modelos.big_picture import BigPicture, ProvedorDoFundo
+from cartridges.modelos.avisos import FilaDeAvisos
 from cartridges.modelos.biblioteca import ModeloDaBiblioteca
-from tests.apoio_qml_biblioteca import QML, _achar, _esperar
+from cartridges.modelos.conquistas import ConquistasDoJogo
+from cartridges.modelos.detalhes import DetalhesDoJogo
+from cartridges.modelos.sessao import ModeloDaSessao
+from tests.apoio_qml_biblioteca import QML, _achar, _esperar, _LojaFalsa
 
 
 LARGURA, ALTURA = 800, 600
@@ -31,23 +35,34 @@ class _Tela:
 
     def __init__(self, quantidade=5, nome=None, animar_passo=False):
         self.modelo = ModeloDaBiblioteca()
-        for n in range(quantidade):
-            self.modelo.atualizar(
-                Jogo(
-                    {
-                        "game_id": f"imported_{n}", "source": "imported",
-                        "name": nome or f"Jogo {n}", "last_played": quantidade - n,
-                    }
-                )
-            )  # fmt: skip
-        self.bp = BigPicture(self.modelo)
+        jogos = [
+            Jogo(
+                {
+                    "game_id": f"imported_{n}", "source": "imported",
+                    "name": nome or f"Jogo {n}", "last_played": quantidade - n,
+                }
+            )
+            for n in range(quantidade)
+        ]  # fmt: skip
+        for jogo in jogos:
+            self.modelo.atualizar(jogo)
+        self.jogos = jogos  # a store de mentira só guarda referências fracas: quem as segura é o teste
+        self.detalhes = DetalhesDoJogo(_LojaFalsa(jogos))
+        self.sessao = ModeloDaSessao(FilaDeAvisos())
+        self.conquistas = ConquistasDoJogo(self.detalhes, self.sessao)
+        self.bp = BigPicture(self.modelo, detalhes=self.detalhes)
         self.bp.entrar()  # antes do QML existir: a lista só acompanha a biblioteca visível, e sem fila
         self.bp.filaTerminou()
         self.motor = QQmlEngine()
         from cartridges.modelos.provedor_de_icones import ProvedorDeIcones  # noqa: PLC0415
         self.motor.addImageProvider("icone", ProvedorDeIcones())
         self.motor.addImageProvider("fundo", ProvedorDoFundo())
-        self.motor.rootContext().setContextProperty("bigPicture", self.bp)
+        self.motor.addImageProvider("desfoque", self.detalhes.provedor)
+        contexto = self.motor.rootContext()
+        for nome_no_qml, objeto in (
+            ("bigPicture", self.bp), ("detalhes", self.detalhes), ("sessao", self.sessao), ("conquistasDoJogo", self.conquistas)
+        ):
+            contexto.setContextProperty(nome_no_qml, objeto)
         componente = QQmlComponent(self.motor, QUrl.fromLocalFile(str(QML / "BigPicture.qml")))
         self.janela = QQuickWindow()
         self.tela = componente.createWithInitialProperties({"width": LARGURA, "height": ALTURA, "animarPasso": animar_passo})
@@ -56,10 +71,6 @@ class _Tela:
         self.tela.setParentItem(self.janela.contentItem())
         self.janela.resize(LARGURA, ALTURA)
         self.janela.show()
-        self.eventos = []
-        eventos = self.eventos  # sem `self` no lambda: nada de ciclo preso à árvore Qt
-        self.tela.abrir.connect(lambda: eventos.append("abrir"))
-        self.tela.sair.connect(lambda: eventos.append("sair"))
         self.tela.forceActiveFocus()
         _esperar()
 
@@ -135,7 +146,7 @@ class _LaunchQueAnota:
             self.jogo._conferir_comando(ao_confirmar or self)  # noqa: SLF001  # o pedido de confirmação de verdade
             return False
         self.chamadas += 1
-        self.no_instante = (self.app.achar("bigPicture").property("progressoAbertura"), self.app.janela.visibility())
+        self.no_instante = self.app.janela.visibility()
         return True
 
 
