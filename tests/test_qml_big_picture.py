@@ -897,7 +897,6 @@ def test_confirmacao_do_comando_na_frente_e_cancelar_volta(app_qt, monkeypatch):
     jogo.comando_a_conferir = True
     _abrir_jogo(app)
     assert _esperar(lambda: avisos.property("dialogoAberto") is True, limite=3)
-    assert _esperar(lambda: not app.big_picture.ocupada, limite=3)  # a capa ainda volta da esquerda: o Iniciar espera
     _clicar_no_texto(app, "Iniciar")
     assert _esperar(lambda: jogo.launch.chamadas == 1, limite=3)
     assert _esperar(lambda: not app.big_picture.ocupada, limite=3)

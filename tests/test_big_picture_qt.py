@@ -1412,3 +1412,32 @@ def test_navegacao_so_no_carrossel(etapas):
         e.bp.ativar()
         e.bp.etapaTerminou()
     assert e.bp.etapa == "sessao"
+
+
+def test_confirmar_durante_a_volta_inicia_o_jogo(etapas):
+    e = etapas
+    launch = e.jogos["a"].launch
+    launch.devolve = False  # comando a conferir: o jogo não abre e a capa volta
+    _nos_detalhes(e)
+    e.bp.ativar()
+    e.bp.etapaTerminou()
+    assert e.pedidas[-1] == ("sessao", "detalhes") and launch.chamadas == 1
+    launch.devolve = True
+    e.bp._continuar_abertura("a")  # noqa: SLF001  # a confirmação chega com a volta ainda rodando
+    assert launch.chamadas == 1 and e.pedidas[-1] == ("sessao", "detalhes")
+    e.bp.etapaTerminou()  # fim da volta: a abertura pendente começa
+    assert e.pedidas[-1] == ("detalhes", "sessao") and launch.chamadas == 1
+    e.bp.etapaTerminou()
+    assert launch.chamadas == 2 and launch.em_tela_cheia is True
+
+
+def test_confirmacao_pendente_cai_se_a_etapa_muda(etapas):
+    e = etapas
+    e.jogos["a"].launch.devolve = False
+    _nos_detalhes(e)
+    e.bp.ativar()
+    e.bp.etapaTerminou()
+    e.bp._continuar_abertura("a")  # noqa: SLF001
+    e.bp._pedir_etapa("carrossel")  # noqa: SLF001  # a etapa vai a outro lugar
+    e.bp.etapaTerminou()
+    assert ("detalhes", "sessao") not in e.pedidas[2:] and e.jogos["a"].launch.chamadas == 1

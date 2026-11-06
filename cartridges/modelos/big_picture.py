@@ -129,6 +129,7 @@ class BigPicture(QObject):
         self._jogos: list[dict[str, str]] = []
         self._agendado = False
         self._ocupada = False
+        self._reabertura: str | None = None  # confirmação que chegou durante a volta da sessão aos detalhes
         self._visivel = False
         self._montada = False  # a lista existe: da entrada (antes de escurecer) ao fim da saída
         self._saindo = False
@@ -357,6 +358,7 @@ class BigPicture(QObject):
         if self._ocupada or not self._visivel:
             return
         self._saindo = self._ocupada = True
+        self._reabertura = None
         self._capas_prontas = True
         self._na_fila = bool(self._jogos)
         self.alterado.emit()
@@ -413,6 +415,7 @@ class BigPicture(QObject):
     def _pedir_etapa(self, para: str) -> None:
         """Muda de etapa: a página fica ocupada até o QML terminar a animação (`etapaTerminou`)."""
         de, self._etapa_bp = self._etapa_bp, para
+        self._reabertura = None  # uma confirmação pendente só vale para a volta em que chegou
         self._transicao, self._ocupada = (de, para), True
         if para != "sessao":
             self._indo = False
@@ -459,6 +462,10 @@ class BigPicture(QObject):
             self._lancar()
         elif transicao is not None:
             self._destravar()
+            if transicao == ("sessao", "detalhes") and (pendente := self._reabertura) is not None:
+                self._reabertura = None
+                if self._visivel and self._etapa_bp == "detalhes":
+                    self._continuar_abertura(pendente)
 
     @Slot()
     def abrirJogo(self) -> None:  # noqa: N802
@@ -507,6 +514,9 @@ class BigPicture(QObject):
 
     def _continuar_abertura(self, jogo_id: str) -> None:
         """O relançamento pedido pelo jogo (comando confirmado ou .ini conferidos)."""
+        if self._transicao == ("sessao", "detalhes"):
+            self._reabertura = jogo_id  # a capa ainda volta: o pedido não se perde, recomeça no fim da volta
+            return
         jogo = shared.store.get(jogo_id) if shared.store is not None else None
         conferidos = jogo is not None and jogo.inis_conferidos
         if self._esperando_inis and jogo_id == self._jogo_aberto:
