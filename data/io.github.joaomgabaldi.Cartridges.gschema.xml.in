@@ -217,7 +217,7 @@
     </key>
     <!-- Where the window's frame was, so it reopens on the monitor it was
          closed on. GTK4 has no window-position API, so these are read and
-         applied through Win32; see cartridges/utils/window_geometry.py.
+         applied through Win32; see kyron/utils/window_geometry.py.
          -2147483648 means "nothing stored yet" - 0 and -1 are both real
          coordinates on a desktop whose second monitor sits above the first. -->
     <key name="x" type="i">

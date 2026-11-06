@@ -21,13 +21,13 @@ import pytest
 from PySide6.QtCore import Q_ARG, QMetaObject, QPointF, Qt, QUrl
 from PySide6.QtTest import QTest
 
-from cartridges import app as modulo_app
-from cartridges import assistente as modulo
-from cartridges import shared
-from cartridges.assistente import Assistente
-from cartridges.conquistas.epic import conta as epic_conta
-from cartridges.modelos import big_picture
-from cartridges.utils import backup, session_fita, window_geometry
+from kyron import app as modulo_app
+from kyron import assistente as modulo
+from kyron import shared
+from kyron.assistente import Assistente
+from kyron.conquistas.epic import conta as epic_conta
+from kyron.modelos import big_picture
+from kyron.utils import backup, session_fita, window_geometry
 from tests.apoio_janela_atualizacao import achar, avaliar, esperar
 from tests.apoio_registro import _apagar_chave
 
@@ -109,7 +109,7 @@ class _Janela:
         monkeypatch.setattr(modulo_app, "_avisos_da_abertura", lambda *_a: self.eventos.append("avisos"))
         self.saidas = []
         monkeypatch.setattr(modulo_app.QGuiApplication, "exit", staticmethod(self.saidas.append))
-        assert modulo_app._mostrar_assistente(app_qt, ["cartridges"], self.abertura) is True  # noqa: SLF001
+        assert modulo_app._mostrar_assistente(app_qt, ["kyron"], self.abertura) is True  # noqa: SLF001
         self.motor = self.abertura.assistente
         self.raiz = self.motor.rootObjects()[0]
         self.modelo = self.motor.rootContext().contextProperty("assistente")
@@ -878,13 +878,13 @@ def test_conectar_conta_no_assistente_sem_biblioteca_nao_levanta(janela, monkeyp
 def test_assistente_sem_gi(tmp_path):
     roteiro = (
         "import builtins, sys; builtins._ = lambda m: m; sys.modules['gi'] = None; "
-        "import cartridges.assistente; print('ok')"
+        "import kyron.assistente; print('ok')"
     )
-    registro = rf"Software\CartridgesTestes\assistente-sem-gi-{uuid.uuid4()}"
+    registro = rf"Software\KyronTestes\assistente-sem-gi-{uuid.uuid4()}"
     ambiente = {
         **os.environ,
-        "CARTRIDGES_DADOS": str(tmp_path / "dados"),
-        "CARTRIDGES_REGISTRO": registro,
+        "KYRON_DADOS": str(tmp_path / "dados"),
+        "KYRON_REGISTRO": registro,
         "QT_QPA_PLATFORM": "offscreen",
     }
     try:

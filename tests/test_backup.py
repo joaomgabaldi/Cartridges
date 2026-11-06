@@ -20,9 +20,9 @@ from pathlib import Path
 
 import pytest
 
-from cartridges import shared
-from cartridges.saves import backup_de_saves
-from cartridges.utils import backup
+from kyron import shared
+from kyron.saves import backup_de_saves
+from kyron.utils import backup
 
 _PASTAS_DO_APP = (
     "app_dir", "games_dir", "covers_dir", "logos_dir", "wallpapers_dir", "log_dir",
@@ -1035,7 +1035,7 @@ def _preparar_restauracao(tmp_path, monkeypatch, com_copias=False):
 
 
 def test_aplicar_pendente_troca_tudo_e_cria_as_pendencias(tmp_path, monkeypatch):
-    from cartridges.utils import restauracao  # noqa: PLC0415
+    from kyron.utils import restauracao  # noqa: PLC0415
 
     aplicadas = _preparar_restauracao(tmp_path, monkeypatch)
 
@@ -1364,7 +1364,7 @@ def test_backup_sem_gi():
         "import builtins, sys\n"
         "builtins._ = lambda m: m\n"
         "sys.modules['gi'] = None\n"  # import gi -> ImportError
-        "import cartridges.utils.backup, cartridges.utils.redefinir\n"
+        "import kyron.utils.backup, kyron.utils.redefinir\n"
         "assert not [m for m in sys.modules if m == 'gi' or m.startswith('gi.')\n"
         "            if sys.modules[m] is not None]\n"
     )

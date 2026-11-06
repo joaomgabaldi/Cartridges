@@ -25,7 +25,7 @@ from PySide6.QtQml import QQmlApplicationEngine
 RAIZ = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(RAIZ))
 
-from cartridges.janela import qwk  # noqa: E402
+from kyron.janela import qwk  # noqa: E402
 user32 = ctypes.windll.user32
 dwmapi = ctypes.windll.dwmapi
 RECT_P = ctypes.POINTER(wintypes.RECT)
@@ -192,7 +192,7 @@ def main() -> int:
     app = QGuiApplication(sys.argv)
     motor = QQmlApplicationEngine()
     qwk.registrar(motor)
-    motor.load(QUrl.fromLocalFile(str(RAIZ / "cartridges" / "qml" / "Principal.qml")))
+    motor.load(QUrl.fromLocalFile(str(RAIZ / "kyron" / "qml" / "Principal.qml")))
     if not motor.rootObjects():
         return 1
     janela = motor.rootObjects()[0]

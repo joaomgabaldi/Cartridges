@@ -10,10 +10,10 @@ from types import SimpleNamespace
 import pytest
 from PySide6.QtCore import Qt
 
-from cartridges import jogo as modulo
-from cartridges.emuladores import aplicacao, varredura
-from cartridges.jogo import Jogo
-from cartridges.ponte import Ponte
+from kyron import jogo as modulo
+from kyron.emuladores import aplicacao, varredura
+from kyron.jogo import Jogo
+from kyron.ponte import Ponte
 
 
 def _pasta(tmp_path, nome="Jogo") -> Path:

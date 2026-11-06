@@ -11,15 +11,15 @@ from pathlib import Path
 
 import pytest
 
-from cartridges import shared
-from cartridges.conquistas.arquivos import Pastas
-from cartridges.saves import conferencia
-from cartridges.saves.conferencia import (
+from kyron import shared
+from kyron.conquistas.arquivos import Pastas
+from kyron.saves import conferencia
+from kyron.saves.conferencia import (
     CHAVES_PROIBIDAS,
     EXTENSOES_PROIBIDAS,
     MARCADORES,
 )
-from cartridges.saves.ludusavi import Previa
+from kyron.saves.ludusavi import Previa
 
 CASA = Path("C:/Users/João")
 # Pastas de jogo que não existem e não estão no perfil de nenhum usuário.

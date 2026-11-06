@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from cartridges import shared
+from kyron import shared
 
 RAIZ = Path(__file__).parent.parent
 SCRIPT = RAIZ / "build-aux" / "windows" / "data_da_release.py"

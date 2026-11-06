@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from cartridges.emuladores import ini
-from cartridges.emuladores.ini import Valores
+from kyron.emuladores import ini
+from kyron.emuladores.ini import Valores
 
 DADOS = Path(__file__).parent / "dados" / "emuladores"
 

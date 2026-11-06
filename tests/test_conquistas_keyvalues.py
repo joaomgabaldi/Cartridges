@@ -4,7 +4,7 @@ import struct
 
 import pytest
 
-from cartridges.conquistas import keyvalues
+from kyron.conquistas import keyvalues
 from tests.apoio_conquistas import kv_bytes
 
 

@@ -13,7 +13,7 @@ import os
 
 import pytest
 
-from cartridges.utils.install_size import (
+from kyron.utils.install_size import (
     folder_size,
     format_size,
     install_size_folder,
@@ -121,8 +121,8 @@ from types import SimpleNamespace
 
 from PySide6.QtCore import QEventLoop, QTimer
 
-from cartridges import shared
-from cartridges.utils import install_size
+from kyron import shared
+from kyron.utils import install_size
 
 
 def _rodar_ate(condicao, limite=5.0) -> bool:
@@ -136,7 +136,7 @@ def _rodar_ate(condicao, limite=5.0) -> bool:
 
 @pytest.mark.parametrize("modulo", ("install_size", "updates_checker"))
 def test_sem_gi(modulo: str) -> None:
-    fonte = Path(__file__).resolve().parent.parent / "cartridges" / "utils" / f"{modulo}.py"
+    fonte = Path(__file__).resolve().parent.parent / "kyron" / "utils" / f"{modulo}.py"
     importados = set()
     for no in ast.walk(ast.parse(fonte.read_text(encoding="utf-8"))):
         if isinstance(no, ast.Import):

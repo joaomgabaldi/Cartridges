@@ -13,8 +13,8 @@ import threading
 import pytest
 from PySide6.QtCore import Qt
 
-from cartridges import shared
-from cartridges.jogo import PERSISTED_ATTRS, STATUS_LABELS, Jogo, status_label
+from kyron import shared
+from kyron.jogo import PERSISTED_ATTRS, STATUS_LABELS, Jogo, status_label
 
 
 def _jogo(**campos) -> Jogo:
@@ -215,7 +215,7 @@ def test_remove_game_avisa_com_desfazer():
 
 @pytest.fixture
 def executados(monkeypatch):
-    from cartridges import jogo as modulo  # noqa: PLC0415
+    from kyron import jogo as modulo  # noqa: PLC0415
 
     chamadas = []
     monkeypatch.setattr(modulo, "run_executable", lambda *args: chamadas.append(args))
@@ -291,7 +291,7 @@ class _SessaoQueAnota:
 @pytest.fixture
 def com_sessao(monkeypatch, schema):
     """Um `shared.sessao` que anota a ordem e rastreadores que só anotam o que fariam."""
-    from cartridges import jogo as modulo  # noqa: PLC0415
+    from kyron import jogo as modulo  # noqa: PLC0415
 
     passos = []
     sessao = _SessaoQueAnota(passos)
@@ -392,7 +392,7 @@ def test_launch_em_tela_cheia_ignora_minimizar_ao_abrir(com_sessao, schema):
 
 def test_segundo_launch_encerra_o_primeiro(com_sessao):
     """A sessão anterior é encerrada, com registro, antes de outra começar."""
-    from cartridges import jogo as modulo  # noqa: PLC0415
+    from kyron import jogo as modulo  # noqa: PLC0415
 
     passos = com_sessao.passos
 
@@ -431,7 +431,7 @@ def test_jogo_nao_importa_interface():
     codigo = (
         "import builtins, sys\n"
         "builtins._ = lambda m: m\n"
-        "import cartridges.jogo\n"
+        "import kyron.jogo\n"
         "proibidos = [m for m in sys.modules if m == 'gi' or m.startswith('gi.')"
         " or m in ('PySide6.QtQuick', 'PySide6.QtWidgets')]\n"
         "print(proibidos)\n"

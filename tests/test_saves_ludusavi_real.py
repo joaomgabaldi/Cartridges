@@ -31,8 +31,8 @@ from pathlib import Path
 
 import pytest
 
-from cartridges.saves import backup_de_saves, conferencia, config
-from cartridges.saves.pasta import dentro
+from kyron.saves import backup_de_saves, conferencia, config
+from kyron.saves.pasta import dentro
 
 # Lido no import, antes de qualquer monkeypatch do `sys.executable`.
 EXE = Path(sys.executable).parent / "ludusavi.exe"

@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""O grupo "Opções avançadas" do Editar: appID da Steam e jogo no Ludusavi (só a regra, `cartridges.edicao`)."""
+"""O grupo "Opções avançadas" do Editar: appID da Steam e jogo no Ludusavi (só a regra, `kyron.edicao`)."""
 
 import pytest
 
@@ -11,7 +11,7 @@ from tests.apoio_edicao import jogo, stub_sgdb
 
 @pytest.fixture
 def editar(store):
-    from cartridges import edicao  # noqa: PLC0415
+    from kyron import edicao  # noqa: PLC0415
 
     stub_sgdb(store)
 
@@ -23,7 +23,7 @@ def editar(store):
 
 
 def _aplicar(game, form):
-    from cartridges import edicao  # noqa: PLC0415
+    from kyron import edicao  # noqa: PLC0415
 
     assert edicao.validar(form, game) is None
     edicao.aplicar(form, game, str(game.steam_appid or ""))
@@ -56,7 +56,7 @@ def test_campo_vazio_tira_o_appid(editar):
 
 
 def test_appid_nao_numerico_bloqueia_aplicar(editar):
-    from cartridges import edicao  # noqa: PLC0415
+    from kyron import edicao  # noqa: PLC0415
 
     game, form = editar(steam_appid="620")
     form.appid = "abc"
@@ -126,7 +126,7 @@ def test_apagar_o_appid_depois_da_busca_vale_o_campo_vazio(editar):
 
 
 def test_busca_sem_mexer_no_campo_grava_o_da_busca_e_carimba(editar):
-    from cartridges.utils.steam import STEAM_METADATA_VERSION  # noqa: PLC0415
+    from kyron.utils.steam import STEAM_METADATA_VERSION  # noqa: PLC0415
 
     game, form = editar(steam_appid="10")
     _buscar(form, "620")

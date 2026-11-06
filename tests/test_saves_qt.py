@@ -18,28 +18,28 @@ from PySide6.QtQuick import QQuickItem, QQuickWindow
 from PySide6.QtQuickControls2 import QQuickStyle
 from PySide6.QtTest import QTest
 
-from cartridges import app as app_modulo
-from cartridges import shared
-from cartridges.aplicativo import Aplicativo
-from cartridges.jogo import Jogo
-from cartridges.modelos import seletores
-from cartridges.modelos.big_picture import BigPicture, ProvedorDoFundo
-from cartridges.modelos.biblioteca import FiltroDaPagina, FiltrosDaBiblioteca, ModeloDaBiblioteca
-from cartridges.modelos.conquistas import ConquistasDoJogo
-from cartridges.modelos.controle import ControleDaGrade
-from cartridges.modelos.edicao import ModeloDaEdicao
-from cartridges.modelos.historico import HistoricoDeSessoes
-from cartridges.modelos.preferencias import Preferencias
-from cartridges.modelos.restauracao import ContinuacaoDaRestauracao
-from cartridges.modelos.saves import SavesDoJogo, corpo_da_confirmacao, formatar, subtitulo
-from cartridges.modelos.sessao import ModeloDaSessao
-from cartridges.modelos.tarefas import PainelDasTarefas
-from cartridges.ponte import Ponte
-from cartridges.saves import backup_de_saves
-from cartridges.saves.ludusavi import Versao
+from kyron import app as app_modulo
+from kyron import shared
+from kyron.aplicativo import Aplicativo
+from kyron.jogo import Jogo
+from kyron.modelos import seletores
+from kyron.modelos.big_picture import BigPicture, ProvedorDoFundo
+from kyron.modelos.biblioteca import FiltroDaPagina, FiltrosDaBiblioteca, ModeloDaBiblioteca
+from kyron.modelos.conquistas import ConquistasDoJogo
+from kyron.modelos.controle import ControleDaGrade
+from kyron.modelos.edicao import ModeloDaEdicao
+from kyron.modelos.historico import HistoricoDeSessoes
+from kyron.modelos.preferencias import Preferencias
+from kyron.modelos.restauracao import ContinuacaoDaRestauracao
+from kyron.modelos.saves import SavesDoJogo, corpo_da_confirmacao, formatar, subtitulo
+from kyron.modelos.sessao import ModeloDaSessao
+from kyron.modelos.tarefas import PainelDasTarefas
+from kyron.ponte import Ponte
+from kyron.saves import backup_de_saves
+from kyron.saves.ludusavi import Versao
 from tests import apoio_aplicativo
 
-QML = Path(__file__).resolve().parent.parent / "cartridges" / "qml"
+QML = Path(__file__).resolve().parent.parent / "kyron" / "qml"
 QQuickStyle.setStyle("Basic")
 
 
@@ -299,7 +299,7 @@ class _Janela:
         self.sessao = ModeloDaSessao(self.ponte.fila)
         self.conquistas = ConquistasDoJogo(_DetalhesFalsos(), self.sessao)
         self.motor = QQmlEngine()
-        from cartridges.modelos.provedor_de_icones import ProvedorDeIcones  # noqa: PLC0415
+        from kyron.modelos.provedor_de_icones import ProvedorDeIcones  # noqa: PLC0415
         self.motor.addImageProvider("icone", ProvedorDeIcones())
         self.motor.addImageProvider("fundo", ProvedorDoFundo())
         contexto = self.motor.rootContext()

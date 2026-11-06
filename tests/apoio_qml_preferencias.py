@@ -12,7 +12,7 @@ from PySide6.QtCore import QMetaObject, Qt
 from PySide6.QtQml import QQmlEngine, QQmlExpression
 from PySide6.QtQuick import QQuickItem
 
-from cartridges.utils import window_geometry
+from kyron.utils import window_geometry
 from tests.apoio_qml_biblioteca import _App, _esperar, _jogos
 
 
@@ -64,7 +64,7 @@ def _enabled(app, nome):
 @pytest.fixture
 def fitas_espiadas(monkeypatch):
     """Uma fita configurada e as prévias e arranques anotados, sem acender nada."""
-    from cartridges.utils import session_fita  # noqa: PLC0415
+    from kyron.utils import session_fita  # noqa: PLC0415
 
     session_fita.gravar_fitas([session_fita.Fita("Centro", "eb0", "192.0.2.10", "k")])
     anotadas = []

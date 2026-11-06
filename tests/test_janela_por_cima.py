@@ -3,7 +3,7 @@
 import pytest
 from PySide6.QtGui import QWindow
 
-from cartridges.utils import janela_por_cima as jpc
+from kyron.utils import janela_por_cima as jpc
 
 MONITOR = (0, 0, 1920, 1080)
 _API_REAL = jpc._api  # guardado na importação, antes do guarda do conftest
@@ -155,7 +155,7 @@ def test_sem_user32_nao_ha_aviso_nem_excecao(janela, monkeypatch):
 
 def test_declarar_os_tipos_aqui_nao_estraga_o_user32_do_window_geometry(monkeypatch, monitors_de_verdade):  # noqa: ARG001
     """``ctypes.windll.user32`` é compartilhado: declarar o ``GetMonitorInfoW`` com a estrutura simples deixava ``window_geometry.monitors()`` sem nenhum monitor."""
-    from cartridges.utils import window_geometry  # noqa: PLC0415
+    from kyron.utils import window_geometry  # noqa: PLC0415
 
     monkeypatch.setattr(jpc, "_api", _API_REAL)  # aqui o de verdade: só declara os tipos
     monkeypatch.setattr(jpc, "_user32", None)

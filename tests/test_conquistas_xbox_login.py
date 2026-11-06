@@ -9,7 +9,7 @@ import urllib.request
 
 import pytest
 
-from cartridges.conquistas.xbox import conta, login
+from kyron.conquistas.xbox import conta, login
 
 
 @pytest.fixture

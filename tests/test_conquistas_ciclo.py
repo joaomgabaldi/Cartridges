@@ -2,11 +2,11 @@
 
 import json
 
-from cartridges import shared
-from cartridges.conquistas import historico
-from cartridges.conquistas.formatos import Desbloqueio
-from cartridges.store import store as store_module
-from cartridges.store.managers.file_manager import FileManager
+from kyron import shared
+from kyron.conquistas import historico
+from kyron.conquistas.formatos import Desbloqueio
+from kyron.store import store as store_module
+from kyron.store.managers.file_manager import FileManager
 from tests.apoio_auditoria_0923_ligacao import ligar
 from tests.apoio_edicao import jogo
 

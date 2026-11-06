@@ -14,9 +14,9 @@ from PySide6.QtCore import QMetaObject, QObject, QPoint, QPointF, Qt, QUrl
 from PySide6.QtQml import QQmlComponent, QQmlEngine
 from PySide6.QtTest import QTest
 
-from cartridges.modelos import tarefas
-from cartridges.modelos.provedor_de_icones import ProvedorDeIcones
-from cartridges.utils import ajustes_do_windows, erro_inesperado
+from kyron.modelos import tarefas
+from kyron.modelos.provedor_de_icones import ProvedorDeIcones
+from kyron.utils import ajustes_do_windows, erro_inesperado
 from tests.apoio_qml_biblioteca import QML, _achar, _App, _esperar, _jogos
 from tests.apoio_qml_detalhes import _abrir_pelo_cartao, _clicar
 
@@ -126,7 +126,7 @@ builtins._ = lambda m: m
 from PySide6.QtCore import QEventLoop, QTimer, QUrl
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtQml import QQmlComponent, QQmlEngine
-from cartridges.modelos.provedor_de_icones import ProvedorDeIcones
+from kyron.modelos.provedor_de_icones import ProvedorDeIcones
 app = QGuiApplication([])
 motor = QQmlEngine()
 motor.addImageProvider("icone", ProvedorDeIcones())

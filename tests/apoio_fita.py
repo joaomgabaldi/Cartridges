@@ -12,8 +12,8 @@ from typing import NamedTuple, Optional
 
 import pytest
 
-from cartridges import shared
-from cartridges.utils import session_fita
+from kyron import shared
+from kyron.utils import session_fita
 
 
 @pytest.fixture(autouse=True)

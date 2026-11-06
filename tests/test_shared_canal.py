@@ -5,7 +5,7 @@
 """O canal (desenvolvimento ou final) decide a pasta e a chave de registro do app.
 
 Cada teste carrega uma cópia do `shared.py` em `tmp_path`, com o `instalacao.json` ao lado:
-nada é gravado no código-fonte e o `cartridges.shared` do processo nunca é recarregado.
+nada é gravado no código-fonte e o `kyron.shared` do processo nunca é recarregado.
 """
 
 import importlib.util
@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from cartridges import shared as shared_real
+from kyron import shared as shared_real
 
 MENSAGEM = "A instalação do Kyron está danificada. Reinstale o aplicativo."
 
@@ -23,8 +23,8 @@ MENSAGEM = "A instalação do Kyron está danificada. Reinstale o aplicativo."
 @pytest.fixture
 def carregar(tmp_path, monkeypatch):
     """Carrega a cópia do `shared` com o `instalacao.json` pedido (texto, bytes ou None)."""
-    monkeypatch.delenv("CARTRIDGES_DADOS", raising=False)
-    monkeypatch.delenv("CARTRIDGES_REGISTRO", raising=False)
+    monkeypatch.delenv("KYRON_DADOS", raising=False)
+    monkeypatch.delenv("KYRON_REGISTRO", raising=False)
     copia = tmp_path / "shared.py"
     shutil.copy(shared_real.__file__, copia)
 
@@ -73,12 +73,12 @@ def test_canal_desconhecido_recusa(carregar):
 
 
 def test_variaveis_de_ambiente_tem_prioridade(carregar, monkeypatch, tmp_path):
-    monkeypatch.setenv("CARTRIDGES_DADOS", str(tmp_path))
-    monkeypatch.setenv("CARTRIDGES_REGISTRO", r"Software\CartridgesTestes\x")
+    monkeypatch.setenv("KYRON_DADOS", str(tmp_path))
+    monkeypatch.setenv("KYRON_REGISTRO", r"Software\KyronTestes\x")
     for conteudo in (None, json.dumps({"canal": "final"})):
         modulo = carregar(conteudo)
         assert modulo.app_dir == tmp_path
-        assert modulo.chave_do_registro == r"Software\CartridgesTestes\x"
+        assert modulo.chave_do_registro == r"Software\KyronTestes\x"
 
 
 def test_nenhum_instalacao_json_no_codigo_fonte():

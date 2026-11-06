@@ -12,6 +12,6 @@ import pytest
 
 @pytest.fixture
 def ligar():
-    from cartridges.utils.ligacao_zerado import ligar_zerado  # noqa: PLC0415
+    from kyron.utils.ligacao_zerado import ligar_zerado  # noqa: PLC0415
 
     return ligar_zerado

@@ -9,10 +9,10 @@ import time
 import pytest
 from PySide6.QtCore import QEventLoop, QTimer
 
-from cartridges import shared
-from cartridges.jogo import Jogo
-from cartridges.modelos.avisos import FilaDeAvisos
-from cartridges.ponte import Ponte
+from kyron import shared
+from kyron.jogo import Jogo
+from kyron.modelos.avisos import FilaDeAvisos
+from kyron.ponte import Ponte
 
 
 def _esperar(ate=None, limite=3.0, minimo=0.0):

@@ -26,7 +26,7 @@ def _thread_em_linha(modulo, monkeypatch):
 
 
 def test_b11_varredura_do_hltb_reiniciada_no_reset_para(monkeypatch, store, make_game):
-    from cartridges.utils import hltb_backfill  # noqa: PLC0415
+    from kyron.utils import hltb_backfill  # noqa: PLC0415
 
     for game_id in ("a", "b"):
         store.add_game(make_game(game_id=game_id, has_hltb_times=False, hltb_id=None), {})
@@ -51,7 +51,7 @@ def test_b11_varredura_do_hltb_reiniciada_no_reset_para(monkeypatch, store, make
 
 
 def test_b11_varredura_de_tamanho_reiniciada_no_reset_para(monkeypatch, store, make_game):
-    from cartridges.utils import install_size  # noqa: PLC0415
+    from kyron.utils import install_size  # noqa: PLC0415
 
     for game_id in ("a", "b"):
         store.add_game(make_game(game_id=game_id, install_size=0, install_size_ts=0), {})
@@ -76,7 +76,7 @@ def test_b11_varredura_de_tamanho_reiniciada_no_reset_para(monkeypatch, store, m
 
 
 def test_b12_resultado_tardio_do_hltb_nao_sobrescreve_a_correcao(store, make_game):
-    from cartridges.utils.hltb_backfill import HLTBBackfill  # noqa: PLC0415
+    from kyron.utils.hltb_backfill import HLTBBackfill  # noqa: PLC0415
 
     jogo = make_game(game_id="a", has_hltb_times=True)
     jogo.update_values = lambda valores: setattr(jogo, "sobrescrito", valores)
@@ -90,7 +90,7 @@ def test_b12_resultado_tardio_do_hltb_nao_sobrescreve_a_correcao(store, make_gam
 def test_b16_jogo_que_saiu_do_disco_perde_o_tamanho(
     monkeypatch, store, make_game, flush_idle
 ):
-    from cartridges.utils import install_size  # noqa: PLC0415
+    from kyron.utils import install_size  # noqa: PLC0415
 
     jogo = make_game(game_id="a", install_size=5000, install_size_ts=0)
     store.add_game(jogo, {})

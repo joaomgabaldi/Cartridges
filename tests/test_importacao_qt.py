@@ -17,34 +17,34 @@ from PySide6.QtQuick import QQuickItem, QQuickWindow
 from PySide6.QtQuickControls2 import QQuickStyle
 from PySide6.QtTest import QTest
 
-from cartridges import aplicativo as modulo
-from cartridges import shared
-from cartridges.utils.app_updater import AppUpdater
-from cartridges.utils.news_checker import NewsChecker
-from cartridges.aplicativo import Aplicativo
-from cartridges.importer.source import SourceScanError
-from cartridges.jogo import Jogo
-from cartridges.modelos.avisos import FilaDeAvisos
-from cartridges.modelos.big_picture import BigPicture, ProvedorDoFundo
-from cartridges.modelos.biblioteca import FiltroDaPagina, FiltrosDaBiblioteca, ModeloDaBiblioteca
-from cartridges.modelos.controle import ControleDaGrade
-from cartridges.modelos.edicao import ModeloDaEdicao
-from cartridges.modelos.conquistas import ConquistasDoJogo
-from cartridges.modelos.historico import HistoricoDeSessoes
-from cartridges.modelos.novidades import Novidades
-from cartridges.modelos.saves import SavesDoJogo
-from cartridges.modelos.preferencias import Preferencias
-from cartridges.modelos.restauracao import ContinuacaoDaRestauracao
-from cartridges.modelos.sessao import ModeloDaSessao
-from cartridges.modelos.sobre import Sobre
-from cartridges.modelos.zerados_manuais import SeletorDeZerados
-from cartridges.modelos.tarefas import PainelDasTarefas
-from cartridges.ponte import Ponte
-from cartridges.store.managers.exibicao_manager import ExibicaoManager
-from cartridges.utils import restauracao, soltar_atalhos
-from cartridges.utils.passada_agendada import PassadaAgendada
+from kyron import aplicativo as modulo
+from kyron import shared
+from kyron.utils.app_updater import AppUpdater
+from kyron.utils.news_checker import NewsChecker
+from kyron.aplicativo import Aplicativo
+from kyron.importer.source import SourceScanError
+from kyron.jogo import Jogo
+from kyron.modelos.avisos import FilaDeAvisos
+from kyron.modelos.big_picture import BigPicture, ProvedorDoFundo
+from kyron.modelos.biblioteca import FiltroDaPagina, FiltrosDaBiblioteca, ModeloDaBiblioteca
+from kyron.modelos.controle import ControleDaGrade
+from kyron.modelos.edicao import ModeloDaEdicao
+from kyron.modelos.conquistas import ConquistasDoJogo
+from kyron.modelos.historico import HistoricoDeSessoes
+from kyron.modelos.novidades import Novidades
+from kyron.modelos.saves import SavesDoJogo
+from kyron.modelos.preferencias import Preferencias
+from kyron.modelos.restauracao import ContinuacaoDaRestauracao
+from kyron.modelos.sessao import ModeloDaSessao
+from kyron.modelos.sobre import Sobre
+from kyron.modelos.zerados_manuais import SeletorDeZerados
+from kyron.modelos.tarefas import PainelDasTarefas
+from kyron.ponte import Ponte
+from kyron.store.managers.exibicao_manager import ExibicaoManager
+from kyron.utils import restauracao, soltar_atalhos
+from kyron.utils.passada_agendada import PassadaAgendada
 
-QML = Path(__file__).resolve().parent.parent / "cartridges" / "qml"
+QML = Path(__file__).resolve().parent.parent / "kyron" / "qml"
 QQuickStyle.setStyle("Basic")
 
 
@@ -108,7 +108,7 @@ class FilaRegistrada(FilaDeAvisos):
 
 @pytest.fixture(autouse=True)
 def importador_limpo(store):  # noqa: ARG001
-    from cartridges.importer.importer import Importer  # noqa: PLC0415
+    from kyron.importer.importer import Importer  # noqa: PLC0415
 
     Importer.summary_toast = None
     yield
@@ -145,7 +145,7 @@ def test_importar_desliga_o_botao_e_religa_no_fim(fonte, app_qt):
 
 def test_importacao_termina_com_varios_jogos_de_managers_assincronos(fonte, store, app_qt):
     """Cada pipeline conta o seu fim: uma conexão que enxerga só o último pipeline deixaria a importação pendurada."""
-    from cartridges.store.managers.async_manager import AsyncManager  # noqa: PLC0415
+    from kyron.store.managers.async_manager import AsyncManager  # noqa: PLC0415
 
     class Lento(AsyncManager):
         def main(self, game, additional_data):
@@ -253,7 +253,7 @@ def test_erro_de_fonte_unico_vira_dialogo_com_titulo_e_corpo(fonte, app_qt):
 
 
 def test_erros_viram_dialogo_em_texto_puro(fonte, store, app_qt):
-    from cartridges.store.managers.manager import Manager  # noqa: PLC0415
+    from kyron.store.managers.manager import Manager  # noqa: PLC0415
 
     class Gerente(Manager):
         blocking = True
@@ -362,7 +362,7 @@ def test_importados_sao_varridos_em_silencio(fonte, store, app_qt):
 
 def test_pendente_resolvido_volta_a_grade(store, app_qt):
     """O modelo só avalia a pendência em `atualizar`; resolvê-la na importação reapresenta o jogo."""
-    from cartridges.importer.importer import Importer  # noqa: PLC0415
+    from kyron.importer.importer import Importer  # noqa: PLC0415
 
     modelo = ModeloDaBiblioteca()
     store.add_manager(ExibicaoManager(modelo))
@@ -443,7 +443,7 @@ class _Janela:
         self.sessao = ModeloDaSessao(self.ponte.fila)
         self.conquistas = ConquistasDoJogo(_DetalhesFalsos(), self.sessao)
         self.motor = QQmlEngine()
-        from cartridges.modelos.provedor_de_icones import ProvedorDeIcones  # noqa: PLC0415
+        from kyron.modelos.provedor_de_icones import ProvedorDeIcones  # noqa: PLC0415
         self.motor.addImageProvider("icone", ProvedorDeIcones())
         self.motor.addImageProvider("fundo", ProvedorDoFundo())
         contexto = self.motor.rootContext()

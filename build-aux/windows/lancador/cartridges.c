@@ -5,7 +5,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  *
  * Kyron.exe: abre o Python embutido do app (..\python\python315.dll) já
- * rodando `-m cartridges`. O Python roda dentro deste processo, então é
+ * rodando `-m kyron`. O Python roda dentro deste processo, então é
  * "Kyron.exe" que o Windows mostra no Gerenciador de Tarefas, na barra de
  * tarefas e nas configurações de GPU, e não "pythonw.exe".
  *
@@ -38,7 +38,7 @@ int WINAPI wWinMain(HINSTANCE instancia, HINSTANCE anterior, PWSTR linha, int ex
     int argc = __argc + 2;
     wchar_t **argv = calloc(argc + 1, sizeof *argv);
     wchar_t m[] = L"-m";
-    wchar_t pacote[] = L"cartridges";
+    wchar_t pacote[] = L"kyron";
 
     DWORD n = GetModuleFileNameW(NULL, exe, MAX_PATH);
     /* A pasta atual não entra na busca de DLLs */

@@ -5,9 +5,9 @@ from pathlib import Path
 
 import pytest
 
-from cartridges import shared
-from cartridges.conquistas import historico
-from cartridges.conquistas.formatos import Desbloqueio as D
+from kyron import shared
+from kyron.conquistas import historico
+from kyron.conquistas.formatos import Desbloqueio as D
 
 
 def test_fundir_so_soma():

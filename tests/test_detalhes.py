@@ -13,11 +13,11 @@ import pytest
 from PIL import Image
 from PySide6.QtCore import QEventLoop, QSize, QTimer
 
-from cartridges import shared
-from cartridges.jogo import Jogo
-from cartridges.modelos import detalhes as modulo
-from cartridges.modelos.detalhes import _FUNDO_SEM_CAPA, DetalhesDoJogo
-from cartridges.utils import desfoque, game_logo
+from kyron import shared
+from kyron.jogo import Jogo
+from kyron.modelos import detalhes as modulo
+from kyron.modelos.detalhes import _FUNDO_SEM_CAPA, DetalhesDoJogo
+from kyron.utils import desfoque, game_logo
 
 
 def _jogo(game_id="a", **extra):
@@ -551,7 +551,7 @@ def test_set_loading_avisa_quando_o_estado_muda(app_qt, store):
 @pytest.fixture(autouse=True)
 def _ganchos_da_pagina_limpos(monkeypatch):
     """Os ganchos da página são globais: cada teste começa sem os de outro e o `monkeypatch` os devolve no fim."""
-    from cartridges.utils import copias_animadas  # noqa: PLC0415
+    from kyron.utils import copias_animadas  # noqa: PLC0415
 
     monkeypatch.setattr(copias_animadas, "ao_terminar_da_pagina", None)
     monkeypatch.setattr(copias_animadas, "soltar_da_pagina", None)
@@ -559,7 +559,7 @@ def _ganchos_da_pagina_limpos(monkeypatch):
 
 def _com_copias(game_id="a", grade=True, grande=True):
     """Uma capa animada de verdade em `covers_dir`, com as cópias pedidas já geradas."""
-    from cartridges.utils import copias_animadas  # noqa: PLC0415
+    from kyron.utils import copias_animadas  # noqa: PLC0415
 
     shared.covers_dir.mkdir(parents=True, exist_ok=True)
     capa = shared.covers_dir / f"{game_id}.webp"
@@ -572,7 +572,7 @@ def _com_copias(game_id="a", grade=True, grande=True):
 
 
 def _tamanho_no_nome(indice):
-    from cartridges.utils import copias_animadas  # noqa: PLC0415
+    from kyron.utils import copias_animadas  # noqa: PLC0415
 
     return "{}x{}".format(*copias_animadas.tamanhos()[indice])
 
@@ -592,7 +592,7 @@ def test_pagina_usa_a_da_grade_sem_a_grande(app_qt, store):
 
 
 def test_pagina_troca_para_a_copia_grande_quando_ela_fica_pronta(app_qt, store, monkeypatch):
-    from cartridges.utils import copias_animadas  # noqa: PLC0415
+    from kyron.utils import copias_animadas  # noqa: PLC0415
 
     capa = _com_copias(grande=False)
     jogo = _jogo()
@@ -609,7 +609,7 @@ def test_pagina_troca_para_a_copia_grande_quando_ela_fica_pronta(app_qt, store, 
 
 
 def test_copia_pronta_nao_refaz_a_linha_com_a_copia_grande(app_qt, store, monkeypatch):
-    from cartridges.utils import copias_animadas  # noqa: PLC0415
+    from kyron.utils import copias_animadas  # noqa: PLC0415
 
     _com_copias()
     detalhes = _modelo(store, _jogo())
@@ -624,7 +624,7 @@ def test_copia_pronta_nao_refaz_a_linha_com_a_copia_grande(app_qt, store, monkey
 
 
 def test_copia_de_outro_jogo_nao_muda_a_pagina(app_qt, store):
-    from cartridges.utils import copias_animadas  # noqa: PLC0415
+    from kyron.utils import copias_animadas  # noqa: PLC0415
 
     capa = _com_copias(grande=False)
     detalhes = _modelo(store, _jogo())
@@ -670,7 +670,7 @@ def _png(dados):
 
 def test_fundo_vivo_guarda_as_cores_da_capa(tmp_path):
     """O desfoque da página vira uma média cinza; o do Big Picture mantém as manchas de cor da capa."""
-    from cartridges.utils import desfoque  # noqa: PLC0415
+    from kyron.utils import desfoque  # noqa: PLC0415
 
     resultado = desfoque.calcular(_capa_de_duas_cores(tmp_path / "c.png", (180, 30, 30), (30, 30, 180)))
     vivo = _png(resultado.png_vivo)
@@ -684,7 +684,7 @@ def test_fundo_vivo_guarda_as_cores_da_capa(tmp_path):
 def test_fundo_vivo_nao_ofusca_capa_clara(tmp_path):
     from PIL import ImageStat  # noqa: PLC0415
 
-    from cartridges.utils import desfoque  # noqa: PLC0415
+    from kyron.utils import desfoque  # noqa: PLC0415
 
     resultado = desfoque.calcular(_capa_de_duas_cores(tmp_path / "c.png", (240, 240, 235), (250, 245, 240)))
     assert ImageStat.Stat(_png(resultado.png_vivo).convert("L")).mean[0] <= desfoque.BRILHO_MAXIMO_DO_FUNDO_VIVO + 1
@@ -693,7 +693,7 @@ def test_fundo_vivo_nao_ofusca_capa_clara(tmp_path):
 def test_fundo_vivo_nao_clareia_capa_escura(tmp_path):
     from PIL import ImageStat  # noqa: PLC0415
 
-    from cartridges.utils import desfoque  # noqa: PLC0415
+    from kyron.utils import desfoque  # noqa: PLC0415
 
     resultado = desfoque.calcular(_capa_de_duas_cores(tmp_path / "c.png", (20, 20, 25), (25, 20, 20)))
     assert ImageStat.Stat(_png(resultado.png_vivo).convert("L")).mean[0] < 30
@@ -703,7 +703,7 @@ def test_provedor_serve_o_desfoque_e_o_fundo_vivo(app_qt):
     from PIL import Image  # noqa: PLC0415
     from PySide6.QtCore import QSize  # noqa: PLC0415
 
-    from cartridges.modelos.detalhes import ProvedorDeDesfoque, url_do_fundo_vivo  # noqa: PLC0415
+    from kyron.modelos.detalhes import ProvedorDeDesfoque, url_do_fundo_vivo  # noqa: PLC0415
     from io import BytesIO  # noqa: PLC0415
 
     def png(cor):

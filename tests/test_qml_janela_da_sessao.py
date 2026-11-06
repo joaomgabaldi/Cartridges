@@ -14,13 +14,13 @@ import pytest
 from PySide6.QtCore import QMetaObject, Qt
 from PySide6.QtTest import QTest
 
-from cartridges import shared
-from cartridges.jogo import Jogo
-from cartridges.modelos import sessao as modulo
-from cartridges.modelos.sessao import canto_inferior_direito
-from cartridges.process_session import ProcessSession
-from cartridges.session_window import SessionWindow
-from cartridges.utils import session_fita, session_log
+from kyron import shared
+from kyron.jogo import Jogo
+from kyron.modelos import sessao as modulo
+from kyron.modelos.sessao import canto_inferior_direito
+from kyron.process_session import ProcessSession
+from kyron.session_window import SessionWindow
+from kyron.utils import session_fita, session_log
 from tests.apoio_qml_biblioteca import _achar, _App, _esperar, _jogos
 
 RAIZ = Path(__file__).resolve().parent.parent
@@ -262,10 +262,10 @@ from types import SimpleNamespace
 from PySide6.QtCore import QTimer, QUrl
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtQml import QQmlApplicationEngine
-from cartridges import app as modulo_app, shared
-from cartridges.modelos import sessao as modulo
-from cartridges.session_window import SessionWindow
-from cartridges.utils import game_logo, session_fita, session_log, session_wallpaper, window_geometry
+from kyron import app as modulo_app, shared
+from kyron.modelos import sessao as modulo
+from kyron.session_window import SessionWindow
+from kyron.utils import game_logo, session_fita, session_log, session_wallpaper, window_geometry
 
 ordem = []
 def anota(nome):
@@ -298,7 +298,7 @@ app.saindo.connect(sessao.encerrar)
 app.aboutToQuit.connect(lambda: (ordem.append("aboutToQuit"), sessao.devolver()))
 
 motor = QQmlApplicationEngine()
-from cartridges.modelos.provedor_de_icones import ProvedorDeIcones  # noqa: PLC0415
+from kyron.modelos.provedor_de_icones import ProvedorDeIcones  # noqa: PLC0415
 motor.addImageProvider("icone", ProvedorDeIcones())
 motor.rootContext().setContextProperty("sessao", sessao)
 motor.loadData(b'''import QtQuick
@@ -306,7 +306,7 @@ Window {
     visible: true; width: 200; height: 100
     onClosing: sessao.principalFechando()
     Loader { active: sessao.janelaManual; source: "JanelaDaSessao.qml" }
-}''', QUrl.fromLocalFile(str(Path("cartridges/qml/_saida.qml").resolve())))
+}''', QUrl.fromLocalFile(str(Path("kyron/qml/_saida.qml").resolve())))
 principal = motor.rootObjects()[0]
 sessao.definir_janela(principal)
 jogo = SimpleNamespace(game_id="imported_1", name="Alfa", notes="", status="playing", zerado=False, playtime=0,
@@ -351,10 +351,10 @@ from types import SimpleNamespace
 from PySide6.QtCore import QTimer, QUrl
 from PySide6.QtGui import QGuiApplication, QWindow
 from PySide6.QtQml import QQmlApplicationEngine
-from cartridges import app as modulo_app, conquista_aviso, janela_do_aviso, shared
-from cartridges.modelos import sessao as modulo
-from cartridges.session_window import SessionWindow
-from cartridges.utils import game_logo, session_fita, session_log, session_wallpaper, window_geometry
+from kyron import app as modulo_app, conquista_aviso, janela_do_aviso, shared
+from kyron.modelos import sessao as modulo
+from kyron.session_window import SessionWindow
+from kyron.utils import game_logo, session_fita, session_log, session_wallpaper, window_geometry
 
 com_sessao = sys.argv[1] == "com"
 ordem = []
@@ -400,7 +400,7 @@ app.saindo.connect(sessao.encerrar)
 app.aboutToQuit.connect(lambda: (ordem.append(["aboutToQuit", visiveis()]), sessao.devolver()))
 
 motor = QQmlApplicationEngine()
-from cartridges.modelos.provedor_de_icones import ProvedorDeIcones  # noqa: PLC0415
+from kyron.modelos.provedor_de_icones import ProvedorDeIcones  # noqa: PLC0415
 motor.addImageProvider("icone", ProvedorDeIcones())
 motor.rootContext().setContextProperty("sessao", sessao)
 motor.loadData(b'''import QtQuick
@@ -408,7 +408,7 @@ Window {
     visible: true; width: 200; height: 100; title: "principal"
     onClosing: sessao.principalFechando()
     Loader { active: sessao.janelaManual; source: "JanelaDaSessao.qml" }
-}''', QUrl.fromLocalFile(str(Path("cartridges/qml/_saida.qml").resolve())))
+}''', QUrl.fromLocalFile(str(Path("kyron/qml/_saida.qml").resolve())))
 principal = motor.rootObjects()[0]
 sessao.definir_janela(principal)
 if com_sessao:

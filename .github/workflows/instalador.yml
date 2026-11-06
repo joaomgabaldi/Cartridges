@@ -35,13 +35,13 @@ jobs:
           # Ponta atual do branch: num Re-run o checkout volta ao commit de antes da "Data da release".
           git fetch -q --depth=1 origin "$GITHUB_REF_NAME"
           git reset -q --hard FETCH_HEAD
-          versao=$(sed -n 's/^VERSION = "\(.*\)"$/\1/p' cartridges/shared.py)
+          versao=$(sed -n 's/^VERSION = "\(.*\)"$/\1/p' kyron/shared.py)
           if [ -z "$versao" ]; then
-            echo "::error::Não achei VERSION em cartridges/shared.py."
+            echo "::error::Não achei VERSION em kyron/shared.py."
             exit 1
           fi
           if pre=$(gh release view "v$versao" --json isPrerelease --jq .isPrerelease 2>/dev/null) && [ "$pre" != "true" ]; then
-            echo "::error::A versão v$versao já foi publicada. Suba a versão em cartridges/shared.py."
+            echo "::error::A versão v$versao já foi publicada. Suba a versão em kyron/shared.py."
             exit 1
           fi
           python build-aux/windows/data_da_release.py "$metainfo" "$versao" "$(date -u -d '-3 hours' +%Y-%m-%d)"
@@ -113,7 +113,7 @@ jobs:
           cp "_dist/instalador/Kyron Windows.exe" Kyron.Windows.exe
           if pre=$(gh release view "$tag" --json isPrerelease --jq .isPrerelease 2>/dev/null); then
             if [ "$pre" != "true" ]; then
-              echo "::error::A versão $tag já foi publicada. Suba a versão em cartridges/shared.py."
+              echo "::error::A versão $tag já foi publicada. Suba a versão em kyron/shared.py."
               exit 1
             fi
             git tag -f "$tag"

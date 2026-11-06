@@ -4,9 +4,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from cartridges.conquistas import fontes
-from cartridges.conquistas.ea import api, jogo, loja
-from cartridges.conquistas.fontes import Fonte
+from kyron.conquistas import fontes
+from kyron.conquistas.ea import api, jogo, loja
+from kyron.conquistas.fontes import Fonte
 
 
 @pytest.fixture
@@ -111,7 +111,7 @@ def test_resolver_nao_candidato(ea):
 
 
 def test_adaptador(monkeypatch):
-    from cartridges.conquistas.ea import conta  # noqa: PLC0415
+    from kyron.conquistas.ea import conta  # noqa: PLC0415
 
     monkeypatch.setattr(conta, "conectada", lambda: True)
     monkeypatch.setattr(conta, "persona", lambda: "p1")

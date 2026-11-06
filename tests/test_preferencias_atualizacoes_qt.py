@@ -9,9 +9,9 @@ import types
 import pytest
 from PySide6.QtCore import QMetaObject, Qt
 
-from cartridges import shared
-from cartridges.utils import app_updater
-from cartridges.utils.app_updater import AppUpdater, Release
+from kyron import shared
+from kyron.utils import app_updater
+from kyron.utils.app_updater import AppUpdater, Release
 from tests.apoio_janela_atualizacao import Janela, esperar
 
 FORA = "A busca de atualizações só funciona no aplicativo instalado."

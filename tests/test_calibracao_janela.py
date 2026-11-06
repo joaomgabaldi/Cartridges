@@ -11,16 +11,16 @@ from pathlib import Path
 
 import pytest
 
-from cartridges import shared
-from cartridges.utils import calibracao, session_fita
-from cartridges.calibracao_janela import PAGINAS_DA_CALIBRACAO, SATURACAO_DA_REFERENCIA
-from cartridges.utils.calibracao import NEUTRA
+from kyron import shared
+from kyron.utils import calibracao, session_fita
+from kyron.calibracao_janela import PAGINAS_DA_CALIBRACAO, SATURACAO_DA_REFERENCIA
+from kyron.utils.calibracao import NEUTRA
 
 
 @pytest.fixture
 def assistente(app_qt, tmp_path, monkeypatch, schema):  # noqa: ARG001
     """O assistente com duas fitas gravadas e a prévia nas fitas espionada."""
-    from cartridges.calibracao_janela import AssistenteDeCalibracao  # noqa: PLC0415
+    from kyron.calibracao_janela import AssistenteDeCalibracao  # noqa: PLC0415
 
     monkeypatch.setattr(shared, "fitas_arquivo", tmp_path / "fitas.json")
     session_fita.gravar_fitas(
@@ -135,7 +135,7 @@ def test_testar_passa_pelas_cores_em_todas_e_para_ao_fechar(assistente, flush_id
 
 
 def test_fita_calibrada_aparece_como_calibrada(app_qt, tmp_path, monkeypatch, schema):  # noqa: ARG001
-    from cartridges.calibracao_janela import AssistenteDeCalibracao  # noqa: PLC0415
+    from kyron.calibracao_janela import AssistenteDeCalibracao  # noqa: PLC0415
 
     monkeypatch.setattr(shared, "fitas_arquivo", tmp_path / "fitas.json")
     puxada = calibracao.Calibracao(((-8, 1.0),) + ((0, 1.0),) * 5, (0, 0))
@@ -153,7 +153,7 @@ def test_fita_calibrada_aparece_como_calibrada(app_qt, tmp_path, monkeypatch, sc
 def test_intensidade_acima_de_100_muda_a_referencia(assistente):
     """A referência não pode estar no máximo de saturação: aí aumentar a
     intensidade não muda nada na parede, e o valor é gravado sem ser visto."""
-    from cartridges.calibracao_janela import _cor_da_etapa  # noqa: PLC0415
+    from kyron.calibracao_janela import _cor_da_etapa  # noqa: PLC0415
 
     referencia = _cor_da_etapa(0)
     assistente.escolher("eb0")
@@ -184,7 +184,7 @@ def test_escolher_depois_do_teste_comeca_do_inicio(assistente):
 
 
 def test_todos_juntos_acende_todas_e_ajusta_cada_uma(assistente):
-    from cartridges.calibracao_janela import TODOS  # noqa: PLC0415
+    from kyron.calibracao_janela import TODOS  # noqa: PLC0415
 
     assistente.escolher(TODOS)
     assert assistente.pagina() == "etapa_todos"
@@ -198,7 +198,7 @@ def test_todos_juntos_acende_todas_e_ajusta_cada_uma(assistente):
 
 
 def test_todos_juntos_tem_controles_de_cada_dispositivo(assistente):
-    from cartridges.calibracao_janela import TODOS  # noqa: PLC0415
+    from kyron.calibracao_janela import TODOS  # noqa: PLC0415
 
     assistente.escolher(TODOS)
     assert [c["id"] for c in assistente.controles] == ["eb0", "eb1"]
@@ -209,7 +209,7 @@ def test_todos_juntos_tem_controles_de_cada_dispositivo(assistente):
 
 
 def test_todos_juntos_cada_um_parte_da_sua_calibracao(assistente):
-    from cartridges.calibracao_janela import TODOS  # noqa: PLC0415
+    from kyron.calibracao_janela import TODOS  # noqa: PLC0415
 
     puxada = calibracao.Calibracao(((-8, 1.0),) + ((0, 1.0),) * 5, (0, 0))
     assistente.calibracoes = {"eb0": puxada, "eb1": NEUTRA}
@@ -219,7 +219,7 @@ def test_todos_juntos_cada_um_parte_da_sua_calibracao(assistente):
 
 
 def test_todos_juntos_restaurar_volta_a_etapa_de_todas(assistente):
-    from cartridges.calibracao_janela import TODOS  # noqa: PLC0415
+    from kyron.calibracao_janela import TODOS  # noqa: PLC0415
 
     assistente.escolher(TODOS)
     assistente.mudar_tom(-8, "eb0")
@@ -229,7 +229,7 @@ def test_todos_juntos_restaurar_volta_a_etapa_de_todas(assistente):
 
 
 def test_todos_juntos_vai_do_branco_direto_ao_teste(assistente):
-    from cartridges.calibracao_janela import TODOS  # noqa: PLC0415
+    from kyron.calibracao_janela import TODOS  # noqa: PLC0415
 
     assistente.escolher(TODOS)
     for _ in range(6):
@@ -242,7 +242,7 @@ def test_todos_juntos_vai_do_branco_direto_ao_teste(assistente):
 
 
 def test_lista_comeca_com_todos_os_dispositivos(assistente):
-    from cartridges.calibracao_janela import TODOS  # noqa: PLC0415
+    from kyron.calibracao_janela import TODOS  # noqa: PLC0415
 
     assert [linha["id"] for linha in assistente.linhas] == [TODOS, "eb0", "eb1"]
     assert assistente.linhas[0]["nome"] == "Todos os dispositivos"
@@ -260,7 +260,7 @@ def test_temperatura_de_volta_ao_centro_nao_conta_como_calibrada(assistente):
 
 
 def test_um_dispositivo_sozinho_e_depois_todos_grava_tudo(assistente):
-    from cartridges.calibracao_janela import TODOS  # noqa: PLC0415
+    from kyron.calibracao_janela import TODOS  # noqa: PLC0415
 
     assistente.escolher("eb0")
     assistente.mudar_tom(-8)
@@ -278,7 +278,7 @@ def test_um_dispositivo_sozinho_e_depois_todos_grava_tudo(assistente):
 
 
 def test_com_um_dispositivo_so_nao_ha_todos(app_qt, tmp_path, monkeypatch, schema):  # noqa: ARG001
-    from cartridges.calibracao_janela import TODOS, AssistenteDeCalibracao  # noqa: PLC0415
+    from kyron.calibracao_janela import TODOS, AssistenteDeCalibracao  # noqa: PLC0415
 
     monkeypatch.setattr(shared, "fitas_arquivo", tmp_path / "fitas.json")
     session_fita.gravar_fitas([session_fita.Fita("A", "eb0", "1", "k")])
@@ -403,7 +403,7 @@ def test_calibracao_janela_sem_gi():
     codigo = (
         "import builtins, sys; builtins._ = lambda m: m; "
         "builtins.ngettext = lambda s, p, n: s if n == 1 else p; "
-        "import cartridges.calibracao_janela; "
+        "import kyron.calibracao_janela; "
         "assert 'gi' not in sys.modules"
     )
     subprocess.run([sys.executable, "-c", codigo], check=True, cwd=Path(__file__).resolve().parent.parent, timeout=60)

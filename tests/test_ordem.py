@@ -4,9 +4,9 @@
 
 """Regras puras de ordenação, filtro e opções da biblioteca (sem Qt)."""
 
-from cartridges.jogo import Jogo
-from cartridges.modelos import ordem
-from cartridges.modelos.ordem import Linha
+from kyron.jogo import Jogo
+from kyron.modelos import ordem
+from kyron.modelos.ordem import Linha
 
 
 def _linha(jogo_id, nome="X", **campos):
@@ -201,8 +201,8 @@ def test_anos_decrescentes():
 def test_copia_mais_velha_que_a_capa_nao_e_usada():
     import os  # noqa: PLC0415
 
-    from cartridges import shared  # noqa: PLC0415
-    from cartridges.utils import copias_animadas  # noqa: PLC0415
+    from kyron import shared  # noqa: PLC0415
+    from kyron.utils import copias_animadas  # noqa: PLC0415
 
     shared.covers_dir.mkdir(parents=True, exist_ok=True)
     shared.capas_animadas_dir.mkdir(parents=True, exist_ok=True)

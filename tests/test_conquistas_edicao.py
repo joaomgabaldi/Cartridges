@@ -4,9 +4,9 @@ import types
 
 import pytest
 
-from cartridges import shared
-from cartridges.conquistas import historico
-from cartridges.conquistas.formatos import Desbloqueio
+from kyron import shared
+from kyron.conquistas import historico
+from kyron.conquistas.formatos import Desbloqueio
 from tests.apoio_edicao import jogo, stub_sgdb
 
 
@@ -27,7 +27,7 @@ def varridos(monkeypatch):
 
 
 def _aplicar(store, game, **mudancas):
-    from cartridges import edicao  # noqa: PLC0415
+    from kyron import edicao  # noqa: PLC0415
 
     stub_sgdb(store)
     form = edicao.Formulario.do_jogo(game)
@@ -43,7 +43,7 @@ def _aplicar(store, game, **mudancas):
 
 
 def test_interruptor_vem_ligado_e_e_gravado(store):
-    from cartridges import edicao  # noqa: PLC0415
+    from kyron import edicao  # noqa: PLC0415
 
     game = jogo(store, 20, executable="x.exe")
     assert edicao.Formulario.do_jogo(game).conquistas is True

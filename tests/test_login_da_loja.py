@@ -12,12 +12,12 @@ from types import SimpleNamespace
 
 import pytest
 
-from cartridges.conquistas import vigia_da_conta
-from cartridges.conquistas.ea import conta as ea_conta
-from cartridges.conquistas.ea import janela as ea_janela
-from cartridges.conquistas.epic import conta as epic_conta
-from cartridges.conquistas.epic import janela as epic_janela
-from cartridges.modelos.contas import Loja, LoginDaLoja
+from kyron.conquistas import vigia_da_conta
+from kyron.conquistas.ea import conta as ea_conta
+from kyron.conquistas.ea import janela as ea_janela
+from kyron.conquistas.epic import conta as epic_conta
+from kyron.conquistas.epic import janela as epic_janela
+from kyron.modelos.contas import Loja, LoginDaLoja
 
 _CURL = "curl 'https://accounts.ea.com/connect/auth' -H 'cookie: remid=AAA; _nx_mpcid=BBB'"
 _COD = "0123456789abcdef0123456789abcdef"
@@ -369,7 +369,7 @@ def test_abrir_nunca_abre_o_navegador_de_verdade(caso, sem_navegador_de_verdade)
 
 def test_abrir_url_sem_troca_nunca_chega_ao_navegador_de_verdade(sem_navegador_de_verdade):
     """O funil `abrir_url` (Novidades, Sobre...) termina no `QDesktopServices.openUrl`: o `conftest.py` o recusa."""
-    from cartridges.utils.open_uri import abrir_url  # noqa: PLC0415
+    from kyron.utils.open_uri import abrir_url  # noqa: PLC0415
 
     with pytest.raises(AssertionError):
         abrir_url("https://exemplo.test/x")

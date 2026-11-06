@@ -15,8 +15,8 @@ from types import ModuleType, SimpleNamespace
 import pytest
 from PIL import Image
 
-from cartridges import shared
-from cartridges.utils import session_fita
+from kyron import shared
+from kyron.utils import session_fita
 from tests.apoio_fita import (  # noqa: F401
     AVISO,
     BATIMENTO,
@@ -1874,7 +1874,7 @@ def test_esperar_ate_o_fim_com_o_dono_valido(pulso, monkeypatch):
 
 # region Cor da tela
 
-from cartridges.utils.tela_do_jogo import Amostra  # noqa: E402
+from kyron.utils.tela_do_jogo import Amostra  # noqa: E402
 
 ATUAL = session_fita.Cor(100, 1000, 1000)
 TETO = 1000
@@ -2568,7 +2568,7 @@ def test_log_separa_candidata_de_confirmada_esperando(na_tela, caplog, monkeypat
 # region Calibração
 
 
-from cartridges.utils import calibracao as calibracao_mod  # noqa: E402
+from kyron.utils import calibracao as calibracao_mod  # noqa: E402
 from tests.apoio_session_fita import _jogo
 
 VERMELHO_PUXADO = calibracao_mod.Calibracao(

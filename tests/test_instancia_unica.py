@@ -22,11 +22,11 @@ from unittest.mock import MagicMock
 import pytest
 from PySide6.QtGui import QWindow
 
-from cartridges import shared
-from cartridges.modelos import tarefas
-from cartridges.modelos.tarefas import PainelDasTarefas
-from cartridges.saves import backup_de_saves
-from cartridges.utils import single_instance
+from kyron import shared
+from kyron.modelos import tarefas
+from kyron.modelos.tarefas import PainelDasTarefas
+from kyron.saves import backup_de_saves
+from kyron.utils import single_instance
 
 RAIZ = Path(__file__).resolve().parent.parent
 _NOMES_DO_CANAL_FINAL = (
@@ -57,7 +57,7 @@ def _nomes_de_teste(monkeypatch):
 
 def test_nomes_da_trava_no_canal_final_sao_os_de_sempre(tmp_path, monkeypatch):
     """Uma cópia do `shared.py` com o `instalacao.json` do canal final, como os testes do canal: só calcula nomes."""
-    monkeypatch.delenv("CARTRIDGES_DADOS", raising=False)
+    monkeypatch.delenv("KYRON_DADOS", raising=False)
     copia = tmp_path / "shared.py"
     shutil.copy(shared.__file__, copia)
     (tmp_path / "instalacao.json").write_text(json.dumps({"canal": "final"}), encoding="utf-8")
@@ -200,11 +200,11 @@ def test_present_procura_a_janela_do_qt(monkeypatch):
 # O `main()` de verdade com a trava já tomada; o realce é trocado (a busca de janelas seria na área de trabalho real).
 _SEGUNDA_COPIA = r"""
 import json, sys
-from cartridges.utils import single_instance
+from kyron.utils import single_instance
 
 realces = []
 single_instance.present_running_instance = lambda: realces.append(1)
-from cartridges import app
+from kyron import app
 
 codigo = app.main([sys.argv[0], "--sair-apos-carregar"])
 print(json.dumps({"codigo": codigo, "realces": realces, "nome": single_instance.nomes()[0]}), flush=True)
@@ -224,8 +224,8 @@ def test_segunda_copia_do_main_sai_sem_carregar(tmp_path, monkeypatch):
     assert nome not in _NOMES_DO_CANAL_FINAL
     ambiente = {
         **os.environ,
-        "CARTRIDGES_DADOS": str(tmp_path),
-        "CARTRIDGES_REGISTRO": rf"Software\CartridgesTestes\instancia-{uuid.uuid4()}",
+        "KYRON_DADOS": str(tmp_path),
+        "KYRON_REGISTRO": rf"Software\KyronTestes\instancia-{uuid.uuid4()}",
         "QT_QPA_PLATFORM": "offscreen",
     }
     assert single_instance.acquire()

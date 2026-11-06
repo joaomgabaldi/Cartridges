@@ -9,8 +9,8 @@ import os
 import pytest
 from PIL import Image
 
-from cartridges.utils import tela_do_jogo
-from cartridges.utils.tela_do_jogo import Amostra
+from kyron.utils import tela_do_jogo
+from kyron.utils.tela_do_jogo import Amostra
 
 
 @pytest.fixture

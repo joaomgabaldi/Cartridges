@@ -6,10 +6,10 @@ from PySide6.QtCore import Qt
 
 import pytest
 
-from cartridges import shared
-from cartridges.modelos.preferencias import PAGINAS, Preferencias
-from cartridges.utils import window_geometry
-from cartridges.utils.window_geometry import Monitor
+from kyron import shared
+from kyron.modelos.preferencias import PAGINAS, Preferencias
+from kyron.utils import window_geometry
+from kyron.utils.window_geometry import Monitor
 from tests.apoio_capas import _ManagerDeCapas
 from tests.apoio_preferencias_qt import PRINCIPAL, SEGUNDO
 
@@ -96,7 +96,7 @@ def test_chave_fora_da_lista_nao_e_gravada(p, caplog):
         p.definir("fita-estado-anterior", "x")
         p.definir("news-check-interval", 3)
     assert {c: shared.schema.get_value(c) for c in shared.schema.list_keys()} == antes
-    avisos = [r for r in caplog.records if r.name == "cartridges.modelos.preferencias"]
+    avisos = [r for r in caplog.records if r.name == "kyron.modelos.preferencias"]
     assert [r.levelname for r in avisos] == ["WARNING"] * 3
 
 
@@ -183,7 +183,7 @@ def test_valor_de_tipo_errado_e_recusado_sem_excecao(p, caplog):
         ):
             p.definir(chave, valor)
     assert {c: shared.schema.get_value(c) for c in shared.schema.list_keys()} == antes
-    avisos = [r for r in caplog.records if r.name == "cartridges.modelos.preferencias"]
+    avisos = [r for r in caplog.records if r.name == "kyron.modelos.preferencias"]
     assert len(avisos) == 7
 
 
@@ -207,7 +207,7 @@ def test_definir_texto_so_aceita_as_chaves_de_texto(p, caplog):
         p.definirTexto("shortcuts-location", "C:/x")
     assert not shared.schema.get_boolean("sgdb")
     assert shared.schema.get_string("shortcuts-location") != "C:/x"
-    avisos = [r for r in caplog.records if r.name == "cartridges.modelos.preferencias"]
+    avisos = [r for r in caplog.records if r.name == "kyron.modelos.preferencias"]
     assert len(avisos) == 2
 
 
@@ -230,7 +230,7 @@ class _FilaFalsa:
 
 
 def _capas(store, make_game, n=2, **manager):
-    from cartridges.store.managers.sgdb_manager import SgdbManager  # noqa: PLC0415
+    from kyron.store.managers.sgdb_manager import SgdbManager  # noqa: PLC0415
 
     jogos = [make_game(game_id=f"j{i}") for i in range(n)]
     for jogo in jogos:
@@ -240,7 +240,7 @@ def _capas(store, make_game, n=2, **manager):
 
 
 def _modelo_de_atualizacoes(fila):
-    from cartridges.modelos.preferencias import AtualizacoesDaBiblioteca  # noqa: PLC0415
+    from kyron.modelos.preferencias import AtualizacoesDaBiblioteca  # noqa: PLC0415
 
     return AtualizacoesDaBiblioteca(fila)
 
@@ -257,8 +257,8 @@ def test_m8_lote_de_capas_nao_repinta_jogo_apagado(app_qt, store, make_game):
 
 
 def test_m8_tarefa_enfileirada_ve_o_cancelamento_do_reset(monkeypatch, make_game):
-    from cartridges.store.managers import sgdb_manager  # noqa: PLC0415
-    from cartridges.store.managers.async_manager import AsyncManager  # noqa: PLC0415
+    from kyron.store.managers import sgdb_manager  # noqa: PLC0415
+    from kyron.store.managers.async_manager import AsyncManager  # noqa: PLC0415
 
     enfileiradas = []
     monkeypatch.setattr(
@@ -291,7 +291,7 @@ def test_sem_jogos_avisa_e_nao_pergunta(app_qt, store):
 
 
 def _completo(make_game, **extra):
-    from cartridges.utils.steam import STEAM_METADATA_VERSION  # noqa: PLC0415
+    from kyron.utils.steam import STEAM_METADATA_VERSION  # noqa: PLC0415
 
     return make_game(
         steam_appid="1", steam_checked=STEAM_METADATA_VERSION, developer="D", release_date="2020", genre="G",
@@ -317,7 +317,7 @@ def test_pergunta_com_a_contagem_dos_incompletos(app_qt, store, make_game):
 
 
 def test_recusa_por_ja_estar_rodando_avisa(app_qt, store, make_game, monkeypatch):
-    from cartridges import metadata_refresh  # noqa: PLC0415
+    from kyron import metadata_refresh  # noqa: PLC0415
 
     store.add_game(make_game(game_id="b", has_hltb_times=False), {})
     refresh = metadata_refresh.MetadataRefresh()
@@ -331,7 +331,7 @@ def test_recusa_por_ja_estar_rodando_avisa(app_qt, store, make_game, monkeypatch
 
 
 def test_recusa_por_nada_a_buscar_avisa(app_qt, store, make_game, monkeypatch):
-    from cartridges import metadata_refresh  # noqa: PLC0415
+    from kyron import metadata_refresh  # noqa: PLC0415
 
     store.add_game(_completo(make_game, game_id="a"), {})
     monkeypatch.setattr(metadata_refresh, "get_metadata_refresh", lambda: metadata_refresh.MetadataRefresh())
@@ -344,7 +344,7 @@ def test_recusa_por_nada_a_buscar_avisa(app_qt, store, make_game, monkeypatch):
 
 def test_resposta_vale_para_a_lista_da_hora_da_pergunta(app_qt, store, make_game, monkeypatch):
     """Guarda os jogos da pergunta; um jogo que entra depois não entra na busca."""
-    from cartridges import metadata_refresh  # noqa: PLC0415
+    from kyron import metadata_refresh  # noqa: PLC0415
 
     faltando = make_game(game_id="b", has_hltb_times=False)
     store.add_game(faltando, {})
@@ -367,7 +367,7 @@ def test_resposta_vale_para_a_lista_da_hora_da_pergunta(app_qt, store, make_game
 
 
 def test_buscar_metadados_comeca_pelos_jogos_certos(app_qt, store, make_game, monkeypatch):
-    from cartridges import metadata_refresh  # noqa: PLC0415
+    from kyron import metadata_refresh  # noqa: PLC0415
 
     completo = _completo(make_game, game_id="a")
     faltando = make_game(game_id="b", has_hltb_times=False)
@@ -417,8 +417,8 @@ def test_capas_dispensam_o_baixando_e_avisam_o_fim(app_qt, store, make_game):
 
 
 def test_erro_amigavel_das_capas_vira_dialogo_uma_vez(app_qt, store, make_game, monkeypatch):
-    from cartridges import shared  # noqa: PLC0415
-    from cartridges.errors.friendly_error import FriendlyError  # noqa: PLC0415
+    from kyron import shared  # noqa: PLC0415
+    from kyron.errors.friendly_error import FriendlyError  # noqa: PLC0415
 
     dialogos = []
     monkeypatch.setattr(
@@ -442,7 +442,7 @@ def test_capas_sem_jogos_nao_faz_nada(app_qt, store):
 
 
 def test_fechar_as_preferencias_nao_cancela_os_metadados(app_qt, monkeypatch):
-    from cartridges import metadata_refresh  # noqa: PLC0415
+    from kyron import metadata_refresh  # noqa: PLC0415
 
     refresh = metadata_refresh.MetadataRefresh()
     refresh.running = True

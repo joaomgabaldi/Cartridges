@@ -9,8 +9,8 @@ import json
 import threading
 import time
 
-from cartridges import shared
-from cartridges.utils import session_fita
+from kyron import shared
+from kyron.utils import session_fita
 from tests.apoio_fita import FitaFalsa, cor_mandada, estado_mandado, falsas, pastas, sem_fade
 from tests.apoio_session_fita import _jogo
 

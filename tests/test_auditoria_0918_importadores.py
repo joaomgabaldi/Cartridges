@@ -19,10 +19,10 @@ from hashlib import sha256
 import pytest
 import requests
 
-from cartridges import shared
-from cartridges.importer import shortcuts_source as ss
-from cartridges.utils import download, game_logo, run_executable, steamgriddb, wallhaven
-from cartridges.utils.steam import SteamAPIHelper, SteamGameNotFoundError
+from kyron import shared
+from kyron.importer import shortcuts_source as ss
+from kyron.utils import download, game_logo, run_executable, steamgriddb, wallhaven
+from kyron.utils.steam import SteamAPIHelper, SteamGameNotFoundError
 
 
 def _response(body, status=200, url="https://example.invalid/"):

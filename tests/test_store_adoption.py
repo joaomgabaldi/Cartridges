@@ -16,9 +16,9 @@ import threading
 import pytest
 from PySide6.QtCore import Qt
 
-from cartridges import shared
-from cartridges.store import store as store_module
-from cartridges.store.store import _path_key
+from kyron import shared
+from kyron.store import store as store_module
+from kyron.store.store import _path_key
 
 
 def key_for(path, source="shortcuts"):

@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from cartridges.utils import gravar_atomico as modulo
-from cartridges.utils.gravar_atomico import gravar_atomico
+from kyron.utils import gravar_atomico as modulo
+from kyron.utils.gravar_atomico import gravar_atomico
 
 
 @pytest.fixture(autouse=True)

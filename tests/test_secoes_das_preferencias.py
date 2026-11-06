@@ -7,8 +7,8 @@
 from PySide6.QtCore import QPointF, Qt
 from PySide6.QtTest import QTest
 
-from cartridges import shared
-from cartridges.saves import backup_de_saves
+from kyron import shared
+from kyron.saves import backup_de_saves
 from tests.apoio_qml_biblioteca import _achar, _esperar
 from tests.apoio_qml_detalhes import _foco_dentro_de
 from tests.apoio_qml_preferencias import _abrir, _avaliar, _clique, app  # noqa: F401

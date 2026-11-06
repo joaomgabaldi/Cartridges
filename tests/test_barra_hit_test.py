@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pytest
 
-from cartridges.janela import qwk
+from kyron.janela import qwk
 
 pytestmark = pytest.mark.skipif(
     not (Path(qwk.__file__).parent / "qwk_ponte.dll").exists(),
@@ -30,8 +30,8 @@ builtins._ = lambda m: m
 from PySide6.QtCore import QEventLoop, QObject, QPoint, QPointF, QTimer, QUrl
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtQml import QQmlApplicationEngine
-from cartridges.janela import qwk
-from cartridges.modelos.provedor_de_icones import ProvedorDeIcones
+from kyron.janela import qwk
+from kyron.modelos.provedor_de_icones import ProvedorDeIcones
 
 app = QGuiApplication(sys.argv)
 motor = QQmlApplicationEngine()
@@ -101,7 +101,7 @@ def medidas(tmp_path_factory):
     raiz = Path(__file__).resolve().parent.parent
     pasta = tmp_path_factory.mktemp("hit")
     arquivo = pasta / "janela.qml"
-    arquivo.write_text(_QML.format(qml=(raiz / "cartridges" / "qml").as_posix()), encoding="utf-8")
+    arquivo.write_text(_QML.format(qml=(raiz / "kyron" / "qml").as_posix()), encoding="utf-8")
     ambiente = {k: v for k, v in os.environ.items() if k != "QT_QPA_PLATFORM"}
     ambiente["PYTHONPATH"] = str(raiz)
     rodou = subprocess.run(

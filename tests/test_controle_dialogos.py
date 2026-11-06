@@ -11,8 +11,8 @@ que é o que o `_ler` emite para o direcional e para o botão A. O hardware real
 import pytest
 from PySide6.QtCore import QMetaObject, Qt
 
-from cartridges import shared
-from cartridges.jogo import Jogo
+from kyron import shared
+from kyron.jogo import Jogo
 from tests.apoio_edicao import jogo
 from tests.apoio_fita import pastas  # noqa: F401  # a pasta descartável das fitas (autouse)
 from tests.apoio_qml_biblioteca import _App, _esperar

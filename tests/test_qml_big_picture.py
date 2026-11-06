@@ -16,12 +16,12 @@ from PySide6.QtQml import QQmlComponent, QQmlEngine
 from PySide6.QtQuick import QQuickItem
 from PySide6.QtTest import QTest
 
-from cartridges import shared
-from cartridges.modelos import biblioteca as modulo_biblioteca
-from cartridges.modelos import regras_do_big_picture as regras
-from cartridges.modelos.big_picture import BigPicture
-from cartridges.modelos.biblioteca import ModeloDaBiblioteca
-from cartridges.process_session import ProcessSession
+from kyron import shared
+from kyron.modelos import biblioteca as modulo_biblioteca
+from kyron.modelos import regras_do_big_picture as regras
+from kyron.modelos.big_picture import BigPicture
+from kyron.modelos.biblioteca import ModeloDaBiblioteca
+from kyron.process_session import ProcessSession
 from tests.apoio_qml_biblioteca import QML, _achar, _esperar, _LojaFalsa
 from tests.apoio_qml_big_picture import (
     ALTURA,
@@ -313,7 +313,7 @@ def _capa_de_teste(motor, pasta, *, central, animar=False, animada=False, escala
 
 def test_central_em_alta_so_estatica(app_qt, tmp_path):
     motor = QQmlEngine()
-    from cartridges.modelos.provedor_de_icones import ProvedorDeIcones  # noqa: PLC0415
+    from kyron.modelos.provedor_de_icones import ProvedorDeIcones  # noqa: PLC0415
     motor.addImageProvider("icone", ProvedorDeIcones())
     capa = _capa_de_teste(motor, tmp_path, central=True)
     lateral = _capa_de_teste(motor, tmp_path, central=False)
@@ -333,7 +333,7 @@ def test_central_em_alta_so_estatica(app_qt, tmp_path):
 
 def test_reflexo_com_mipmap(app_qt, tmp_path):
     motor = QQmlEngine()
-    from cartridges.modelos.provedor_de_icones import ProvedorDeIcones  # noqa: PLC0415
+    from kyron.modelos.provedor_de_icones import ProvedorDeIcones  # noqa: PLC0415
     motor.addImageProvider("icone", ProvedorDeIcones())
     capa = _capa_de_teste(motor, tmp_path, central=False)
     reflexo = _achar(capa, "reflexo")
@@ -343,7 +343,7 @@ def test_reflexo_com_mipmap(app_qt, tmp_path):
 
 def test_animada_so_com_autoplay(app_qt, tmp_path):
     motor = QQmlEngine()
-    from cartridges.modelos.provedor_de_icones import ProvedorDeIcones  # noqa: PLC0415
+    from kyron.modelos.provedor_de_icones import ProvedorDeIcones  # noqa: PLC0415
     motor.addImageProvider("icone", ProvedorDeIcones())
     parada = _capa_de_teste(motor, tmp_path, central=True, animada=True, animar=False)
     tocando = _capa_de_teste(motor, tmp_path, central=True, animada=True, animar=True)
@@ -538,7 +538,7 @@ def test_esc_sai_e_devolve_o_foco_ao_cartao_central(app_qt, monkeypatch):
 
 def test_botao_indisponivel_sem_3d(app_qt, monkeypatch):
     app = _aberto_com(monkeypatch)
-    monkeypatch.setattr("cartridges.modelos.big_picture.tem_3d", lambda _janela: False)
+    monkeypatch.setattr("kyron.modelos.big_picture.tem_3d", lambda _janela: False)
     app.big_picture._rever_3d()  # noqa: SLF001
     botao = app.achar("botaoBigPicture")
     assert botao.property("indisponivel") is True
@@ -692,7 +692,7 @@ def test_animada_nao_toca_escondida(app_qt, tmp_path):
 
 def test_dica_aparece_no_botao_indisponivel(app_qt, monkeypatch):
     app = _aberto_com(monkeypatch)
-    monkeypatch.setattr("cartridges.modelos.big_picture.tem_3d", lambda _janela: False)
+    monkeypatch.setattr("kyron.modelos.big_picture.tem_3d", lambda _janela: False)
     app.big_picture._rever_3d()  # noqa: SLF001
     botao = app.achar("botaoBigPicture")
     assert botao.property("indisponivel") is True and botao.property("enabled") is True
@@ -822,7 +822,7 @@ def test_entrada_com_fade_no_app(app_qt, monkeypatch):
     # O caminho inteiro com a cortina falsa: o QML prepara as capas, a troca acontece no escuro e a fila corre.
     from PySide6.QtCore import QMetaObject  # noqa: PLC0415
 
-    from cartridges.modelos import big_picture as modulo  # noqa: PLC0415
+    from kyron.modelos import big_picture as modulo  # noqa: PLC0415
     from tests.apoio_qml_biblioteca import _App, _jogos  # noqa: PLC0415
 
     monkeypatch.setattr(modulo, "tem_3d", lambda _janela: True)
@@ -1003,7 +1003,7 @@ def test_modo_big_picture_do_controle_so_sem_dialogo_na_frente(app_qt, monkeypat
 def test_sem_capa_desenha_o_placeholder_da_biblioteca(app_qt, tmp_path):
     # Sem capa pronta aparece o placeholder, não um quadro cinza com o nome do jogo.
     motor = QQmlEngine()
-    from cartridges.modelos.provedor_de_icones import ProvedorDeIcones  # noqa: PLC0415
+    from kyron.modelos.provedor_de_icones import ProvedorDeIcones  # noqa: PLC0415
     motor.addImageProvider("icone", ProvedorDeIcones())
     placeholder = QUrl.fromLocalFile(str(modulo_biblioteca._PLACEHOLDER))  # noqa: SLF001
     sem = _capa_de_teste(motor, tmp_path, central=False)
@@ -1451,7 +1451,7 @@ def test_logo_de_le_o_disco_uma_vez_por_jogo(app_qt, monkeypatch, tmp_path):
     jogos = {"com": object(), "sem": object()}
     monkeypatch.setattr(shared, "store", SimpleNamespace(get=jogos.get), raising=False)
     monkeypatch.setattr(
-        "cartridges.utils.game_logo.cached_logo_path",
+        "kyron.utils.game_logo.cached_logo_path",
         lambda jogo: lidos.append(jogo) or (arquivo if jogo is jogos["com"] else None),
     )
     bp = BigPicture(ModeloDaBiblioteca())

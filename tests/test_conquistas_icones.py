@@ -13,9 +13,9 @@ import requests
 from PySide6.QtGui import QColor, QImage, QImageReader
 from requests.exceptions import ConnectionError as ErroDeConexao
 
-from cartridges import shared
-from cartridges.conquistas import arquivos, aviso_da_conta, icones
-from cartridges.utils.thread_principal import eh_thread_principal
+from kyron import shared
+from kyron.conquistas import arquivos, aviso_da_conta, icones
+from kyron.utils.thread_principal import eh_thread_principal
 
 URL = "https://cdn.exemplo.com/a.jpg?key=SEGREDO"
 
@@ -270,23 +270,23 @@ def test_documentos_do_sistema_sem_gi():
 
 def test_modulos_sem_gi():
     modulos = [
-        "cartridges.conquistas.arquivos",
-        "cartridges.conquistas.aviso_da_conta",
-        "cartridges.conquistas.icones",
-        "cartridges.conquistas.ea.conta",
-        "cartridges.conquistas.epic.conta",
-        "cartridges.conquistas.xbox.conta",
-        "cartridges.conquistas.xbox.login",
-        "cartridges.conquistas.vigia",
-        "cartridges.conquistas.vigia_da_conta",
-        "cartridges.conquistas.ubisoft.vigia",
-        "cartridges.conquistas.varredura",
-        "cartridges.conquistas.sessao",
-        "cartridges.conquista_aviso",
+        "kyron.conquistas.arquivos",
+        "kyron.conquistas.aviso_da_conta",
+        "kyron.conquistas.icones",
+        "kyron.conquistas.ea.conta",
+        "kyron.conquistas.epic.conta",
+        "kyron.conquistas.xbox.conta",
+        "kyron.conquistas.xbox.login",
+        "kyron.conquistas.vigia",
+        "kyron.conquistas.vigia_da_conta",
+        "kyron.conquistas.ubisoft.vigia",
+        "kyron.conquistas.varredura",
+        "kyron.conquistas.sessao",
+        "kyron.conquista_aviso",
     ]
     codigo = "import builtins, sys\nbuiltins._ = lambda m: m\n"
     codigo += "".join(f"import {m}\n" for m in modulos) + "assert 'gi' not in sys.modules\n"
-    # O ambiente do subprocesso herda `CARTRIDGES_DADOS`/`CARTRIDGES_REGISTRO` temporários do conftest.
+    # O ambiente do subprocesso herda `KYRON_DADOS`/`KYRON_REGISTRO` temporários do conftest.
     resultado = subprocess.run(
         [sys.executable, "-c", codigo], capture_output=True, text=True, timeout=120, cwd=Path(__file__).parent.parent
     )

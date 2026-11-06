@@ -13,28 +13,28 @@ from PySide6.QtQml import QQmlComponent, QQmlEngine
 from PySide6.QtQuick import QQuickItem, QQuickWindow
 from PySide6.QtQuickControls2 import QQuickStyle
 
-from cartridges import aplicativo as aplicativo_modulo
-from cartridges import shared
-from cartridges.utils.app_updater import AppUpdater
-from cartridges.utils.news_checker import NewsChecker
-from cartridges.aplicativo import Aplicativo
-from cartridges.jogo import Jogo
-from cartridges.modelos.big_picture import BigPicture, ProvedorDoFundo
-from cartridges.modelos.conquistas import ConquistasDoJogo
-from cartridges.modelos.biblioteca import FiltroDaPagina, FiltrosDaBiblioteca, ModeloDaBiblioteca
-from cartridges.modelos.controle import ControleDaGrade
-from cartridges.modelos.detalhes import DetalhesDoJogo
-from cartridges.modelos.edicao import ModeloDaEdicao
-from cartridges.modelos.historico import HistoricoDeSessoes
-from cartridges.modelos.novidades import Novidades
-from cartridges.modelos.saves import SavesDoJogo
-from cartridges.modelos.preferencias import Preferencias
-from cartridges.modelos.restauracao import ContinuacaoDaRestauracao
-from cartridges.modelos.sessao import ModeloDaSessao
-from cartridges.modelos.sobre import Sobre
-from cartridges.modelos.zerados_manuais import SeletorDeZerados
-from cartridges.modelos.tarefas import PainelDasTarefas
-from cartridges.ponte import Ponte
+from kyron import aplicativo as aplicativo_modulo
+from kyron import shared
+from kyron.utils.app_updater import AppUpdater
+from kyron.utils.news_checker import NewsChecker
+from kyron.aplicativo import Aplicativo
+from kyron.jogo import Jogo
+from kyron.modelos.big_picture import BigPicture, ProvedorDoFundo
+from kyron.modelos.conquistas import ConquistasDoJogo
+from kyron.modelos.biblioteca import FiltroDaPagina, FiltrosDaBiblioteca, ModeloDaBiblioteca
+from kyron.modelos.controle import ControleDaGrade
+from kyron.modelos.detalhes import DetalhesDoJogo
+from kyron.modelos.edicao import ModeloDaEdicao
+from kyron.modelos.historico import HistoricoDeSessoes
+from kyron.modelos.novidades import Novidades
+from kyron.modelos.saves import SavesDoJogo
+from kyron.modelos.preferencias import Preferencias
+from kyron.modelos.restauracao import ContinuacaoDaRestauracao
+from kyron.modelos.sessao import ModeloDaSessao
+from kyron.modelos.sobre import Sobre
+from kyron.modelos.zerados_manuais import SeletorDeZerados
+from kyron.modelos.tarefas import PainelDasTarefas
+from kyron.ponte import Ponte
 from tests.apoio_qml_biblioteca import QML, _App, _achar, _esperar, _jogos, _tres
 
 QQuickStyle.setStyle("Basic")
@@ -358,7 +358,7 @@ def _cartao_animado(app):
 def _jogo_com_capa_animada():
     from PIL import Image
 
-    from cartridges.utils import copias_animadas
+    from kyron.utils import copias_animadas
 
     caminho = shared.covers_dir / "imported_1.webp"
     quadros = [Image.new("RGBA", (8, 12), (tom, 0, 0, 255)) for tom in (0, 90)]
@@ -634,7 +634,7 @@ def test_copia_animada_a_vista_e_largada_antes_de_apagar_e_refeita_se_velha(app_
     import pytest  # noqa: PLC0415
     from PIL import Image  # noqa: PLC0415
 
-    from cartridges.utils import copias_animadas  # noqa: PLC0415
+    from kyron.utils import copias_animadas  # noqa: PLC0415
 
     monkeypatch.setattr(aplicativo_modulo, "_animacoes_do_sistema", lambda: True)
     monkeypatch.setattr(copias_animadas, "ao_terminar_copia", None)
@@ -674,7 +674,7 @@ def test_copia_animada_a_vista_e_largada_antes_de_apagar_e_refeita_se_velha(app_
 
 def _cartao_com_copia(monkeypatch, lixo):
     """Um cartão com autoplay ligado e a cópia animada pronta; com `lixo`, a cópia é trocada por bytes que não são WebP."""
-    from cartridges.utils import copias_animadas  # noqa: PLC0415
+    from kyron.utils import copias_animadas  # noqa: PLC0415
 
     monkeypatch.setattr(aplicativo_modulo, "_animacoes_do_sistema", lambda: True)
     monkeypatch.setattr(copias_animadas, "ao_terminar_copia", None)
@@ -695,7 +695,7 @@ LIXO = b"isto nao e um webp"
 
 def test_copia_animada_valida_aparece_em_ate_3_s(app_qt, monkeypatch):
     """Controle positivo do teste da cópia corrompida: com a cópia boa, a espera daquele teste bastaria para a animação aparecer."""
-    from cartridges.utils import copias_animadas  # noqa: PLC0415
+    from kyron.utils import copias_animadas  # noqa: PLC0415
 
     app, _capa, _copia, cartao, animada = _cartao_com_copia(monkeypatch, lixo=False)
     assert _esperar(lambda: animada.property("playing") is True)
@@ -707,7 +707,7 @@ def test_copia_animada_valida_aparece_em_ate_3_s(app_qt, monkeypatch):
 
 def test_copia_animada_corrompida_deixa_a_capa_parada_visivel(app_qt, monkeypatch):
     """Sem refazer: a cópia lixo fica, o `AnimatedImage` a tenta e não carrega, e a capa parada segue à vista."""
-    from cartridges.utils import copias_animadas  # noqa: PLC0415
+    from kyron.utils import copias_animadas  # noqa: PLC0415
 
     app, capa, copia, cartao, animada = _cartao_com_copia(monkeypatch, lixo=True)
     parada = _achar(cartao, "capaParada")
@@ -764,7 +764,7 @@ def test_grade_com_jogos_chegando_depois_mostra_varias_colunas(app_qt):
 
 def test_botao_das_tarefas_some_com_modal_no_big_picture_e_na_sessao(app_qt, flush_idle):  # noqa: ARG001
     """No `Aplicativo.qml` de verdade, com uma tarefa, o botão do canto só pode aparecer sem nada por cima."""
-    from cartridges.modelos import tarefas  # noqa: PLC0415
+    from kyron.modelos import tarefas  # noqa: PLC0415
 
     app = _App(_tres())
     botao = app.achar("botaoDasTarefas")

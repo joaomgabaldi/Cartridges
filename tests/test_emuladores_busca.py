@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from cartridges.emuladores import busca
+from kyron.emuladores import busca
 
 
 def _exe(pasta: Path, nome="x.exe") -> str:

@@ -14,12 +14,12 @@ import requests
 from PySide6.QtCore import QMetaObject, QPointF, Qt
 from PySide6.QtTest import QTest
 
-from cartridges import shared
-from cartridges.modelos import novidades as modulo_novidades
-from cartridges.modelos.avisos import FilaDeAvisos
-from cartridges.modelos.novidades import Novidades
-from cartridges.utils import news_checker
-from cartridges.utils.news_checker import NewsChecker
+from kyron import shared
+from kyron.modelos import novidades as modulo_novidades
+from kyron.modelos.avisos import FilaDeAvisos
+from kyron.modelos.novidades import Novidades
+from kyron.utils import news_checker
+from kyron.utils.news_checker import NewsChecker
 from tests.apoio_janela_atualizacao import Janela, achar, avaliar, esperar
 from tests.apoio_novidades import CheckerFalso, post
 
@@ -84,7 +84,7 @@ def _buscar(novidades, feed_):
 def test_news_checker_sem_gi():
     codigo = (
         "import builtins, sys; builtins._ = lambda m: m; "
-        "import cartridges.utils.news_checker, cartridges.modelos.novidades; sys.exit('gi' in sys.modules)"
+        "import kyron.utils.news_checker, kyron.modelos.novidades; sys.exit('gi' in sys.modules)"
     )
     resultado = subprocess.run(
         [sys.executable, "-c", codigo], cwd=RAIZ, capture_output=True, text=True, timeout=60, check=False

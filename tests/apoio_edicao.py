@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Apoio dos testes da edição (`cartridges.edicao`) e da ligação de zerados.
+"""Apoio dos testes da edição (`kyron.edicao`) e da ligação de zerados.
 
 Módulo à parte, e não um teste: importar `tests.conftest` ou um `test_*.py` de
 outro arquivo roda a coleta de novo.
@@ -15,7 +15,7 @@ from PySide6.QtCore import QEventLoop, QTimer
 
 def jogo(store, numero, **campos):
     """Um `Jogo` de verdade, já registrado na store."""
-    from cartridges.jogo import Jogo  # noqa: PLC0415
+    from kyron.jogo import Jogo  # noqa: PLC0415
 
     game = Jogo(
         {
@@ -55,7 +55,7 @@ class StubSgdb:
 
 
 def stub_sgdb(store, erros=()):
-    from cartridges.store.managers.sgdb_manager import SgdbManager  # noqa: PLC0415
+    from kyron.store.managers.sgdb_manager import SgdbManager  # noqa: PLC0415
 
     falso = StubSgdb(erros)
     store.managers[SgdbManager] = falso

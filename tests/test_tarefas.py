@@ -7,7 +7,7 @@ import weakref
 import pytest
 from PySide6.QtCore import QEventLoop, Qt, QTimer
 
-from cartridges.modelos import tarefas
+from kyron.modelos import tarefas
 
 
 def _rodar(limite=0.2):

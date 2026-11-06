@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from cartridges.conquistas import arquivos, historico
+from kyron.conquistas import arquivos, historico
 
 
 def kv_bytes(itens: dict) -> bytes:

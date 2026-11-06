@@ -7,9 +7,9 @@ from pathlib import Path
 import pytest
 import requests
 
-from cartridges import shared
-from cartridges.conquistas import catalogo
-from cartridges.conquistas.epic import api, conta
+from kyron import shared
+from kyron.conquistas import catalogo
+from kyron.conquistas.epic import api, conta
 from tests.apoio_xbox import Resposta, RespostaSemFim
 
 _DADOS = Path(__file__).parent / "dados" / "epic"

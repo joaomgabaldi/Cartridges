@@ -4,9 +4,9 @@ import os
 
 import pytest
 
-from cartridges.conquistas import catalogo, historico, vigia
-from cartridges.conquistas.catalogo import Catalogo, ConquistaInfo
-from cartridges.conquistas.ubisoft import pacote, vigia as vigia_ubisoft
+from kyron.conquistas import catalogo, historico, vigia
+from kyron.conquistas.catalogo import Catalogo, ConquistaInfo
+from kyron.conquistas.ubisoft import pacote, vigia as vigia_ubisoft
 from tests.apoio_conquistas import gravar_pacote, gravar_spool, pastas  # noqa: F401
 
 INICIO = 1_791_243_000

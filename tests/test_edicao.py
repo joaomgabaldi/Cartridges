@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""A regra da edição (`cartridges.edicao`), sem tela: validar e aplicar o formulário."""
+"""A regra da edição (`kyron.edicao`), sem tela: validar e aplicar o formulário."""
 
 import subprocess
 import sys
@@ -13,13 +13,13 @@ from types import SimpleNamespace
 import pytest
 from PIL import Image
 
-from cartridges import shared
+from kyron import shared
 from tests.apoio_edicao import girar, jogo, stub_sgdb
 
 
 @pytest.fixture
 def edicao():
-    from cartridges import edicao  # noqa: PLC0415
+    from kyron import edicao  # noqa: PLC0415
 
     return edicao
 
@@ -32,7 +32,7 @@ def sgdb(store):
 @pytest.fixture
 def aplicativo(monkeypatch):
     """O `shared.aplicativo` com a fila de avisos de verdade e um verificador falso."""
-    from cartridges.modelos.avisos import FilaDeAvisos  # noqa: PLC0415
+    from kyron.modelos.avisos import FilaDeAvisos  # noqa: PLC0415
 
     verificacoes = []
     dialogos = []
@@ -139,7 +139,7 @@ def test_jogo_novo_so_nasce_depois_de_validar(edicao, store, sgdb, data, rastrea
 
 
 def test_adicionar_cria_imported_com_proximo_id(edicao, store, sgdb):
-    from cartridges.jogo import Jogo  # noqa: PLC0415
+    from kyron.jogo import Jogo  # noqa: PLC0415
 
     store.add_game(Jogo({"game_id": "imported_1", "source": "imported", "name": "Já", "executable": "a"}), {}, run_pipeline=False)
     form = edicao.Formulario.do_jogo(None)
@@ -192,7 +192,7 @@ def test_jogo_vivo_fora_da_store_e_gravado(edicao, store, sgdb):
 
 
 def test_appid_digitado_manda_sobre_o_buscado(edicao, store, sgdb):
-    from cartridges.utils.steam import STEAM_METADATA_VERSION  # noqa: PLC0415
+    from kyron.utils.steam import STEAM_METADATA_VERSION  # noqa: PLC0415
 
     game = jogo(store, 30, steam_appid="10")
     form = edicao.Formulario.do_jogo(game)
@@ -331,7 +331,7 @@ NOT_GAME_METADATA = {
 
 def test_the_guard_covers_every_persisted_field():
     """Campo novo em `PERSISTED_ATTRS` obriga a pô-lo na guarda acima ou a dizer aqui por que ele não pertence a ela."""
-    from cartridges.jogo import PERSISTED_ATTRS  # noqa: PLC0415
+    from kyron.jogo import PERSISTED_ATTRS  # noqa: PLC0415
 
     cobertos = set(PERSISTED_METADATA) | NOT_GAME_METADATA
     assert set(PERSISTED_ATTRS) - cobertos == set(), "campo fora da guarda"
@@ -490,7 +490,7 @@ def test_sem_capa_pede_sgdb(edicao, store, sgdb, app_dirs):
 
 
 def test_erro_amigavel_do_sgdb_vira_dialogo(edicao, store, aplicativo):
-    from cartridges.errors.friendly_error import FriendlyError  # noqa: PLC0415
+    from kyron.errors.friendly_error import FriendlyError  # noqa: PLC0415
 
     stub_sgdb(store, erros=[FriendlyError("Não foi possível autenticar no SteamGridDB", "Verifique a chave."), ValueError("x")])
     _aplicar(edicao, jogo(store, 82))
@@ -498,7 +498,7 @@ def test_erro_amigavel_do_sgdb_vira_dialogo(edicao, store, aplicativo):
 
 
 def test_erro_do_sgdb_oferece_as_preferencias_do_sgdb(edicao, store, aplicativo):
-    from cartridges.errors.friendly_error import FriendlyError  # noqa: PLC0415
+    from kyron.errors.friendly_error import FriendlyError  # noqa: PLC0415
 
     stub_sgdb(store, erros=[FriendlyError("Não foi possível autenticar no SteamGridDB", "Verifique a chave.")])
     _aplicar(edicao, jogo(store, 84))
@@ -526,7 +526,7 @@ def test_capa_que_nao_grava_nao_derruba_o_aplicar(edicao, store, sgdb, monkeypat
 
 @pytest.fixture
 def abandonadas(monkeypatch):
-    from cartridges.utils import copias_animadas  # noqa: PLC0415
+    from kyron.utils import copias_animadas  # noqa: PLC0415
 
     lista = []
     monkeypatch.setattr(copias_animadas, "abandonar", lista.append)
@@ -577,7 +577,7 @@ def test_excluir_a_capa(edicao, store, sgdb, app_dirs):
 
 
 def test_logo_e_parede_sao_gravados_com_o_nome_final(edicao, store, sgdb, tmp_path):
-    from cartridges.utils import game_logo, session_wallpaper  # noqa: PLC0415
+    from kyron.utils import game_logo, session_wallpaper  # noqa: PLC0415
 
     game = jogo(store, 87)
     logo = tmp_path / "logo_tmp.png"
@@ -610,7 +610,7 @@ def test_logo_de_um_arquivo_do_disco_nao_e_apagado(edicao, store, sgdb, tmp_path
 
 
 def test_titulo_e_nao_trocar_e_voltar_ao_automatico(edicao, store, sgdb):
-    from cartridges.utils import game_logo, session_wallpaper  # noqa: PLC0415
+    from kyron.utils import game_logo, session_wallpaper  # noqa: PLC0415
 
     game = jogo(store, 89)
     _aplicar(edicao, game, logo=edicao.Escolha("title"), papel_de_parede=edicao.Escolha("none"))
@@ -632,7 +632,7 @@ def test_edicao_sem_gi():
     codigo = (
         "import builtins, sys; builtins._ = lambda m: m; "
         "builtins.ngettext = lambda s, p, n: s if n == 1 else p; "
-        "import cartridges.edicao, cartridges.utils.ligacao_zerado, cartridges.utils.session_wallpaper; "
+        "import kyron.edicao, kyron.utils.ligacao_zerado, kyron.utils.session_wallpaper; "
         "assert 'gi' not in sys.modules"
     )
     subprocess.run([sys.executable, "-c", codigo], check=True, cwd=Path(__file__).resolve().parent.parent)
@@ -708,7 +708,7 @@ def test_estado_do_logo_e_do_papel(edicao, store):
 
 
 def test_jogo_adicionado_a_mao_durante_a_importacao_nao_entra_no_desfazer(edicao, store, sgdb, monkeypatch):
-    from cartridges.importer.importer import Importer  # noqa: PLC0415
+    from kyron.importer.importer import Importer  # noqa: PLC0415
 
     monkeypatch.setattr(Importer, "summary_toast", None)
     importer = Importer(SimpleNamespace(avisos=None))
@@ -724,8 +724,8 @@ def test_jogo_adicionado_a_mao_durante_a_importacao_nao_entra_no_desfazer(edicao
 
 
 def test_edicao_usa_o_temporario_do_save_cover():
-    from cartridges import edicao as modulo  # noqa: PLC0415
-    from cartridges.utils import save_cover  # noqa: PLC0415
+    from kyron import edicao as modulo  # noqa: PLC0415
+    from kyron.utils import save_cover  # noqa: PLC0415
 
     assert modulo._temporario is save_cover._temporario  # noqa: SLF001
 
@@ -757,7 +757,7 @@ def test_appid_do_campo_intocado_nao_liga_appid_manual(edicao, store, sgdb):
 @pytest.fixture
 def inis_na_hora(edicao, monkeypatch):
     """A thread dos .ini roda no `start`; registra o que ela fez."""
-    from cartridges.emuladores import aplicacao, varredura  # noqa: PLC0415
+    from kyron.emuladores import aplicacao, varredura  # noqa: PLC0415
 
     feitos = []
     monkeypatch.setattr(

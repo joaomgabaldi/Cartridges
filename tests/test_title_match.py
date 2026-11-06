@@ -4,7 +4,7 @@
 
 """Checks for the Steam title matcher.
 
-Runnable standalone — ``cartridges.utils.title_match`` imports
+Runnable standalone — ``kyron.utils.title_match`` imports
 nothing from the app — so a regression is caught with a plain::
 
     python3 tests/test_title_match.py
@@ -20,7 +20,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from cartridges.utils.title_match import (  # noqa: E402
+from kyron.utils.title_match import (  # noqa: E402
     compare_titles,
     rank_candidates,
 )

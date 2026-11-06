@@ -6,7 +6,7 @@
 
 from PIL import Image
 
-from cartridges.utils.cor_da_capa import dominante, dominante_da_imagem
+from kyron.utils.cor_da_capa import dominante, dominante_da_imagem
 
 
 def _capa(tmp_path, cor, detalhe=None):

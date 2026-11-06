@@ -14,13 +14,13 @@ from PySide6.QtGui import QImage, QWindow
 from PySide6.QtQuick import QSGRendererInterface
 from PySide6.QtTest import QTest
 
-from cartridges.jogo import Jogo
-from cartridges.modelos import big_picture as modulo
-from cartridges.modelos import regras_do_big_picture as regras
-from cartridges.modelos.big_picture import BigPicture, ProvedorDoFundo
-from cartridges.modelos.biblioteca import ModeloDaBiblioteca
-from cartridges.utils import restauracao
-from cartridges.xinput import REPEAT_DELAY_US
+from kyron.jogo import Jogo
+from kyron.modelos import big_picture as modulo
+from kyron.modelos import regras_do_big_picture as regras
+from kyron.modelos.big_picture import BigPicture, ProvedorDoFundo
+from kyron.modelos.biblioteca import ModeloDaBiblioteca
+from kyron.utils import restauracao
+from kyron.xinput import REPEAT_DELAY_US
 
 
 def _esperar():
@@ -1129,9 +1129,9 @@ def test_lista_refeita_durante_a_abertura_refaz_no_inicio_da_volta(abrivel):
 @pytest.fixture
 def com_sessao(abrivel, monkeypatch, schema):
     """O `abrivel` com o `ModeloDaSessao` de verdade: o `launch` falso começa o rastreio por processo."""
-    from cartridges.modelos.avisos import FilaDeAvisos  # noqa: PLC0415
-    from cartridges.modelos.sessao import ModeloDaSessao  # noqa: PLC0415
-    from cartridges.process_session import ProcessSession  # noqa: PLC0415
+    from kyron.modelos.avisos import FilaDeAvisos  # noqa: PLC0415
+    from kyron.modelos.sessao import ModeloDaSessao  # noqa: PLC0415
+    from kyron.process_session import ProcessSession  # noqa: PLC0415
 
     a = abrivel
     a.sessao = ModeloDaSessao(FilaDeAvisos(), big_picture=a.bp)
@@ -1164,8 +1164,8 @@ def test_fim_da_sessao_reabre_com_o_jogo_no_centro(com_sessao):
 
 
 def test_fim_da_sessao_com_queda_para_a_manual_reabre_o_big_picture(com_sessao):
-    from cartridges.process_session import ProcessSession  # noqa: PLC0415
-    from cartridges.session_window import SessionWindow  # noqa: PLC0415
+    from kyron.process_session import ProcessSession  # noqa: PLC0415
+    from kyron.session_window import SessionWindow  # noqa: PLC0415
 
     a = com_sessao
     _ida(a)
@@ -1181,8 +1181,8 @@ def test_fim_da_sessao_com_queda_para_a_manual_reabre_o_big_picture(com_sessao):
 
 @pytest.mark.parametrize("visivel", [False, True])
 def test_fim_da_sessao_com_o_big_picture_escondido_nao_chama(app_qt, visivel):
-    from cartridges.modelos.avisos import FilaDeAvisos  # noqa: PLC0415
-    from cartridges.modelos.sessao import ModeloDaSessao  # noqa: PLC0415
+    from kyron.modelos.avisos import FilaDeAvisos  # noqa: PLC0415
+    from kyron.modelos.sessao import ModeloDaSessao  # noqa: PLC0415
 
     chamadas = []
     bp = SimpleNamespace(visivel=visivel, voltouDoJogo=lambda: chamadas.append(1))
@@ -1191,8 +1191,8 @@ def test_fim_da_sessao_com_o_big_picture_escondido_nao_chama(app_qt, visivel):
 
 
 def test_fim_da_sessao_no_meio_de_um_fade_nao_cria_outra_cortina(fade):
-    from cartridges.modelos.avisos import FilaDeAvisos  # noqa: PLC0415
-    from cartridges.modelos.sessao import ModeloDaSessao  # noqa: PLC0415
+    from kyron.modelos.avisos import FilaDeAvisos  # noqa: PLC0415
+    from kyron.modelos.sessao import ModeloDaSessao  # noqa: PLC0415
 
     bp = fade.bp
     aberturas = []

@@ -8,7 +8,7 @@ import time
 
 import pytest
 
-from cartridges.utils.rate_limiter import PickHistory, RateLimiter
+from kyron.utils.rate_limiter import PickHistory, RateLimiter
 
 
 class Limiter(RateLimiter):

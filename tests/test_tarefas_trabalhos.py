@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from cartridges.modelos import tarefas
+from kyron.modelos import tarefas
 
 
 @pytest.fixture(autouse=True)
@@ -78,7 +78,7 @@ def _tarefas_vistas(monkeypatch):
 
 
 def test_hltb_vira_tarefa_com_a_fila_e_termina(monkeypatch, store, make_game, flush_idle):
-    from cartridges.utils import hltb_backfill  # noqa: PLC0415
+    from kyron.utils import hltb_backfill  # noqa: PLC0415
 
     for game_id in ("a", "b", "c"):
         store.add_game(make_game(game_id=game_id, has_hltb_times=False, hltb_id=None), {})
@@ -105,9 +105,9 @@ def test_hltb_vira_tarefa_com_a_fila_e_termina(monkeypatch, store, make_game, fl
 def _refresh_com_managers(monkeypatch):
     """Um MetadataRefresh sem rede: managers falsos, thread em linha e o
     prefetch de tags sem nada a buscar."""
-    from cartridges import metadata_refresh, shared  # noqa: PLC0415
-    from cartridges.store.managers.hltb_manager import HLTBManager  # noqa: PLC0415
-    from cartridges.store.managers.steam_api_manager import (  # noqa: PLC0415
+    from kyron import metadata_refresh, shared  # noqa: PLC0415
+    from kyron.store.managers.hltb_manager import HLTBManager  # noqa: PLC0415
+    from kyron.store.managers.steam_api_manager import (  # noqa: PLC0415
         SteamAPIManager,
     )
 
@@ -148,7 +148,7 @@ def test_metadados_cancelado_tambem_sai_do_quadro(monkeypatch, flush_idle):
 
 
 def test_tamanho_conta_so_jogos_com_pasta(monkeypatch, store, make_game, flush_idle):
-    from cartridges.utils import install_size  # noqa: PLC0415
+    from kyron.utils import install_size  # noqa: PLC0415
 
     store.add_game(make_game(game_id="com", executable="com", install_size=0, install_size_ts=0), {})
     store.add_game(make_game(game_id="sem", executable="sem", install_size=0, install_size_ts=0), {})
@@ -169,7 +169,7 @@ def test_tamanho_conta_so_jogos_com_pasta(monkeypatch, store, make_game, flush_i
 def test_tamanho_so_com_jogos_sem_pasta_nao_vira_tarefa(
     monkeypatch, store, make_game, flush_idle
 ):
-    from cartridges.utils import install_size  # noqa: PLC0415
+    from kyron.utils import install_size  # noqa: PLC0415
 
     jogo = make_game(game_id="sem", install_size=5000, install_size_ts=0)
     store.add_game(jogo, {})

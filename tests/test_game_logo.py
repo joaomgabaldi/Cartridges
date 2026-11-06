@@ -9,8 +9,8 @@ import time
 
 import pytest
 
-from cartridges import shared
-from cartridges.utils import game_logo
+from kyron import shared
+from kyron.utils import game_logo
 
 
 @pytest.fixture(autouse=True)
@@ -216,7 +216,7 @@ def test_game_logo_sem_gi():
 
     codigo = (
         "import builtins, sys; builtins._ = lambda m: m; "
-        "import cartridges.utils.game_logo, cartridges.utils.desfoque; "
+        "import kyron.utils.game_logo, kyron.utils.desfoque; "
         "assert 'gi' not in sys.modules"
     )
     subprocess.run([sys.executable, "-c", codigo], check=True, cwd=Path(__file__).resolve().parent.parent)

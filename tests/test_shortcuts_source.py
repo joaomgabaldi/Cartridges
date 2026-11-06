@@ -14,9 +14,9 @@ These tests drive the real ``__iter__`` with the two PowerShell calls replaced, 
 
 import pytest
 
-from cartridges.importer import shortcuts_source as ss
-from cartridges.importer.source import SourceScanError
-from cartridges.store.store import _is_derived_command
+from kyron.importer import shortcuts_source as ss
+from kyron.importer.source import SourceScanError
+from kyron.store.store import _is_derived_command
 
 # A real Xbox layout: the .lnk carries a grouping id, and Get-StartApps is the
 # only thing that knows the launchable one.
@@ -440,7 +440,7 @@ def test_steam_appid_extraction(url, expected):
 
 
 def test_atalhos_da_pasta_so_lnk_e_url(tmp_path, schema):
-    from cartridges.importer.shortcuts_source import atalhos_da_pasta  # noqa: PLC0415
+    from kyron.importer.shortcuts_source import atalhos_da_pasta  # noqa: PLC0415
 
     (tmp_path / "sub").mkdir()
     for nome in ("a.lnk", "b.URL", "c.txt", "sub/d.lnk"):

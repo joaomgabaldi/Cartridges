@@ -3,8 +3,8 @@ from pathlib import Path
 
 import pytest
 
-from cartridges.conquistas.ea import jogo
-from cartridges.conquistas.ea.jogo import Candidato, candidato, normalizar
+from kyron.conquistas.ea import jogo
+from kyron.conquistas.ea.jogo import Candidato, candidato, normalizar
 
 # O conftest troca `jogo.chaves_do_registro` por um stub; este teste usa a função de verdade.
 _CHAVES_REAL = jogo.chaves_do_registro

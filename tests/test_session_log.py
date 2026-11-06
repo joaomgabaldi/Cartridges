@@ -11,8 +11,8 @@ energia, uma edição à mão, uma sessão apagada. Cada teste abaixo é uma des
 situações.
 """
 
-from cartridges import shared
-from cartridges.utils import session_log
+from kyron import shared
+from kyron.utils import session_log
 
 
 def path():
@@ -187,7 +187,7 @@ def test_the_periods_end_on_the_last_day_played_and_all_starts_at_the_first_sess
     cresceriam para sempre."""
     from datetime import date
 
-    from cartridges.session_history import period_range
+    from kyron.session_history import period_range
 
     today = date(2026, 10, 13)
     last = date(2026, 9, 18)
@@ -207,7 +207,7 @@ def test_the_periods_end_on_the_last_day_played_and_all_starts_at_the_first_sess
 def test_a_session_ending_at_midnight_does_not_add_an_empty_day():
     from datetime import date
 
-    from cartridges.session_history import period_range
+    from kyron.session_history import period_range
 
     sessions = [{"end": local_ts(2026, 9, 19), "seconds": 3600}]  # 23h → 0h
     assert period_range(sessions, "all", date(2026, 10, 13)) == (
@@ -219,7 +219,7 @@ def test_a_session_ending_at_midnight_does_not_add_an_empty_day():
 def test_a_long_pause_becomes_a_break_and_a_short_one_stays():
     from datetime import date, timedelta
 
-    from cartridges.session_history import LACUNA_MAXIMA, sem_lacunas_longas
+    from kyron.session_history import LACUNA_MAXIMA, sem_lacunas_longas
 
     inicio = date(2025, 10, 1)
 
@@ -244,7 +244,7 @@ def test_week_and_month_do_not_reach_before_the_first_session():
     o período escolhido é "semana" ou "mês"."""
     from datetime import date
 
-    from cartridges.session_history import period_range
+    from kyron.session_history import period_range
 
     today = date(2026, 9, 19)
     sessions = [
@@ -264,7 +264,7 @@ def _grava_linhas(handler, quantas):
 
 
 def test_sem_limite_grava_alem_de_max_bytes(tmp_path, monkeypatch):
-    from cartridges.logging.session_file_handler import SessionFileHandler  # noqa: PLC0415
+    from kyron.logging.session_file_handler import SessionFileHandler  # noqa: PLC0415
 
     monkeypatch.setattr(SessionFileHandler, "MAX_BYTES", 500)
     handler = SessionFileHandler(tmp_path / "cartridges.log", sem_limite=True)
@@ -277,7 +277,7 @@ def test_sem_limite_grava_alem_de_max_bytes(tmp_path, monkeypatch):
 
 
 def test_limite_continua_por_padrao(tmp_path, monkeypatch):
-    from cartridges.logging.session_file_handler import SessionFileHandler  # noqa: PLC0415
+    from kyron.logging.session_file_handler import SessionFileHandler  # noqa: PLC0415
 
     monkeypatch.setattr(SessionFileHandler, "MAX_BYTES", 500)
     handler = SessionFileHandler(tmp_path / "cartridges.log")
@@ -289,7 +289,7 @@ def test_limite_continua_por_padrao(tmp_path, monkeypatch):
 
 
 def test_sem_limite_nao_consulta_a_posicao_do_arquivo(tmp_path):
-    from cartridges.logging.session_file_handler import SessionFileHandler  # noqa: PLC0415
+    from kyron.logging.session_file_handler import SessionFileHandler  # noqa: PLC0415
 
     class Contador:
         """Arquivo de verdade por trás; só conta as chamadas a tell()."""

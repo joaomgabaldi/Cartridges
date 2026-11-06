@@ -2,8 +2,8 @@
 
 import pytest
 
-from cartridges.conquistas.formatos import Desbloqueio
-from cartridges.conquistas.ubisoft import spool
+from kyron.conquistas.formatos import Desbloqueio
+from kyron.conquistas.ubisoft import spool
 from tests.apoio_conquistas import SPOOL_DO_HOST, spool_bytes, varint
 
 DO_HOST = [Desbloqueio("UBI:23", 1785102639), Desbloqueio("UBI:12", 1791243494)]

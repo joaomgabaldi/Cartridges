@@ -11,14 +11,14 @@ from PySide6.QtTest import QTest
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QWindow
 
-from cartridges import process_session as ps
-from cartridges import session_window as sw
-from cartridges import shared
-from cartridges.modelos.avisos import FilaDeAvisos
-from cartridges.modelos.sessao import ModeloDaSessao, pode_anotar
-from cartridges.process_session import ProcessSession
-from cartridges.session_window import SessionWindow
-from cartridges.utils import session_fita, session_log, session_wallpaper
+from kyron import process_session as ps
+from kyron import session_window as sw
+from kyron import shared
+from kyron.modelos.avisos import FilaDeAvisos
+from kyron.modelos.sessao import ModeloDaSessao, pode_anotar
+from kyron.process_session import ProcessSession
+from kyron.session_window import SessionWindow
+from kyron.utils import session_fita, session_log, session_wallpaper
 
 CLASSICO = r'start "" "D:\Jogos\halo.exe"'
 

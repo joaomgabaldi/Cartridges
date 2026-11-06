@@ -21,8 +21,8 @@ from types import SimpleNamespace
 import pytest
 from PIL import Image
 
-from cartridges import shared
-from cartridges.utils import session_wallpaper
+from kyron import shared
+from kyron.utils import session_wallpaper
 
 
 def _arte(largura: int, altura: int) -> Image.Image:
@@ -330,7 +330,7 @@ class TestLimiteDoPapelDeParede:
     def _anotar(monkeypatch, modulo):
         import requests  # noqa: PLC0415
 
-        from cartridges.utils.download import MAX_IMAGE_BYTES  # noqa: PLC0415
+        from kyron.utils.download import MAX_IMAGE_BYTES  # noqa: PLC0415
 
         limites = []
 
@@ -342,7 +342,7 @@ class TestLimiteDoPapelDeParede:
         return limites
 
     def test_busca_automatica_usa_50_mb(self, monkeypatch) -> None:
-        from cartridges.utils.download import MAX_WALLPAPER_BYTES  # noqa: PLC0415
+        from kyron.utils.download import MAX_WALLPAPER_BYTES  # noqa: PLC0415
 
         limites = self._anotar(monkeypatch, session_wallpaper)
         monkeypatch.setattr(

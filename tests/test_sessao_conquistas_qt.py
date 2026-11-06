@@ -18,17 +18,17 @@ from PySide6.QtCore import QCoreApplication, QPoint, QPointF, Qt
 from PySide6.QtGui import QColor, QImage, QWheelEvent
 from PySide6.QtTest import QTest
 
-from cartridges import shared
-from cartridges.conquistas import catalogo, historico, icones
-from cartridges.conquistas import sessao as sessao_conquistas
-from cartridges.conquistas.catalogo import Catalogo, ConquistaInfo
-from cartridges.conquistas.formatos import Desbloqueio
-from cartridges.jogo import Jogo
-from cartridges.modelos import conquistas as modulo_das_conquistas
-from cartridges.modelos import sessao as modulo_da_sessao
-from cartridges.modelos.conquistas import ConquistasDoJogo
-from cartridges.modelos.sessao import ModeloDaSessao
-from cartridges.utils import session_fita, session_wallpaper, window_geometry
+from kyron import shared
+from kyron.conquistas import catalogo, historico, icones
+from kyron.conquistas import sessao as sessao_conquistas
+from kyron.conquistas.catalogo import Catalogo, ConquistaInfo
+from kyron.conquistas.formatos import Desbloqueio
+from kyron.jogo import Jogo
+from kyron.modelos import conquistas as modulo_das_conquistas
+from kyron.modelos import sessao as modulo_da_sessao
+from kyron.modelos.conquistas import ConquistasDoJogo
+from kyron.modelos.sessao import ModeloDaSessao
+from kyron.utils import session_fita, session_wallpaper, window_geometry
 from tests.apoio_conquistas import com_fonte
 from tests.apoio_conquistas_qt import _Detalhes, _jogo
 from tests.apoio_qml_biblioteca import _achar, _App, _esperar, _jogos
@@ -166,7 +166,7 @@ def test_varredura_que_estoura_no_fim_da_sessao_nao_derruba_o_resto(modelo, cham
 def test_encerrar_para_o_vigia_fecha_o_aviso_e_nao_le_no_fim(modelo, chamadas, make_game, monkeypatch):
     """No `saindo` (as janelas ainda na tela) só se grava e se para o vigia, que tira o aviso da
     tela; a parede e as fitas, que podem demorar, vêm no `aboutToQuit`, nessa ordem. A leitura final não roda."""
-    from cartridges import conquista_aviso  # noqa: PLC0415
+    from kyron import conquista_aviso  # noqa: PLC0415
 
     monkeypatch.setattr(sessao_conquistas, "comecar", lambda _jogo: None)
     # O `parar` de verdade, com um vigia falso: é ele quem tira o aviso da tela.
@@ -538,7 +538,7 @@ def test_modulo_gtk_do_cartao_saiu():
     """O `ConquistasDaSessao.qml` substituiu o cartão da versão anterior (GTK)."""
     import importlib.util  # noqa: PLC0415
 
-    assert importlib.util.find_spec("cartridges.conquistas_sessao") is None
+    assert importlib.util.find_spec("kyron.conquistas_sessao") is None
     assert hasattr(modulo_das_conquistas, "cartao_da_sessao")
 
 

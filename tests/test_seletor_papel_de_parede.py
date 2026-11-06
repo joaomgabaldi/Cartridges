@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""O seletor do papel de parede da sessão (`cartridges.modelos.seletores.SeletorDePapelDeParede`).
+"""O seletor do papel de parede da sessão (`kyron.modelos.seletores.SeletorDePapelDeParede`).
 
 Nenhum teste fala com a rede: o wallhaven e o download são falsos, e os monitores também (nada aqui depende
 da máquina). A interface (`SeletorDePapelDeParede.qml`) tem os seus testes em `test_qml_edicao.py`.
@@ -19,11 +19,11 @@ import pytest
 from PIL import Image, ImageChops, ImageStat
 from PySide6.QtCore import QUrl
 
-from cartridges import shared
-from cartridges.modelos import seletores
-from cartridges.modelos.seletores import SeletorDePapelDeParede
-from cartridges.utils.session_wallpaper import Monitor, Posicoes, enquadrar
-from cartridges.utils.wallhaven import WallhavenError
+from kyron import shared
+from kyron.modelos import seletores
+from kyron.modelos.seletores import SeletorDePapelDeParede
+from kyron.utils.session_wallpaper import Monitor, Posicoes, enquadrar
+from kyron.utils.wallhaven import WallhavenError
 from tests.apoio_seletores import (  # noqa: F401  (as fixtures vêm junto)
     DownloadFalso,
     WallhavenFalso,
@@ -315,7 +315,7 @@ def test_destino_morto_nao_vaza_nem_quebra(app_qt, wallhaven, arte, temp):
 def test_session_wallpaper_importa_sem_gi():
     codigo = (
         "import builtins, sys; builtins._ = lambda m: m; sys.path.insert(0, sys.argv[1]);"
-        "import cartridges.utils.session_wallpaper, cartridges.utils.wallhaven, cartridges.modelos.seletores;"
+        "import kyron.utils.session_wallpaper, kyron.utils.wallhaven, kyron.modelos.seletores;"
         "sys.exit(1 if 'gi' in sys.modules else 0)"
     )
     resultado = subprocess.run([sys.executable, "-c", codigo, str(RAIZ)], capture_output=True, text=True, check=False)
@@ -327,7 +327,7 @@ def test_session_wallpaper_importa_sem_gi():
 
 @pytest.fixture
 def edicao(app_qt, store, baixar, temp):
-    from cartridges.modelos.edicao import ModeloDaEdicao  # noqa: PLC0415
+    from kyron.modelos.edicao import ModeloDaEdicao  # noqa: PLC0415
 
     modelo = ModeloDaEdicao(SimpleNamespace(pedir_dialogo=lambda *a: None))
     modelo.adicionar()
@@ -481,7 +481,7 @@ def test_h7_falha_de_leitura_nao_diz_nenhum_encontrado(app_qt, tmp_path, temp):
 
 def test_as_caixas_da_previa_do_ajuste_sao_as_da_main():
     """`PREVIEW_MAX`, `HYBRID_LANDSCAPE_MAX` e `HYBRID_PORTRAIT_MAX` são os da versão anterior (GTK)."""
-    from cartridges.modelos import seletores  # noqa: PLC0415
+    from kyron.modelos import seletores  # noqa: PLC0415
 
     assert (seletores.CAIXA_UNICA, seletores.CAIXA_DEITADA, seletores.CAIXA_EM_PE) == ((800, 440), (600, 340), (220, 340))
 

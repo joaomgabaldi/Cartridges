@@ -2,11 +2,11 @@
 
 import pytest
 
-from cartridges.conquistas import catalogo, historico
-from cartridges.conquistas.catalogo import Catalogo, ConquistaInfo
-from cartridges.conquistas.formatos import Desbloqueio
-from cartridges.conquistas.xbox import api, conta
-from cartridges.conquistas.xbox import vigia as vigia_xbox
+from kyron.conquistas import catalogo, historico
+from kyron.conquistas.catalogo import Catalogo, ConquistaInfo
+from kyron.conquistas.formatos import Desbloqueio
+from kyron.conquistas.xbox import api, conta
+from kyron.conquistas.xbox import vigia as vigia_xbox
 
 _INICIO = 1_800_000_000
 

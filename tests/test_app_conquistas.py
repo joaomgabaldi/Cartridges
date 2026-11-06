@@ -8,7 +8,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from cartridges import app, shared
+from kyron import app, shared
 from tests.apoio_app_conquistas import _Gravador
 
 

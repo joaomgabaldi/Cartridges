@@ -5,8 +5,8 @@ import os
 
 import pytest
 
-from cartridges.conquistas import formatos
-from cartridges.conquistas.formatos import Desbloqueio
+from kyron.conquistas import formatos
+from kyron.conquistas.formatos import Desbloqueio
 from tests.apoio_conquistas import kv_bytes, schema_de_teste
 
 

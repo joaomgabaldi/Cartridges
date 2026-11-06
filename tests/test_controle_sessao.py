@@ -12,12 +12,12 @@ from types import SimpleNamespace
 import pytest
 from PySide6.QtCore import Qt
 
-from cartridges import jogo as modulo_jogo
-from cartridges import shared
-from cartridges.jogo import Jogo
-from cartridges.modelos.avisos import FilaDeAvisos
-from cartridges.modelos.sessao import ModeloDaSessao
-from cartridges.xinput import RUMBLE_LAUNCH
+from kyron import jogo as modulo_jogo
+from kyron import shared
+from kyron.jogo import Jogo
+from kyron.modelos.avisos import FilaDeAvisos
+from kyron.modelos.sessao import ModeloDaSessao
+from kyron.xinput import RUMBLE_LAUNCH
 from tests.apoio_controle_grade import ATIVO, INATIVO, Montagem
 
 CLASSICO = r'start "" "D:\Jogos\halo.exe"'
@@ -261,7 +261,7 @@ def test_abertura_vibra_antes_de_sair_da_frente(monkeypatch, schema):
 
 def test_sessao_bloqueia_a_entrada_automatica(app_qt, monkeypatch):
     """Um controle conectado com a sessão à vista não abre o Big Picture por baixo dela."""
-    from cartridges.modelos import big_picture as modulo_bp  # noqa: PLC0415
+    from kyron.modelos import big_picture as modulo_bp  # noqa: PLC0415
     from tests.apoio_qml_biblioteca import _App, _esperar, _jogos  # noqa: PLC0415
 
     monkeypatch.setattr(modulo_bp, "tem_3d", lambda _janela: True)
@@ -270,7 +270,7 @@ def test_sessao_bloqueia_a_entrada_automatica(app_qt, monkeypatch):
     shared.schema.set_boolean("big-picture-ao-conectar", True)
     shared.schema.set_boolean("gamepad", True)
     jogo = SimpleNamespace(game_id="0", name="Jogo 0", notes="", zerado=False, status="")
-    monkeypatch.setattr("cartridges.utils.game_logo.cached_logo_path", lambda _jogo: None)
+    monkeypatch.setattr("kyron.utils.game_logo.cached_logo_path", lambda _jogo: None)
     app.sessao.show_session_blocker(jogo)
     _esperar()
     app.controle.conectado.emit()

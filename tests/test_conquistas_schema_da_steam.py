@@ -1,7 +1,7 @@
 """O navegador do schema de conquistas da Steam."""
 
-from cartridges.conquistas import schema_da_steam
-from cartridges.conquistas.schema_da_steam import ConquistaDoSchema
+from kyron.conquistas import schema_da_steam
+from kyron.conquistas.schema_da_steam import ConquistaDoSchema
 
 
 def _schema(bits, tipo="ACHIEVEMENTS", appid="570"):

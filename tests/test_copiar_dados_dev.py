@@ -37,7 +37,7 @@ def _ler(caminho: str) -> dict:
 
 @pytest.fixture
 def chaves():
-    raiz = rf"Software\CartridgesTestes\{uuid.uuid4()}"
+    raiz = rf"Software\KyronTestes\{uuid.uuid4()}"
     origem, destino = raiz + r"\origem", raiz + r"\destino"
     with winreg.CreateKeyEx(cd.RAIZ, origem, 0, winreg.KEY_WRITE) as k:
         winreg.SetValueEx(k, "inteiro", 0, winreg.REG_DWORD, 7)

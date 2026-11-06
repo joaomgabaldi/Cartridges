@@ -10,7 +10,7 @@ Nada de rede: o feed é o `fetch_news` trocado por quem usa; o checker falso nã
 
 from PySide6.QtCore import QObject, Signal
 
-from cartridges.utils.news_feed import NewsPost
+from kyron.utils.news_feed import NewsPost
 
 
 def post(timestamp=100, titulo="Título", resumo="Resumo", url="https://x/1", categoria="Repack"):

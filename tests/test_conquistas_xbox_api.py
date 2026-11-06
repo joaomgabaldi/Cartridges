@@ -6,10 +6,10 @@ from pathlib import Path
 import pytest
 import requests
 
-from cartridges import shared
-from cartridges.conquistas import catalogo
-from cartridges.conquistas.formatos import Desbloqueio
-from cartridges.conquistas.xbox import api, conta
+from kyron import shared
+from kyron.conquistas import catalogo
+from kyron.conquistas.formatos import Desbloqueio
+from kyron.conquistas.xbox import api, conta
 from tests.apoio_xbox import Resposta, RespostaSemFim, rede_falsa
 
 _DADOS = Path(__file__).parent / "dados" / "xbox" / "conquistas.json"

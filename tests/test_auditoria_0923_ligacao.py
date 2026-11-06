@@ -8,8 +8,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from cartridges import shared
-from cartridges.utils import session_log
+from kyron import shared
+from kyron.utils import session_log
 from tests.apoio_edicao import girar, jogo, stub_sgdb
 from tests.apoio_auditoria_0923_ligacao import ligar  # noqa: F401  (as fixtures vêm junto)
 
@@ -49,7 +49,7 @@ def test_liga_sem_aplicativo_nao_quebra(store, ligar):
 
 
 def test_agendar_liga_na_thread_principal(store):
-    from cartridges.utils import ligacao_zerado  # noqa: PLC0415
+    from kyron.utils import ligacao_zerado  # noqa: PLC0415
 
     zerado = jogo(store, 5, removed=True, status="beaten", steam_appid="572")
     vivo = jogo(store, 6, steam_appid="572")
@@ -62,7 +62,7 @@ def test_agendar_liga_na_thread_principal(store):
 @pytest.fixture
 def fila_das_copias(monkeypatch):
     """A fila das cópias animadas com o executor nas mãos do teste."""
-    from cartridges.utils import copias_animadas  # noqa: PLC0415
+    from kyron.utils import copias_animadas  # noqa: PLC0415
 
     fila = []
     monkeypatch.setattr(copias_animadas, "_executor", SimpleNamespace(submit=fila.append))
@@ -81,7 +81,7 @@ def _animada(caminho, cor):
 
 def _copias_de(game_id):
     """As cópias animadas do jogo, gravadas de verdade a partir da capa dele."""
-    from cartridges.utils import copias_animadas  # noqa: PLC0415
+    from kyron.utils import copias_animadas  # noqa: PLC0415
 
     capa = shared.covers_dir / f"{game_id}.gif"
     copias = []
@@ -97,7 +97,7 @@ def test_a_capa_do_zerado_leva_embora_as_copias_da_capa_anterior(
 ):
     """O nome da cópia é só o id: sem invalidar, o jogo tocaria a animação da
     capa que acabou de ser substituída (ou guardaria cópias órfãs)."""
-    from cartridges.utils import copias_animadas  # noqa: PLC0415
+    from kyron.utils import copias_animadas  # noqa: PLC0415
 
     zerado = jogo(store, 30, removed=True, status="beaten", steam_appid="99")
     vivo = jogo(store, 31, steam_appid="99")
@@ -148,7 +148,7 @@ def test_dois_vivos_nao_liga(store, ligar):
 def test_rotina_da_steam_so_marca_a_ligacao(store, monkeypatch):
     """`SteamAPIManager.main` não liga na hora: só marca `additional_data`; quem liga, depois do pipeline inteiro, é
     `Store._ao_avancar_pipeline`."""
-    from cartridges.store.managers import steam_api_manager  # noqa: PLC0415
+    from kyron.store.managers import steam_api_manager  # noqa: PLC0415
 
     gerente = steam_api_manager.SteamAPIManager()
     monkeypatch.setattr(gerente.steam_api_helper, "resolve", lambda _n: ("570", {}))
@@ -170,8 +170,8 @@ def test_ligacao_so_roda_depois_do_pipeline_inteiro(store):
     Um manager parecido com o SteamAPIManager marca `ligar_zerado` e termina na hora; um parecido com o SGDB
     (`run_after` do primeiro) só termina quando o teste manda. Usa o `Store.add_game` e o `Pipeline` de verdade.
     """
-    from cartridges.jogo import Jogo  # noqa: PLC0415
-    from cartridges.store.managers.manager import Manager  # noqa: PLC0415
+    from kyron.jogo import Jogo  # noqa: PLC0415
+    from kyron.store.managers.manager import Manager  # noqa: PLC0415
 
     class _FingeSteam(Manager):
         """No lugar do SteamAPIManager: marca a ligação e termina na hora."""
@@ -227,7 +227,7 @@ def test_ligacao_so_roda_depois_do_pipeline_inteiro(store):
 def test_nao_sobrescreve_escolha_travada_do_jogo(store, ligar, tmp_path):
     """"Escolha própria" é qualquer decisão travada do jogo, não só um arquivo manual: "usar o título" no logo e
     "não trocar" na parede também são, e a ligação não pode desfazê-las."""
-    from cartridges.utils import game_logo, session_wallpaper  # noqa: PLC0415
+    from kyron.utils import game_logo, session_wallpaper  # noqa: PLC0415
 
     zerado = jogo(store, 23, removed=True, status="beaten", steam_appid="900")
     vivo = jogo(store, 24, steam_appid="900")
@@ -252,7 +252,7 @@ def test_nao_sobrescreve_escolha_travada_do_jogo(store, ligar, tmp_path):
 def test_edicao_troca_appid_e_liga(store, avisos):
     """O segundo gatilho: aplicar a edição liga quando o appID buscado difere
     do que o jogo já tinha."""
-    from cartridges import edicao  # noqa: PLC0415
+    from kyron import edicao  # noqa: PLC0415
 
     stub_sgdb(store)
     zerado = jogo(store, 14, removed=True, status="beaten", steam_appid="640", playtime=120)
@@ -270,7 +270,7 @@ def test_edicao_troca_appid_e_liga(store, avisos):
 
 
 def _detalhes_de(store, jogo_mostrado):
-    from cartridges.modelos.detalhes import DetalhesDoJogo  # noqa: PLC0415
+    from kyron.modelos.detalhes import DetalhesDoJogo  # noqa: PLC0415
 
     modelo = DetalhesDoJogo(store)
     assert modelo.mostrar(jogo_mostrado.game_id)
@@ -304,7 +304,7 @@ def test_nao_fecha_a_tela_de_detalhes_de_outro_jogo(store, ligar):
 
 
 def test_brilho_proprio_do_zerado_vai_para_o_jogo(store, ligar):
-    from cartridges.utils import session_fita  # noqa: PLC0415
+    from kyron.utils import session_fita  # noqa: PLC0415
 
     zerado = jogo(store, 1, removed=True, status="beaten", steam_appid="570")
     vivo = jogo(store, 2, steam_appid="570")

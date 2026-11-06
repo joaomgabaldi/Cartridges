@@ -6,7 +6,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import pytest
 import requests
 
-from cartridges.utils import download
+from kyron.utils import download
 
 
 @pytest.fixture

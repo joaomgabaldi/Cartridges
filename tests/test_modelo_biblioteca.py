@@ -11,14 +11,14 @@ import time
 
 from PySide6.QtCore import QEventLoop, QTimer
 
-from cartridges import shared
-from cartridges.jogo import Jogo
-from cartridges.configuracoes import Configuracoes
-from cartridges.modelos import biblioteca as modulo
-from cartridges.modelos.biblioteca import FiltroDaPagina, FiltrosDaBiblioteca, ModeloDaBiblioteca
-from cartridges.store.managers.exibicao_manager import ExibicaoManager
-from cartridges.utils import thread_principal
-from cartridges.utils.thread_principal import eh_thread_principal
+from kyron import shared
+from kyron.jogo import Jogo
+from kyron.configuracoes import Configuracoes
+from kyron.modelos import biblioteca as modulo
+from kyron.modelos.biblioteca import FiltroDaPagina, FiltrosDaBiblioteca, ModeloDaBiblioteca
+from kyron.store.managers.exibicao_manager import ExibicaoManager
+from kyron.utils import thread_principal
+from kyron.utils.thread_principal import eh_thread_principal
 
 
 def _jogo(game_id, nome, **extra):
@@ -160,7 +160,7 @@ def test_grade_carrega_no_qml(app_qt):
 
     qml = Path(shared.__file__).parent / "qml"
     motor = QQmlEngine()
-    from cartridges.modelos.provedor_de_icones import ProvedorDeIcones  # noqa: PLC0415
+    from kyron.modelos.provedor_de_icones import ProvedorDeIcones  # noqa: PLC0415
     motor.addImageProvider("icone", ProvedorDeIcones())
     motor.addImportPath(str(qml.parent))
     modelo = ModeloDaBiblioteca()
@@ -392,7 +392,7 @@ def _capa_animada(game_id, com_copia=True, sufixo=".webp"):
     """Grava uma capa animada pequena em `covers_dir` e, se pedido, a cópia no tamanho da grade."""
     from PIL import Image
 
-    from cartridges.utils import copias_animadas
+    from kyron.utils import copias_animadas
 
     caminho = shared.covers_dir / f"{game_id}{sufixo}"
     quadros = [Image.new("RGBA", (8, 12), (tom, 0, 0, 255)) for tom in (0, 90)]
@@ -427,7 +427,7 @@ def test_sem_copia_papel_vazio(app_qt):
 
 @pytest.fixture
 def pedidos(monkeypatch):
-    from cartridges.utils import copias_animadas
+    from kyron.utils import copias_animadas
 
     feitos = []
     monkeypatch.setattr(copias_animadas, "preparar", lambda capas: feitos.append(capas))
@@ -456,7 +456,7 @@ def test_copia_pronta_atualiza_a_linha(app_qt, pedidos):
     modelo.ativar_copias()
     mudancas = []
     modelo.dataChanged.connect(lambda *_: mudancas.append(1))
-    from cartridges.utils import copias_animadas
+    from kyron.utils import copias_animadas
 
     copias_animadas.gerar(caminho, copia, copias_animadas.tamanhos()[0])
     copias_animadas.ao_terminar_copia("a", "pronta")

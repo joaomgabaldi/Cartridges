@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 from PySide6.QtQml import QQmlEngine
 
-from cartridges.janela import qwk
+from kyron.janela import qwk
 
 DLL = Path(qwk.__file__).parent / "qwk_ponte.dll"
 

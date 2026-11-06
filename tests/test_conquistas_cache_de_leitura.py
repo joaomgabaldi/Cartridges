@@ -5,8 +5,8 @@ import os
 
 import pytest
 
-from cartridges.conquistas import fontes
-from cartridges.conquistas.cache_de_leitura import CacheDeLeitura, assinatura
+from kyron.conquistas import fontes
+from kyron.conquistas.cache_de_leitura import CacheDeLeitura, assinatura
 from tests.apoio_conquistas import criar, pastas  # noqa: F401
 
 

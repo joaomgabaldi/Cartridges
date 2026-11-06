@@ -11,10 +11,10 @@ import weakref
 
 from PySide6.QtCore import QEventLoop, QTimer
 
-from cartridges.jogo import Jogo
-from cartridges.modelos.biblioteca import ModeloDaBiblioteca
-from cartridges.ponte import Ponte
-from cartridges.store.managers.exibicao_manager import ExibicaoManager
+from kyron.jogo import Jogo
+from kyron.modelos.biblioteca import ModeloDaBiblioteca
+from kyron.ponte import Ponte
+from kyron.store.managers.exibicao_manager import ExibicaoManager
 
 
 def _jogo(game_id="a"):

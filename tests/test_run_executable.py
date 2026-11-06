@@ -6,7 +6,7 @@
 
 import pytest
 
-from cartridges.utils.run_executable import aumid_from_command
+from kyron.utils.run_executable import aumid_from_command
 
 
 @pytest.mark.parametrize(

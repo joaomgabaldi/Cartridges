@@ -17,10 +17,10 @@ from pathlib import Path
 import pytest
 from PySide6.QtCore import QTimer, qInstallMessageHandler, qWarning
 
-from cartridges import shared
-from cartridges.logging import setup
-from cartridges.logging.session_file_handler import SessionFileHandler
-from cartridges.utils import erro_inesperado
+from kyron import shared
+from kyron.logging import setup
+from kyron.logging.session_file_handler import SessionFileHandler
+from kyron.utils import erro_inesperado
 
 RAIZ = Path(__file__).resolve().parent.parent
 
@@ -64,7 +64,7 @@ def test_aviso_do_qml_leva_o_arquivo_e_a_linha(app_qt, caplog):  # noqa: ARG001
 
     setup.registrar_avisos_do_qt()
     motor = QQmlEngine()
-    from cartridges.modelos.provedor_de_icones import ProvedorDeIcones  # noqa: PLC0415
+    from kyron.modelos.provedor_de_icones import ProvedorDeIcones  # noqa: PLC0415
     motor.addImageProvider("icone", ProvedorDeIcones())
     componente = QQmlComponent(motor)
     componente.setData(b"import QtQml\nQtObject {\n    Component.onCompleted: console.warn('aviso do qml')\n}\n", QUrl("file:///teste/Aviso.qml"))
@@ -179,8 +179,8 @@ def test_erro_nao_levantavel_vai_para_o_log(caplog):
 def _rodar(script, tmp_path):
     ambiente = {
         **os.environ,
-        "CARTRIDGES_DADOS": str(tmp_path),
-        "CARTRIDGES_REGISTRO": rf"Software\CartridgesTestes\log-{uuid.uuid4()}",
+        "KYRON_DADOS": str(tmp_path),
+        "KYRON_REGISTRO": rf"Software\KyronTestes\log-{uuid.uuid4()}",
         "QT_QPA_PLATFORM": "offscreen",
     }
     return subprocess.run(
@@ -195,7 +195,7 @@ def test_queda_nativa_fica_no_arquivo_de_log(tmp_path):
     filho = _rodar(
         f"""
         import faulthandler
-        from cartridges.logging import setup
+        from kyron.logging import setup
         arquivo = open({str(log)!r}, "w", encoding="utf-8")
         arquivo.write("antes da queda\\n")
         arquivo.flush()
@@ -217,9 +217,9 @@ def test_logging_setup_sem_gi(tmp_path):
         import sys
         sys.modules["gi"] = None
         import logging
-        from cartridges import shared
-        from cartridges.logging import setup
-        from cartridges.utils import erro_inesperado
+        from kyron import shared
+        from kyron.logging import setup
+        from kyron.utils import erro_inesperado
         setup.setup_logging()
         setup.log_system_info()
         logging.getLogger().handlers[0].flush()
@@ -240,7 +240,7 @@ def test_setup_logging_que_falha_grava_num_arquivo_da_sessao(monkeypatch, caplog
     """`dictConfig` embrulha a falha de um handler em `ValueError`: sem console no app instalado, o log vai a um arquivo
     próprio da sessão, na pasta dos logs, que a rotação seguinte comprime e descarta como os outros. Com os guards do
     log normal: o teto de 32 MiB, sem ele só com o log detalhado."""
-    from cartridges import app as modulo_app  # noqa: PLC0415
+    from kyron import app as modulo_app  # noqa: PLC0415
 
     monkeypatch.setattr(modulo_app.detalhado, "ativo", lambda: detalhado_ativo)
     monkeypatch.setattr(shared, "log_dir", tmp_path / "logs")
@@ -387,7 +387,7 @@ def test_falha_ao_montar_o_dialogo_nao_derruba_e_libera(aviso, monkeypatch, flus
 
 def test_principal_escondida_o_dialogo_espera_na_fila(app_qt, monkeypatch, flush_idle):  # noqa: ARG001
     """Sem a janela das tarefas, o pedido vai à pilha, por cima, e está lá quando a principal voltar."""
-    from cartridges.aplicativo import Aplicativo  # noqa: PLC0415
+    from kyron.aplicativo import Aplicativo  # noqa: PLC0415
 
     aplicativo = Aplicativo()
     monkeypatch.setattr(shared, "aplicativo", aplicativo, raising=False)
@@ -460,7 +460,7 @@ def test_chave_usa_o_ultimo_quadro_do_app_e_nao_o_da_biblioteca():
 
 
 def _rastro_do_app(n):
-    """Rastro de um quadro do app (arquivo do pacote cartridges, linha n) chamando uma função de biblioteca (outro
+    """Rastro de um quadro do app (arquivo do pacote kyron, linha n) chamando uma função de biblioteca (outro
     arquivo, sempre a mesma linha)."""
     ambiente = {}
     exec(  # noqa: S102

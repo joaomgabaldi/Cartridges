@@ -9,7 +9,7 @@ Um teste nunca importa outro `test_*.py`: importar um arquivo de teste de outro 
 
 import pytest
 
-from cartridges.utils import session_fita
+from kyron.utils import session_fita
 
 
 def _com_fitas(*nomes):

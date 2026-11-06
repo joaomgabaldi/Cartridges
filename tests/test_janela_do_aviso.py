@@ -12,9 +12,9 @@ from PySide6.QtCore import QObject, Qt
 from PySide6.QtGui import QColor, QWindow
 from PySide6.QtQml import QQmlEngine, QQmlExpression
 
-from cartridges import conquista_aviso, shared
-from cartridges.conquistas import icones
-from cartridges.utils import janela_por_cima as jpc
+from kyron import conquista_aviso, shared
+from kyron.conquistas import icones
+from kyron.utils import janela_por_cima as jpc
 
 
 @pytest.fixture
@@ -28,7 +28,7 @@ def entregas(monkeypatch):
 @pytest.fixture
 def abrir(user32_falso, entregas):  # noqa: ARG001
     """Cria uma `JanelaDoAviso`; todas são fechadas no fim do teste."""
-    from cartridges.janela_do_aviso import JanelaDoAviso  # noqa: PLC0415
+    from kyron.janela_do_aviso import JanelaDoAviso  # noqa: PLC0415
 
     abertas = []
 

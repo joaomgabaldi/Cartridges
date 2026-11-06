@@ -23,8 +23,8 @@ if not hasattr(builtins, "_"):
 
 import time  # noqa: E402
 
-from cartridges.utils import hltb as hltb_module  # noqa: E402
-from cartridges.utils.hltb import (  # noqa: E402
+from kyron.utils import hltb as hltb_module  # noqa: E402
+from kyron.utils.hltb import (  # noqa: E402
     HLTBGameNotFoundError,
     HLTBHelper,
     HLTBUnavailableError,

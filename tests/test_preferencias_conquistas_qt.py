@@ -18,14 +18,14 @@ from PySide6.QtCore import Q_ARG, QMetaObject, Qt
 from PySide6.QtGui import QColor
 from PySide6.QtTest import QTest
 
-from cartridges import app as modulo_app
-from cartridges import conquista_aviso, shared
-from cartridges.conquistas.ea import conta as ea_conta
-from cartridges.conquistas.epic import conta as epic_conta
-from cartridges.modelos import contas as modulo_das_contas
-from cartridges.modelos import preferencias as preferencias_mod
-from cartridges.modelos.preferencias import Preferencias
-from cartridges.utils import open_uri, session_fita
+from kyron import app as modulo_app
+from kyron import conquista_aviso, shared
+from kyron.conquistas.ea import conta as ea_conta
+from kyron.conquistas.epic import conta as epic_conta
+from kyron.modelos import contas as modulo_das_contas
+from kyron.modelos import preferencias as preferencias_mod
+from kyron.modelos.preferencias import Preferencias
+from kyron.utils import open_uri, session_fita
 from tests.apoio_fita import falsas, pastas, sem_fade, sem_vigia  # noqa: F401
 from tests.apoio_registro import _apagar_chave
 from tests.apoio_app_conquistas import _Gravador
@@ -545,7 +545,7 @@ def test_encerrar_o_app_fecha_o_modal_aberto(p, previas, monkeypatch):
 def test_o_modelo_nao_traz_o_gtk():
     codigo = (
         "import builtins, sys; builtins._ = lambda m: m; builtins.ngettext = lambda s, p, n: s if n == 1 else p; "
-        "import cartridges.modelos.preferencias; import cartridges.conquista_aviso; "
+        "import kyron.modelos.preferencias; import kyron.conquista_aviso; "
         "assert 'gi' not in sys.modules"
     )
     subprocess.run([sys.executable, "-c", codigo], check=True, cwd=RAIZ, timeout=60)
@@ -624,8 +624,8 @@ def sem_rede(*_a, **_k):
 
 
 requests.sessions.Session.send = sem_rede
-from cartridges import app as m, conquista_aviso, shared
-from cartridges.utils import janela_por_cima, session_fita, session_wallpaper
+from kyron import app as m, conquista_aviso, shared
+from kyron.utils import janela_por_cima, session_fita, session_wallpaper
 from PySide6.QtCore import QTimer
 
 m.session_fita = SimpleNamespace(migrar_roxo_antigo=lambda: None, abrir=lambda: None, fechar=lambda: None)
@@ -682,11 +682,11 @@ sys.exit(codigo)
 
 
 def test_fechar_a_principal_com_o_exemplo_na_tela_sai(tmp_path):
-    registro = rf"Software\CartridgesTestes\app-{uuid.uuid4()}"
+    registro = rf"Software\KyronTestes\app-{uuid.uuid4()}"
     ambiente = {
         **os.environ,
-        "CARTRIDGES_DADOS": str(tmp_path),
-        "CARTRIDGES_REGISTRO": registro,
+        "KYRON_DADOS": str(tmp_path),
+        "KYRON_REGISTRO": registro,
         "QT_QPA_PLATFORM": "offscreen",
     }
     try:

@@ -3,8 +3,8 @@
 import json
 from pathlib import Path
 
-from cartridges.saves import config
-from cartridges.saves.config import JogoNoConfig
+from kyron.saves import config
+from kyron.saves.config import JogoNoConfig
 
 
 def jogo(nome="X", appid="123", executavel="C:/Jogos/X/x.exe", no_manifesto=True):

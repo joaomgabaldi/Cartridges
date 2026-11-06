@@ -9,17 +9,17 @@ O `login.entrar` do Xbox, o `conectar` e o `abrir` do navegador são sempre fals
 
 import pytest
 
-from cartridges import shared
-from cartridges.conquistas import catalogo, fontes, historico
-from cartridges.conquistas.catalogo import Catalogo, ConquistaInfo
-from cartridges.conquistas.ea import conta as ea_conta
-from cartridges.conquistas.epic import conta as epic_conta
-from cartridges.conquistas.formatos import Desbloqueio
-from cartridges.conquistas.xbox import conta, login
-from cartridges.jogo import Jogo
-from cartridges.modelos import contas as modulo
-from cartridges.modelos.contas import ContasDasLojas
-from cartridges.modelos.conquistas import ConquistasDoJogo
+from kyron import shared
+from kyron.conquistas import catalogo, fontes, historico
+from kyron.conquistas.catalogo import Catalogo, ConquistaInfo
+from kyron.conquistas.ea import conta as ea_conta
+from kyron.conquistas.epic import conta as epic_conta
+from kyron.conquistas.formatos import Desbloqueio
+from kyron.conquistas.xbox import conta, login
+from kyron.jogo import Jogo
+from kyron.modelos import contas as modulo
+from kyron.modelos.contas import ContasDasLojas
+from kyron.modelos.conquistas import ConquistasDoJogo
 from tests.apoio_conquistas import com_fonte
 from tests.apoio_conquistas_qt import _Detalhes
 

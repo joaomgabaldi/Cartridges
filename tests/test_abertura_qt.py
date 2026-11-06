@@ -18,10 +18,10 @@ from pathlib import Path
 
 from PySide6.QtCore import QEventLoop, Qt, QTimer
 
-from cartridges import app as modulo_app
-from cartridges import shared
-from cartridges.aplicativo import Aplicativo
-from cartridges.utils import backup, redefinir
+from kyron import app as modulo_app
+from kyron import shared
+from kyron.aplicativo import Aplicativo
+from kyron.utils import backup, redefinir
 from tests.apoio_abertura import preparar_main
 from tests.apoio_aplicativo import AplicativoAnotado
 from tests.apoio_registro import _apagar_chave
@@ -47,8 +47,8 @@ def _ficha(pasta: Path, game_id: str, nome: str) -> None:
 
 
 def _rodar(argumentos: list[str], dados: Path) -> subprocess.CompletedProcess:
-    registro = rf"Software\CartridgesTestes\abertura-{uuid.uuid4()}"
-    ambiente = {**os.environ, "CARTRIDGES_DADOS": str(dados), "CARTRIDGES_REGISTRO": registro, "QT_QPA_PLATFORM": "offscreen"}
+    registro = rf"Software\KyronTestes\abertura-{uuid.uuid4()}"
+    ambiente = {**os.environ, "KYRON_DADOS": str(dados), "KYRON_REGISTRO": registro, "QT_QPA_PLATFORM": "offscreen"}
     try:
         return subprocess.run(
             [sys.executable, *argumentos], cwd=RAIZ, env=ambiente, capture_output=True, text=True, timeout=90, check=False
@@ -69,7 +69,7 @@ def test_backup_agendado_e_aplicado_antes_da_biblioteca(tmp_path):
     _ficha(dados / "games", "imported_9", "Antes")
     shutil.copyfile(zip_, dados / "restaurar.zip")
 
-    resultado = _rodar(["-m", "cartridges", "--sair-apos-carregar"], dados)
+    resultado = _rodar(["-m", "kyron", "--sair-apos-carregar"], dados)
 
     assert resultado.returncode == 0, resultado.stderr
     assert "jogos carregados: 2" in resultado.stdout
@@ -81,7 +81,7 @@ def _restaurar(monkeypatch, abrir):
     """O `_restaurar_e_abrir` de verdade (janela, thread, `backup.aplicar_pendente`), com o `_abrir` dado."""
     monkeypatch.setattr(modulo_app, "_abrir", abrir)
     abertura = modulo_app._Abertura()  # noqa: SLF001
-    modulo_app._restaurar_e_abrir(modulo_app.QGuiApplication.instance(), ["cartridges"], abertura)  # noqa: SLF001
+    modulo_app._restaurar_e_abrir(modulo_app.QGuiApplication.instance(), ["kyron"], abertura)  # noqa: SLF001
     janela = abertura.restauracao.rootObjects()[0]
     restaurando = abertura.restauracao.rootContext().contextProperty("restaurando")
     return abertura, janela, restaurando
@@ -156,7 +156,7 @@ def test_principal_aparece_antes_de_a_restauracao_fechar(app_qt, monkeypatch):  
         return motor
 
     monkeypatch.setattr(modulo_app, "_janela_da_restauracao", guardar)
-    modulo_app._restaurar_e_abrir(app_qt, ["cartridges"], abertura)  # noqa: SLF001
+    modulo_app._restaurar_e_abrir(app_qt, ["kyron"], abertura)  # noqa: SLF001
     try:
         assert _esperar(lambda: vista)
         assert vista == [True]
@@ -228,7 +228,7 @@ def test_redefinir_roda_antes_do_log(tmp_path):
     (dados / "logs" / "cartridges.log").write_text("linha antiga\n", encoding="utf-8")
     (dados / "redefinir").touch()
 
-    resultado = _rodar(["-m", "cartridges", "--sair-apos-carregar"], dados)
+    resultado = _rodar(["-m", "kyron", "--sair-apos-carregar"], dados)
 
     assert resultado.returncode == 0, resultado.stderr
     assert "jogos carregados: 0" in resultado.stdout
@@ -262,7 +262,7 @@ def test_redefinicao_que_falha_avisa_depois_da_janela(monkeypatch, caplog):
     monkeypatch.setattr(modulo_app.redefinir, "aplicar_pendente", redefinir_que_falha)
 
     with caplog.at_level(logging.INFO):
-        assert modulo_app.main(["cartridges"]) == 0
+        assert modulo_app.main(["kyron"]) == 0
 
     assert eventos == ["log", "janela", ("dialogo", "Não foi possível redefinir")]
     registro = next(r for r in caplog.records if r.getMessage() == "Não foi possível redefinir o Cartridges")
@@ -297,7 +297,7 @@ def test_fechar_durante_a_restauracao_pula_o_que_ainda_nao_existe(monkeypatch, c
 
 def _assistente(app_qt, monkeypatch, eventos, restaurar=None):
     """O `_mostrar_assistente` de verdade (a janela num motor próprio), com o `_abrir` e o `_restaurar_e_abrir` espiões."""
-    from cartridges import assistente as modulo_assistente  # noqa: PLC0415
+    from kyron import assistente as modulo_assistente  # noqa: PLC0415
 
     monkeypatch.setattr(shared, "store", None, raising=False)
     monkeypatch.setattr(modulo_assistente, "precisa_mostrar", lambda: True)
@@ -311,7 +311,7 @@ def _assistente(app_qt, monkeypatch, eventos, restaurar=None):
 
     monkeypatch.setattr(modulo_app, "_restaurar_e_abrir", restaurar_espiao)
     abertura = modulo_app._Abertura()  # noqa: SLF001
-    assert modulo_app._mostrar_assistente(app_qt, ["cartridges"], abertura) is True  # noqa: SLF001
+    assert modulo_app._mostrar_assistente(app_qt, ["kyron"], abertura) is True  # noqa: SLF001
     janela = abertura.assistente.rootObjects()[0]
     modelo = abertura.assistente.rootContext().contextProperty("assistente")
     _esperar()
@@ -356,7 +356,7 @@ def test_segunda_ativacao_com_o_assistente_traz_o_assistente(app_qt, monkeypatch
 
 
 def test_restaurar_pelo_assistente_segue_a_restauracao(app_qt, monkeypatch, tmp_path):
-    from cartridges import assistente as modulo_assistente  # noqa: PLC0415
+    from kyron import assistente as modulo_assistente  # noqa: PLC0415
 
     monkeypatch.setattr(modulo_assistente, "_em_thread", lambda tarefa: tarefa())
     monkeypatch.setattr(backup, "validar", lambda _caminho: {})
@@ -380,12 +380,12 @@ def test_backup_pendente_vem_antes_do_assistente(monkeypatch):
     monkeypatch.setattr(modulo_app.backup, "ha_pendente", lambda: True)
     monkeypatch.setattr(modulo_app, "_restaurar_e_abrir", lambda *_a: eventos.append("restaurar"))
     monkeypatch.setattr(modulo_app, "_mostrar_assistente", lambda *_a, **_k: eventos.append("assistente") or True)
-    assert modulo_app.main(["cartridges"]) == 0
+    assert modulo_app.main(["kyron"]) == 0
     assert eventos == ["log", "restaurar"]
 
 
 def test_sem_backup_agendado_abre_na_hora(monkeypatch):
-    from cartridges import assistente as modulo_assistente  # noqa: PLC0415
+    from kyron import assistente as modulo_assistente  # noqa: PLC0415
 
     eventos = []
 
@@ -394,13 +394,13 @@ def test_sem_backup_agendado_abre_na_hora(monkeypatch):
     monkeypatch.setattr(modulo_app, "_restaurar_e_abrir", lambda *_a: eventos.append("restaurar"))
     monkeypatch.setattr(backup, "pasta_dos_saves_desfeita", None)
     monkeypatch.setattr(redefinir, "falha", None)
-    assert modulo_app.main(["cartridges"]) == 0
+    assert modulo_app.main(["kyron"]) == 0
     assert eventos == ["log", "abrir"]
 
 
 def test_sair_apos_carregar_nao_mostra_o_assistente(tmp_path):
     """O modo de teste da carga, sem tela, sobre uma pasta de dados vazia (a primeira abertura)."""
-    resultado = _rodar(["-m", "cartridges", "--sair-apos-carregar"], tmp_path / "dados")
+    resultado = _rodar(["-m", "kyron", "--sair-apos-carregar"], tmp_path / "dados")
     assert resultado.returncode == 0, resultado.stderr
     assert "jogos carregados: 0" in resultado.stdout
 
@@ -410,7 +410,7 @@ _FECHAR_PELO_X = r"""
 import sys
 from pathlib import Path
 from PySide6.QtCore import QTimer
-from cartridges import app as modulo_app
+from kyron import app as modulo_app
 
 anotacoes = Path(sys.argv[1])
 
@@ -440,7 +440,7 @@ def mostrar(app, argv, abertura, *a, **k):
     return mostrado
 
 modulo_app._mostrar_assistente = mostrar
-sys.exit(modulo_app.main(["cartridges"]))
+sys.exit(modulo_app.main(["kyron"]))
 """
 
 
@@ -460,17 +460,17 @@ _REINICIO = r"""
 import json
 from PySide6.QtCore import QTimer
 from PySide6.QtQml import QQmlApplicationEngine
-from cartridges import app as modulo_app
-from cartridges.aplicativo import Aplicativo
-from cartridges.modelos.tarefas import PainelDasTarefas
-from cartridges.saves import backup_de_saves
+from kyron import app as modulo_app
+from kyron.aplicativo import Aplicativo
+from kyron.modelos.tarefas import PainelDasTarefas
+from kyron.saves import backup_de_saves
 
 backup_de_saves.em_andamento = lambda: True
 qt = modulo_app.AplicacaoQt([])
 painel = PainelDasTarefas()
 qt.saindo.connect(painel.encerrando)  # como o `_abrir`
 motor = QQmlApplicationEngine()
-from cartridges.modelos.provedor_de_icones import ProvedorDeIcones  # noqa: PLC0415
+from kyron.modelos.provedor_de_icones import ProvedorDeIcones  # noqa: PLC0415
 motor.addImageProvider("icone", ProvedorDeIcones())
 motor.rootContext().setContextProperty("painelDasTarefas", painel)
 motor.loadData(b"import QtQuick\nWindow { visible: true; width: 200; height: 200; "

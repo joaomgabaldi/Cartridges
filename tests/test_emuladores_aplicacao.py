@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from cartridges.emuladores import aplicacao
-from cartridges.jogo import Jogo
+from kyron.emuladores import aplicacao
+from kyron.jogo import Jogo
 
 
 def _jogo(**campos) -> Jogo:

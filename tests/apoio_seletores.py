@@ -16,8 +16,8 @@ import pytest
 from PIL import Image
 from PySide6.QtCore import QEventLoop, QTimer
 
-from cartridges.modelos import seletores
-from cartridges.utils.download import DownloadCancelado
+from kyron.modelos import seletores
+from kyron.utils.download import DownloadCancelado
 
 
 def png_bytes():

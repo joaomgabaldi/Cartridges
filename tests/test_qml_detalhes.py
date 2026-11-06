@@ -11,8 +11,8 @@ from PySide6.QtQml import QQmlEngine, QQmlExpression
 from PySide6.QtQuick import QQuickItem
 from PySide6.QtTest import QTest
 
-from cartridges import shared
-from cartridges.jogo import Jogo
+from kyron import shared
+from kyron.jogo import Jogo
 from tests.apoio_qml_biblioteca import _achar, _App, _esperar, _jogos, _tres
 from tests.apoio_qml_detalhes import _abrir_pelo_cartao, _cartoes, _clicar, _foco_dentro_de
 
@@ -368,8 +368,8 @@ def test_balao_e_menus_nao_vazam_o_foco_para_a_pagina(app_qt):
 
 def _app_com_atualizacao(monkeypatch):
     """Um jogo com a faixa "Atualização disponível"; a página e o navegador são falsos (nada é aberto de verdade)."""
-    from cartridges.modelos import detalhes as modelo_dos_detalhes  # noqa: PLC0415
-    from cartridges.utils import open_uri  # noqa: PLC0415
+    from kyron.modelos import detalhes as modelo_dos_detalhes  # noqa: PLC0415
+    from kyron.utils import open_uri  # noqa: PLC0415
 
     abertos = []
     monkeypatch.setattr(modelo_dos_detalhes, "abrir_url", lambda url: abertos.append(url) or True)
@@ -604,7 +604,7 @@ def test_jogar_tem_hover_visivel_nos_dois_temas(app_qt):
     e nunca o branco fixo do código antigo; no tema que o ambiente der, a cor lida tem de ser a do texto."""
     from pathlib import Path  # noqa: PLC0415
 
-    fonte = (Path(__file__).resolve().parent.parent / "cartridges" / "qml" / "PaginaDoJogo.qml").read_text(encoding="utf-8")
+    fonte = (Path(__file__).resolve().parent.parent / "kyron" / "qml" / "PaginaDoJogo.qml").read_text(encoding="utf-8")
     veu = next(linha for linha in fonte.splitlines() if "botaoJogar.down ? Qt.rgba(0, 0, 6" in linha)
     assert "Qt.alpha(botaoJogar.corDoTexto" in veu and "Qt.rgba(1, 1, 1, 0.1)" not in veu
     app = _App(_tres())

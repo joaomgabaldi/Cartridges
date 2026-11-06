@@ -14,12 +14,12 @@ from pathlib import Path
 
 import shiboken6
 
-from cartridges import aplicativo as aplicativo_modulo
-from cartridges.aplicativo import Aplicativo
-from cartridges.modelos.biblioteca import ModeloDaBiblioteca
-from cartridges.modelos.big_picture import BigPicture
-from cartridges.utils import ajustes_do_windows
-from cartridges.utils.ajustes_do_windows import FiltroDeAjustes, e_mudanca_de_ajuste
+from kyron import aplicativo as aplicativo_modulo
+from kyron.aplicativo import Aplicativo
+from kyron.modelos.biblioteca import ModeloDaBiblioteca
+from kyron.modelos.big_picture import BigPicture
+from kyron.utils import ajustes_do_windows
+from kyron.utils.ajustes_do_windows import FiltroDeAjustes, e_mudanca_de_ajuste
 
 _WM_SETTINGCHANGE = 0x001A
 _GENERICA = b"windows_generic_MSG"
@@ -31,7 +31,7 @@ _FILTRO_NUMA_JANELA_NATIVA = textwrap.dedent("""
     import ctypes
     from PySide6.QtGui import QGuiApplication, QWindow
     app = QGuiApplication([])
-    from cartridges.utils.ajustes_do_windows import FiltroDeAjustes
+    from kyron.utils.ajustes_do_windows import FiltroDeAjustes
     chamadas = []
     filtro = FiltroDeAjustes(lambda: chamadas.append(1))
     app.installNativeEventFilter(filtro)
@@ -87,7 +87,7 @@ def test_filtro_nunca_consome_a_mensagem(app_qt, flush_idle, monkeypatch):  # no
 def test_filtro_instalado_ve_o_wm_settingchange_de_uma_janela_nativa(tmp_path):
     """O tipo que o PySide entrega de verdade, numa janela do próprio teste, em subprocesso (o app dos testes é
     offscreen)."""
-    ambiente = {**os.environ, "CARTRIDGES_DADOS": str(tmp_path), "QT_QPA_PLATFORM": "windows"}
+    ambiente = {**os.environ, "KYRON_DADOS": str(tmp_path), "QT_QPA_PLATFORM": "windows"}
     resultado = subprocess.run(
         [sys.executable, "-c", _FILTRO_NUMA_JANELA_NATIVA], cwd=RAIZ, env=ambiente, capture_output=True, text=True,
         timeout=60, check=False,
@@ -114,7 +114,7 @@ def test_reler_animacoes_avisa_so_quando_muda(app_qt, monkeypatch):  # noqa: ARG
 
 
 def test_big_picture_segue_as_animacoes_relidas(app_qt, monkeypatch, schema):  # noqa: ARG001
-    from cartridges import app as modulo_app  # noqa: PLC0415
+    from kyron import app as modulo_app  # noqa: PLC0415
 
     schema.set_boolean("cover-autoplay", True)
     ligadas = [True]

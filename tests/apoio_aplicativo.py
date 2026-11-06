@@ -9,7 +9,7 @@ Não importa o `conftest` nem outro teste: as cópias abaixo são deliberadas.
 
 from collections.abc import Callable
 
-from cartridges import shared
+from kyron import shared
 
 
 class AvisosAnotados:

@@ -13,8 +13,8 @@ from PySide6.QtQml import QQmlComponent, QQmlEngine, QQmlExpression
 from PySide6.QtQuick import QQuickItem
 from PySide6.QtTest import QTest
 
-from cartridges import shared
-from cartridges.utils import open_uri, window_geometry
+from kyron import shared
+from kyron.utils import open_uri, window_geometry
 from tests.apoio_qml_biblioteca import QML, _achar, _App, _esperar, _jogos
 from tests.apoio_qml_detalhes import _abrir_pelo_cartao, _cartoes, _clicar, _foco_dentro_de
 from tests.apoio_qml_preferencias import (  # noqa: F401  (as fixtures vêm junto)
@@ -158,9 +158,9 @@ def test_historico_e_conquistas_apagados_com_as_preferencias(app):
     assert _esperar(lambda: app.achar("dialogoDoHistorico").property("visible") is True)
     assert _achar(app.achar("dialogoDoHistorico"), "rolagemDoHistorico").property("enabled") is True
     # A lista fechada fica desabilitada pela moldura: abre-se, com um catálogo, para conferir.
-    from cartridges.conquistas import catalogo, historico  # noqa: PLC0415
-    from cartridges.conquistas.catalogo import Catalogo, ConquistaInfo  # noqa: PLC0415
-    from cartridges.conquistas.formatos import Desbloqueio  # noqa: PLC0415
+    from kyron.conquistas import catalogo, historico  # noqa: PLC0415
+    from kyron.conquistas.catalogo import Catalogo, ConquistaInfo  # noqa: PLC0415
+    from kyron.conquistas.formatos import Desbloqueio  # noqa: PLC0415
     from tests.apoio_conquistas import com_fonte  # noqa: PLC0415
 
     catalogo.guardar("570", Catalogo((ConquistaInfo("A", "Primeira", "Faça algo.", "", "", False, 55.0),), 0, True))
@@ -292,7 +292,7 @@ def test_textos_da_pagina_geral_e_da_importacao(app):
 
 
 def test_big_picture_sem_3d_explica_na_linha(app):
-    from cartridges.modelos.preferencias import SEM_3D  # noqa: PLC0415
+    from kyron.modelos.preferencias import SEM_3D  # noqa: PLC0415
 
     app.preferencias._tem_3d = lambda: False  # noqa: SLF001
     shared.schema.set_boolean("gamepad", True)
@@ -399,7 +399,7 @@ def test_grupos_do_plano_8b_aparecem(app):
 
 
 def _com_refresh_falso(monkeypatch):
-    from cartridges import metadata_refresh  # noqa: PLC0415
+    from kyron import metadata_refresh  # noqa: PLC0415
 
     chamadas = []
 
@@ -500,7 +500,7 @@ def test_linha_dos_metadados_apagada_sem_as_duas_fontes(app):
 
 
 def test_atualizar_capas_apagado_sem_sgdb(app, store, make_game):
-    from cartridges.store.managers.sgdb_manager import SgdbManager  # noqa: PLC0415
+    from kyron.store.managers.sgdb_manager import SgdbManager  # noqa: PLC0415
     from tests.apoio_capas import _ManagerDeCapas  # noqa: PLC0415
 
     store.add_game(make_game(game_id="a"), {})
@@ -543,7 +543,7 @@ def test_foco_acompanha_o_botao_dos_metadados(app, store, make_game, monkeypatch
 
 
 def test_foco_das_capas_fica_no_dialogo_e_esc_fecha(app, store, make_game):
-    from cartridges.store.managers.sgdb_manager import SgdbManager  # noqa: PLC0415
+    from kyron.store.managers.sgdb_manager import SgdbManager  # noqa: PLC0415
     from tests.apoio_capas import _ManagerDeCapas  # noqa: PLC0415
 
     store.add_game(make_game(game_id="a"), {})
@@ -639,7 +639,7 @@ def test_sem_segundo_monitor_o_grupo_apaga_e_explica(app, monkeypatch):
 
 def test_botao_em_linha_apagada_nao_soma_dois_apagados(app, store, make_game):
     """50% no total. O botão apagado fora de uma linha continua a 50% por conta própria."""
-    from cartridges.store.managers.sgdb_manager import SgdbManager  # noqa: PLC0415
+    from kyron.store.managers.sgdb_manager import SgdbManager  # noqa: PLC0415
     from tests.apoio_capas import _ManagerDeCapas  # noqa: PLC0415
 
     store.add_game(make_game(game_id="a"), {})
@@ -667,7 +667,7 @@ def test_chave_do_wallhaven_apagada_sem_o_papel_de_parede(app):
 
 def test_placa_mostra_o_numero(app_qt):
     motor = QQmlEngine()
-    from cartridges.modelos.provedor_de_icones import ProvedorDeIcones  # noqa: PLC0415
+    from kyron.modelos.provedor_de_icones import ProvedorDeIcones  # noqa: PLC0415
     motor.addImageProvider("icone", ProvedorDeIcones())
     componente = QQmlComponent(motor, QUrl.fromLocalFile(str(QML / "PlacaDoMonitor.qml")))
     placa = componente.createWithInitialProperties({"numero": "2"})
@@ -738,7 +738,7 @@ def test_interruptor_das_fitas_apagado_sem_fita(app):
 
 
 def test_amostra_abre_o_seletor_e_a_cor_vai_ao_modelo(app, fitas_espiadas):
-    from cartridges.utils import session_fita  # noqa: PLC0415
+    from kyron.utils import session_fita  # noqa: PLC0415
 
     shared.schema.set_boolean("session-fita", True)
     _abrir(app, "iluminacao")
@@ -756,7 +756,7 @@ def test_amostra_abre_o_seletor_e_a_cor_vai_ao_modelo(app, fitas_espiadas):
 
 
 def test_voltar_a_cor_padrao_so_fora_do_roxo(app, fitas_espiadas):
-    from cartridges.utils import session_fita  # noqa: PLC0415
+    from kyron.utils import session_fita  # noqa: PLC0415
 
     shared.schema.set_boolean("session-fita", True)
     _abrir(app, "iluminacao")
@@ -770,7 +770,7 @@ def test_voltar_a_cor_padrao_so_fora_do_roxo(app, fitas_espiadas):
 
 
 def test_testar_troca_o_icone_e_mostra_o_resultado(app, fitas_espiadas, monkeypatch):
-    from cartridges.utils import session_fita  # noqa: PLC0415
+    from kyron.utils import session_fita  # noqa: PLC0415
 
     shared.schema.set_boolean("session-fita", True)
     import threading  # noqa: PLC0415
@@ -815,7 +815,7 @@ def _abrir_o_assistente(app):
 
 
 def test_configurar_abre_o_assistente_com_a_conta_salva(app):
-    from cartridges.utils import tuya_conta  # noqa: PLC0415
+    from kyron.utils import tuya_conta  # noqa: PLC0415
 
     tuya_conta.salvar(tuya_conta.Conta("chave-salva", "segredo-salvo", "eu"))
     dialogo, _botao = _abrir_o_assistente(app)
@@ -843,7 +843,7 @@ def test_dispositivos_do_assistente_em_texto_puro(app):
     """O nome do dispositivo vem da conta da Tuya e aparece como está."""
     dialogo, _botao = _abrir_o_assistente(app)
     nome = "<b>Sala</b> & Cia"
-    from cartridges.utils.session_fita import Fita  # noqa: PLC0415
+    from kyron.utils.session_fita import Fita  # noqa: PLC0415
 
     app.preferencias.configuracaoDasFitas._mostrar([Fita(nome, "eb0", "192.0.2.10", "k")])  # noqa: SLF001
     assert _esperar(lambda: app.achar("dispositivoDasFitas-eb0").property("visible") is True)
@@ -861,7 +861,7 @@ def test_dispositivos_do_assistente_em_texto_puro(app):
 
 
 def test_dispositivo_sem_endereco_apagado(app):
-    from cartridges.utils.session_fita import Fita  # noqa: PLC0415
+    from kyron.utils.session_fita import Fita  # noqa: PLC0415
 
     _abrir_o_assistente(app)
     app.preferencias.configuracaoDasFitas._mostrar([Fita("Sem IP", "eb1", "", "k"), Fita("Com IP", "eb2", "192.0.2.11", "k")])  # noqa: SLF001
@@ -909,7 +909,7 @@ def test_esc_fecha_o_assistente_e_volta_as_preferencias(app, flush_idle):
 @pytest.fixture
 def calibracao_aberta(app, fitas_espiadas, monkeypatch):
     """O assistente aberto sobre duas fitas, sem acender nada (a prévia de uma fita só também é espiada)."""
-    from cartridges.utils import session_fita  # noqa: PLC0415
+    from kyron.utils import session_fita  # noqa: PLC0415
 
     session_fita.gravar_fitas(
         [session_fita.Fita("<b>Sala</b> & Cia", "eb0", "192.0.2.10", "k"), session_fita.Fita("Quarto", "eb1", "192.0.2.11", "k")]
@@ -966,7 +966,7 @@ def test_temperatura_so_no_branco(calibracao_aberta):
 
 
 def test_sliders_seguem_as_constantes_da_calibracao(calibracao_aberta):
-    from cartridges.utils import calibracao  # noqa: PLC0415
+    from kyron.utils import calibracao  # noqa: PLC0415
 
     app, _dialogo = calibracao_aberta
     app.preferencias.calibracao.escolher("eb0")
@@ -1052,7 +1052,7 @@ def _clicar_botao(app, nome):
 
 
 def test_calibracao_clique_nos_botoes_de_ponta_a_ponta(calibracao_aberta, fitas_espiadas):
-    from cartridges.utils import session_fita  # noqa: PLC0415
+    from kyron.utils import session_fita  # noqa: PLC0415
 
     app, _dialogo = calibracao_aberta
     assistente = app.preferencias.calibracao
@@ -1268,7 +1268,7 @@ def test_ctrl_f_leva_ao_campo(app):
 
 
 def test_filtro_nao_esvazia_os_assistentes_abertos_por_cima(app, fitas_espiadas, monkeypatch):
-    from cartridges.utils import session_fita  # noqa: PLC0415
+    from kyron.utils import session_fita  # noqa: PLC0415
 
     monkeypatch.setattr(session_fita, "previa_calibracao", lambda *_a: None)
     _abrir(app, "iluminacao")

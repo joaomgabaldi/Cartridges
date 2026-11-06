@@ -9,10 +9,10 @@ from pathlib import Path
 
 import pytest
 from PySide6.QtGui import QWindow
-from cartridges import conquista_aviso
-from cartridges.conquistas import progresso
-from cartridges.conquistas.catalogo import ConquistaInfo
-from cartridges.conquistas.vigia import Desbloqueada
+from kyron import conquista_aviso
+from kyron.conquistas import progresso
+from kyron.conquistas.catalogo import ConquistaInfo
+from kyron.conquistas.vigia import Desbloqueada
 
 
 _CRIAR_JANELA_REAL = conquista_aviso._criar_janela
@@ -178,7 +178,7 @@ def test_janela_que_nao_entra_nao_e_mostrada(monkeypatch, sem_efeitos):
 
 def test_janela_que_nao_importa_nao_trava_a_fila(monkeypatch, sem_efeitos):
     def sem_modulo(_aviso):
-        raise ImportError("cartridges.janela_do_aviso")
+        raise ImportError("kyron.janela_do_aviso")
 
     monkeypatch.setattr(conquista_aviso, "_criar_janela", sem_modulo)
     conquista_aviso.mostrar(_aviso("Um"))
@@ -296,7 +296,7 @@ def test_limite_da_saida_vence_antes_do_terminou(monkeypatch, sem_efeitos, user3
 
 def test_cartao_do_aviso_e_o_mesmo_componente(monkeypatch, user32_falso):  # noqa: ARG001
     """A janela mostra o `CartaoDoAviso.qml` registrado no módulo, o mesmo que o assistente e as Preferências usam."""
-    from cartridges.janela_do_aviso import JanelaDoAviso  # noqa: PLC0415
+    from kyron.janela_do_aviso import JanelaDoAviso  # noqa: PLC0415
 
     qml = Path(conquista_aviso.__file__).parent / "qml"
     assert "CartaoDoAviso 1.0 CartaoDoAviso.qml" in (qml / "qmldir").read_text(encoding="utf-8").splitlines()

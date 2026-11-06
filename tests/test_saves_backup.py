@@ -22,10 +22,10 @@ from pathlib import Path
 
 import pytest
 
-from cartridges import shared
-from cartridges.saves import backup_de_saves, conferencia, ludusavi, pasta
-from cartridges.saves.ludusavi import Versao
-from cartridges.modelos import tarefas
+from kyron import shared
+from kyron.saves import backup_de_saves, conferencia, ludusavi, pasta
+from kyron.saves.ludusavi import Versao
+from kyron.modelos import tarefas
 from tests import apoio_aplicativo
 
 _PYTHON = sys.executable  # o `ludusavi_de_verdade` troca o do `sys` durante o teste
@@ -483,7 +483,7 @@ def test_saves_sem_backup_com_o_editor_aberto_nao_abre_outro(store, make_game, f
 def test_backup_de_saves_sem_gi():
     raiz = Path(__file__).resolve().parent.parent
     codigo = (
-        f"import builtins, sys; builtins._ = lambda m: m; sys.path.insert(0, {str(raiz)!r}); from cartridges.saves import backup_de_saves; "
+        f"import builtins, sys; builtins._ = lambda m: m; sys.path.insert(0, {str(raiz)!r}); from kyron.saves import backup_de_saves; "
         "assert 'gi' not in sys.modules, sorted(m for m in sys.modules if m.startswith('gi'))"
     )
     resultado = subprocess.run(

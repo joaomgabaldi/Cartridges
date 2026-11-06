@@ -18,9 +18,9 @@ import json
 import pytest
 import requests
 
-from cartridges.utils import download
-from cartridges.utils import steamgriddb as sgdb
-from cartridges.utils.steamgriddb import SgdbAuthError, SgdbGameNotFound
+from kyron.utils import download
+from kyron.utils import steamgriddb as sgdb
+from kyron.utils.steamgriddb import SgdbAuthError, SgdbGameNotFound
 
 
 class FakeResponse:
@@ -214,7 +214,7 @@ def test_capa_baixada_vira_tiff_e_nao_deixa_temporario(make_game, schema, monkey
 
     from PIL import Image  # noqa: PLC0415
 
-    from cartridges import shared  # noqa: PLC0415
+    from kyron import shared  # noqa: PLC0415
 
     temporarios = tmp_path / "temporarios"
     temporarios.mkdir()

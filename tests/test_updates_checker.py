@@ -10,10 +10,10 @@ from types import SimpleNamespace
 
 from PySide6.QtCore import QEventLoop, QTimer
 
-from cartridges import shared
-from cartridges.modelos.avisos import FilaDeAvisos
-from cartridges.utils import updates_checker
-from cartridges.utils.updates_feed import DigestEntry, UpdatePost
+from kyron import shared
+from kyron.modelos.avisos import FilaDeAvisos
+from kyron.utils import updates_checker
+from kyron.utils.updates_feed import DigestEntry, UpdatePost
 
 
 def _rodar_ate(condicao, limite=5.0) -> bool:

@@ -34,17 +34,17 @@ from PySide6.QtQuick import QQuickItem, QQuickWindow
 from PySide6.QtQuickControls2 import QQuickStyle
 from PySide6.QtTest import QTest
 
-from cartridges import shared
-from cartridges.modelos import tarefas
-from cartridges.modelos.avisos import FilaDeAvisos
-from cartridges.modelos.sessao import ModeloDaSessao
-from cartridges.modelos.tarefas import PainelDasTarefas, acao_ao_fechar, pode_mostrar
-from cartridges.saves import backup_de_saves
-from cartridges.utils import window_geometry
+from kyron import shared
+from kyron.modelos import tarefas
+from kyron.modelos.avisos import FilaDeAvisos
+from kyron.modelos.sessao import ModeloDaSessao
+from kyron.modelos.tarefas import PainelDasTarefas, acao_ao_fechar, pode_mostrar
+from kyron.saves import backup_de_saves
+from kyron.utils import window_geometry
 from tests.apoio_registro import _apagar_chave
 
 RAIZ = Path(__file__).resolve().parent.parent
-QML = RAIZ / "cartridges" / "qml"
+QML = RAIZ / "kyron" / "qml"
 QQuickStyle.setStyle("Basic")
 
 
@@ -139,7 +139,7 @@ class _Cena:
     def __init__(self):
         self.painel = PainelDasTarefas()
         self.motor = QQmlEngine()
-        from cartridges.modelos.provedor_de_icones import ProvedorDeIcones  # noqa: PLC0415
+        from kyron.modelos.provedor_de_icones import ProvedorDeIcones  # noqa: PLC0415
         self.motor.addImageProvider("icone", ProvedorDeIcones())
         self.motor.rootContext().setContextProperty("painelDasTarefas", self.painel)
         self.componente = QQmlComponent(self.motor)
@@ -870,10 +870,10 @@ from PySide6.QtCore import QCoreApplication, QTimer
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtQml import QQmlEngine
 
-from cartridges import app as modulo_app, shared
-from cartridges.modelos import tarefas
-from cartridges.saves import backup_de_saves
-from cartridges.utils import single_instance
+from kyron import app as modulo_app, shared
+from kyron.modelos import tarefas
+from kyron.saves import backup_de_saves
+from kyron.utils import single_instance
 
 ANOTACOES = Path(sys.argv[1])
 MODO = sys.argv[2]
@@ -999,8 +999,8 @@ def _main_num_processo(tmp_path, modo):
     dados = tmp_path / "dados"
     dados.mkdir()
     anotacoes = tmp_path / "anotacoes.json"
-    registro = rf"Software\CartridgesTestes\fechar-{uuid.uuid4()}"
-    ambiente = {**os.environ, "CARTRIDGES_DADOS": str(dados), "CARTRIDGES_REGISTRO": registro, "QT_QPA_PLATFORM": "offscreen"}
+    registro = rf"Software\KyronTestes\fechar-{uuid.uuid4()}"
+    ambiente = {**os.environ, "KYRON_DADOS": str(dados), "KYRON_REGISTRO": registro, "QT_QPA_PLATFORM": "offscreen"}
     try:
         resultado = subprocess.run(
             [sys.executable, "-c", _FECHAR_COM_BACKUP, str(anotacoes), modo], cwd=RAIZ, env=ambiente,

@@ -15,11 +15,11 @@ from PySide6.QtCore import QPoint, QPointF, Qt, QtMsgType, qInstallMessageHandle
 from PySide6.QtGui import QColor, QImage
 from PySide6.QtTest import QTest
 
-from cartridges import shared
-from cartridges.conquistas import catalogo, historico, icones
-from cartridges.conquistas.catalogo import Catalogo, ConquistaInfo
-from cartridges.conquistas.formatos import Desbloqueio
-from cartridges.jogo import Jogo
+from kyron import shared
+from kyron.conquistas import catalogo, historico, icones
+from kyron.conquistas.catalogo import Catalogo, ConquistaInfo
+from kyron.conquistas.formatos import Desbloqueio
+from kyron.jogo import Jogo
 from tests.apoio_conquistas import com_fonte
 from tests.apoio_qml_biblioteca import _achar, _App, _assentar, _esperar, _jogos
 from tests.apoio_qml_detalhes import _abrir_pelo_cartao, _clicar, _foco_dentro_de
@@ -408,7 +408,7 @@ assert imagem.save(str(png), "PNG")
 url = QUrl.fromLocalFile(str(png)).toString()
 
 motor = QQmlEngine()
-from cartridges.modelos.provedor_de_icones import ProvedorDeIcones  # noqa: PLC0415
+from kyron.modelos.provedor_de_icones import ProvedorDeIcones  # noqa: PLC0415
 motor.addImageProvider("icone", ProvedorDeIcones())
 janela = QQuickWindow()
 janela.resize(400, 200)
@@ -418,7 +418,7 @@ itens = []
 
 def montar(texto):
     componente = QQmlComponent(motor)
-    componente.setData(texto.encode(), QUrl.fromLocalFile(str(Path("cartridges/qml/_recorte.qml").resolve())))
+    componente.setData(texto.encode(), QUrl.fromLocalFile(str(Path("kyron/qml/_recorte.qml").resolve())))
     item = componente.create()
     assert item is not None, componente.errorString()
     item.setParent(janela.contentItem())  # o dono em C++: sem ele o coletor do motor apaga o item
@@ -450,7 +450,7 @@ print(json.dumps({"api": str(janela.rendererInterface().graphicsApi()), "conquis
 def test_icones_de_conquista_cortam_os_cantos(tmp_path):
     """O ícone vermelho cheio sai com o canto arredondado, no ícone das conquistas e no do aviso: no canto, o que está
     atrás (o azul da janela; o escuro do cartão do aviso); no meio, o vermelho."""
-    ambiente = {**os.environ, "QT_QPA_PLATFORM": "windows", "CARTRIDGES_DADOS": str(tmp_path)}
+    ambiente = {**os.environ, "QT_QPA_PLATFORM": "windows", "KYRON_DADOS": str(tmp_path)}
     resultado = subprocess.run(
         [sys.executable, "-c", _RECORTE, str(tmp_path / "icone.png")],
         cwd=RAIZ, env=ambiente, capture_output=True, text=True, timeout=60, check=False,

@@ -15,10 +15,10 @@ import pytest
 from PySide6.QtCore import QMetaObject, QPointF, Qt, QUrl
 from PySide6.QtTest import QTest
 
-from cartridges import shared
-from cartridges.modelos import sobre as modulo_sobre
-from cartridges.modelos.avisos import FilaDeAvisos
-from cartridges.modelos.sobre import Sobre, informacoes_de_depuracao, novidades_da_versao
+from kyron import shared
+from kyron.modelos import sobre as modulo_sobre
+from kyron.modelos.avisos import FilaDeAvisos
+from kyron.modelos.sobre import Sobre, informacoes_de_depuracao, novidades_da_versao
 from tests.apoio_janela_atualizacao import Janela, achar, avaliar, esperar
 
 METAINFO = Path(__file__).resolve().parent.parent / "data" / "io.github.joaomgabaldi.Cartridges.metainfo.xml.in"

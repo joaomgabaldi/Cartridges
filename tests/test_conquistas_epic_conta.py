@@ -6,8 +6,8 @@ import time
 
 import pytest
 
-from cartridges import shared
-from cartridges.conquistas.epic import conta
+from kyron import shared
+from kyron.conquistas.epic import conta
 from tests.apoio_xbox import Resposta, RespostaSemFim, rede_falsa
 
 _COD = "0123456789abcdef0123456789abcdef"

@@ -26,15 +26,15 @@ from requests.exceptions import RequestException
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from cartridges.store.managers.steam_api_manager import SteamAPIManager  # noqa: E402
-from cartridges.utils.steam import (  # noqa: E402
+from kyron.store.managers.steam_api_manager import SteamAPIManager  # noqa: E402
+from kyron.utils.steam import (  # noqa: E402
     STEAM_METADATA_VERSION,
     SteamAPIHelper,
     SteamGameNotFoundError,
     format_release_date,
     parse_release_date,
 )
-from cartridges.utils.steam_genre import (  # noqa: E402
+from kyron.utils.steam_genre import (  # noqa: E402
     GENRE_NAMES,
     GENRE_TAGS,
     VAGUE_GENRE_TAGS,
@@ -189,7 +189,7 @@ class FakeResponse:
 
 def _helper_returning(monkeypatch, payload, error=None) -> SteamAPIHelper:
     monkeypatch.setattr(
-        "cartridges.utils.download._get",
+        "kyron.utils.download._get",
         lambda *_a, **_k: FakeResponse(payload, error),
     )
     return SteamAPIHelper(contextlib.nullcontext())
@@ -295,7 +295,7 @@ def test_store_tags_survive_an_unexpected_payload(monkeypatch, payload) -> None:
 def test_bulk_stops_between_batches_when_asked(monkeypatch) -> None:
     """A cancelled refresh must not sit through every request it was going to
     make: a big library is several batches, each able to hit a 30 s timeout."""
-    from cartridges.utils import steam as steam_module  # noqa: PLC0415
+    from kyron.utils import steam as steam_module  # noqa: PLC0415
 
     calls: list = []
 
@@ -303,7 +303,7 @@ def test_bulk_stops_between_batches_when_asked(monkeypatch) -> None:
         calls.append(kwargs["params"])
         return FakeResponse({"response": {"store_items": []}})
 
-    monkeypatch.setattr("cartridges.utils.download._get", record)
+    monkeypatch.setattr("kyron.utils.download._get", record)
     monkeypatch.setattr(steam_module, "TAG_BATCH_SIZE", 2)
     helper = SteamAPIHelper(contextlib.nullcontext())
 

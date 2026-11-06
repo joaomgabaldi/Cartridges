@@ -13,7 +13,7 @@ import winreg
 
 import pytest
 
-from cartridges.utils.game_folder import game_folder, open_folder
+from kyron.utils.game_folder import game_folder, open_folder
 
 pytestmark = pytest.mark.skipif(
     os.name != "nt", reason="game_folder reads the Windows package registry"

@@ -6,8 +6,8 @@
 
 import pytest
 
-from cartridges.utils import cortina_monitor as cm
-from cartridges.utils import janela_por_cima as jpc
+from kyron.utils import cortina_monitor as cm
+from kyron.utils import janela_por_cima as jpc
 
 
 class _Win32Falso:

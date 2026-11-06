@@ -4,7 +4,7 @@
 
 """Checks for the repack update-feed reader.
 
-Runnable standalone — ``cartridges.utils.updates_feed`` imports only
+Runnable standalone — ``kyron.utils.updates_feed`` imports only
 the standard library and ``requests`` — so a regression is caught with a plain::
 
     python3 tests/test_updates_feed.py
@@ -22,8 +22,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from cartridges.utils.title_match import CONFIDENT_SCORE, compare_titles  # noqa: E402
-from cartridges.utils.updates_feed import (  # noqa: E402
+from kyron.utils.title_match import CONFIDENT_SCORE, compare_titles  # noqa: E402
+from kyron.utils.updates_feed import (  # noqa: E402
     extract_entries,
     is_update_digest,
     parse_feed,
@@ -197,7 +197,7 @@ class TestDoctypeGuard(unittest.TestCase):
     inclusive dentro de um comentário — `<!-- <a -->` escondia o DOCTYPE."""
 
     def test_a_doctype_hidden_behind_a_comment_is_refused(self):
-        from cartridges.utils.updates_feed import parse_xml
+        from kyron.utils.updates_feed import parse_xml
 
         doc = (
             '<?xml version="1.0"?><!-- <a -->'
@@ -206,19 +206,19 @@ class TestDoctypeGuard(unittest.TestCase):
         self.assertIsNone(parse_xml(doc))
 
     def test_a_plain_doctype_is_still_refused(self):
-        from cartridges.utils.updates_feed import parse_xml
+        from kyron.utils.updates_feed import parse_xml
 
         doc = '<?xml version="1.0"?><!DOCTYPE rss><rss><channel/></rss>'
         self.assertIsNone(parse_xml(doc))
 
     def test_a_doctype_string_inside_the_body_is_harmless(self):
-        from cartridges.utils.updates_feed import parse_xml
+        from kyron.utils.updates_feed import parse_xml
 
         doc = "<rss><channel><title>&lt;!DOCTYPE&gt; no texto</title></channel></rss>"
         self.assertIsNotNone(parse_xml(doc))
 
     def test_an_ordinary_commented_feed_still_parses(self):
-        from cartridges.utils.updates_feed import parse_xml
+        from kyron.utils.updates_feed import parse_xml
 
         doc = '<?xml version="1.0"?><!-- gerado às 3h --><rss><channel/></rss>'
         self.assertIsNotNone(parse_xml(doc))

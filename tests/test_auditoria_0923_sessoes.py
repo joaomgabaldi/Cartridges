@@ -7,8 +7,8 @@
 import json
 from datetime import date, datetime, timedelta
 
-from cartridges import shared
-from cartridges.utils import session_log
+from kyron import shared
+from kyron.utils import session_log
 
 
 def _arquivo():
@@ -53,7 +53,7 @@ def test_delete_sobrevive_a_linha_json_que_nao_e_objeto():
 
 
 def test_migracao_de_id_leva_as_sessoes(store, write_record):
-    from cartridges.store.store import _migrate_game_files  # noqa: PLC0415
+    from kyron.store.store import _migrate_game_files  # noqa: PLC0415
 
     write_record("velho", executable="x")
     session_log.record("velho", 60, 1_700_000_000)
@@ -79,7 +79,7 @@ def test_excluir_pode_preservar_as_sessoes(store, make_game):
 
 
 def test_resumo_usa_os_dias_do_grafico():
-    from cartridges.session_history import resumo_dos_ultimos_dias  # noqa: PLC0415
+    from kyron.session_history import resumo_dos_ultimos_dias  # noqa: PLC0415
 
     hoje = date(2026, 9, 23)
     # Terminou às 20h de 16/09: fora dos 7 dias de calendário até 23/09.
@@ -90,7 +90,7 @@ def test_resumo_usa_os_dias_do_grafico():
 
 
 def test_zero_segundos_vira_nenhuma_sessao():
-    from cartridges.session_history import tempo_ou_nenhuma  # noqa: PLC0415
+    from kyron.session_history import tempo_ou_nenhuma  # noqa: PLC0415
 
     assert tempo_ou_nenhuma(0) == "nenhuma sessão"
     assert tempo_ou_nenhuma(3600) == "1 hora"

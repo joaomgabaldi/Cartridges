@@ -12,10 +12,10 @@ import weakref
 
 from PySide6.QtCore import Qt
 
-from cartridges import shared
-from cartridges.jogo import Jogo
-from cartridges.store.managers.file_manager import FileManager
-from cartridges.store.managers.manager import Manager
+from kyron import shared
+from kyron.jogo import Jogo
+from kyron.store.managers.file_manager import FileManager
+from kyron.store.managers.manager import Manager
 
 # O que a versão anterior (GTK) grava para um jogo novo com estes campos. Escrito à mão de propósito: se um padrão
 # ou uma chave mudar, o arquivo do jogo deixa de ser o mesmo para a versão anterior.

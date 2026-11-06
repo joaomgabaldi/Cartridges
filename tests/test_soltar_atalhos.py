@@ -4,8 +4,8 @@
 
 """Arrastar atalhos para a janela: o que entra na pasta de atalhos."""
 
-from cartridges.utils import soltar_atalhos
-from cartridges.utils.soltar_atalhos import MAX_ARQUIVOS, MAX_BYTES, Resultado
+from kyron.utils import soltar_atalhos
+from kyron.utils.soltar_atalhos import MAX_ARQUIVOS, MAX_BYTES, Resultado
 
 
 def arquivo(pasta, nome, conteudo=b"x"):

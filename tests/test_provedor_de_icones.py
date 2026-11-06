@@ -8,7 +8,7 @@ from PySide6.QtGui import QColor
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from cartridges.modelos.provedor_de_icones import ProvedorDeIcones, caminho  # noqa: E402
+from kyron.modelos.provedor_de_icones import ProvedorDeIcones, caminho  # noqa: E402
 
 
 @pytest.fixture(autouse=True)

@@ -6,8 +6,8 @@
 
 import contextlib
 
-from cartridges.emuladores import idiomas
-from cartridges.utils import steam
+from kyron.emuladores import idiomas
+from kyron.utils import steam
 
 # Resposta real do appdetails do Cyberpunk 2077 (l=brazilian).
 CYBERPUNK = 'Inglês<strong>*</strong>, Francês<strong>*</strong>, Italiano<strong>*</strong>, Alemão<strong>*</strong>, Espanhol (Espanha)<strong>*</strong>, Árabe, Tcheco, Húngaro, Japonês<strong>*</strong>, Coreano<strong>*</strong>, Polonês<strong>*</strong>, Português (Brasil)<strong>*</strong>, Russo<strong>*</strong>, Chinês simplificado<strong>*</strong>, Espanhol (América Latina), Tailandês, Chinês tradicional, Turco, Ucraniano<br><strong>*</strong>idiomas com suporte total de áudio'

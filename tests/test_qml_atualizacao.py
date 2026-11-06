@@ -8,9 +8,9 @@ import pytest
 from PySide6.QtCore import QMetaObject, Qt
 from PySide6.QtTest import QTest
 
-from cartridges import shared
-from cartridges.utils import app_updater
-from cartridges.utils.app_updater import AppUpdater, DownloadCancelled, Release
+from kyron import shared
+from kyron.utils import app_updater
+from kyron.utils.app_updater import AppUpdater, DownloadCancelled, Release
 from tests.apoio_janela_atualizacao import Janela, avaliar, esperar
 from tests.apoio_qml_biblioteca import _achar
 

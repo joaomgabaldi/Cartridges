@@ -11,7 +11,7 @@
     <destino>\\bin\\ludusavi.exe       backup dos saves; `ludusavi` o procura do mesmo jeito
     <destino>\\python\\               Python embutido do python.org
     <destino>\\lib\\                  dependências (pip install --target)
-    <destino>\\app\\cartridges\\      o pacote (qml, qwk_ponte.dll, instalacao.json)
+    <destino>\\app\\kyron\\      o pacote (qml, qwk_ponte.dll, instalacao.json)
     <destino>\\app\\data\\            gschema, placeholders, sons e ícone
     <destino>\\licencas\\             textos das licenças de terceiros que não estão nos `*.dist-info` de `lib`
 
@@ -78,7 +78,7 @@ LICENCAS = {
 # Sem eles o app nem importa (`shared` lê o gschema na importação), mostra cartões vazios ou perde, em silêncio,
 # as "Novidades" e a descrição do "Sobre o Kyron" (a metainfo).
 OBRIGATORIOS = (
-    "cartridges/janela/qwk_ponte.dll",
+    "kyron/janela/qwk_ponte.dll",
     "data/io.github.joaomgabaldi.Cartridges.gschema.xml.in",
     "data/io.github.joaomgabaldi.Cartridges.metainfo.xml.in",
     "data/library_placeholder.svg",
@@ -167,9 +167,9 @@ def montar(
         for sobra in pyside.glob(padrao):
             shutil.rmtree(sobra) if sobra.is_dir() else sobra.unlink()
 
-    pacote = destino / "app" / "cartridges"
+    pacote = destino / "app" / "kyron"
     shutil.copytree(
-        raiz / "cartridges", pacote,
+        raiz / "kyron", pacote,
         ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "*.pyi", "*.in", "instalacao.json"),
     )
     (pacote / "instalacao.json").write_text(json.dumps({"canal": canal}), encoding="utf-8")
@@ -264,9 +264,9 @@ def instalar_bibliotecas(cache: Path, raiz: Path = RAIZ) -> Path:
 
 
 def versao_do_app(raiz: Path = RAIZ) -> str:
-    achada = re.search(r'^VERSION = "([\d.]+)"', (raiz / "cartridges" / "shared.py").read_text(encoding="utf-8"), re.M)
+    achada = re.search(r'^VERSION = "([\d.]+)"', (raiz / "kyron" / "shared.py").read_text(encoding="utf-8"), re.M)
     if not achada:
-        sys.exit("Não achei VERSION em cartridges/shared.py.")
+        sys.exit("Não achei VERSION em kyron/shared.py.")
     return achada[1]
 
 
@@ -302,7 +302,7 @@ def compilar_lancador(cache: Path, raiz: Path = RAIZ) -> Path:
 
 
 def renderizar_iss(destino: Path, raiz: Path = RAIZ) -> Path:
-    """Preenche @VERSION@ no .iss, ao lado de `destino`: `cartridges/shared.py` é a fonte única da versão."""
+    """Preenche @VERSION@ no .iss, ao lado de `destino`: `kyron/shared.py` é a fonte única da versão."""
     modelo = (raiz / "build-aux" / "windows" / "Cartridges.iss.in").read_text(encoding="utf-8")
     iss = destino.parent / f"{destino.name}.iss"
     iss.write_text(modelo.replace("@VERSION@", versao_do_app(raiz)), encoding="utf-8-sig")

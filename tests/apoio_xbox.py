@@ -63,7 +63,7 @@ def rede_falsa(monkeypatch, modulo, respostas, nome="_post"):
 
 def respostas_de_login(gamertag="Jogador", xuid="2535400000000000", renovacao="R1"):
     """O que a Microsoft responde a um login (ou a uma renovação) bem-sucedido."""
-    from cartridges.conquistas.xbox import conta  # noqa: PLC0415
+    from kyron.conquistas.xbox import conta  # noqa: PLC0415
 
     return {
         conta.TOKEN: [Resposta(200, {"access_token": "A1", "refresh_token": renovacao, "expires_in": 3600})],

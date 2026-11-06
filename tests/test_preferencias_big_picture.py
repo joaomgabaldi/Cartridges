@@ -2,8 +2,8 @@
 
 import pytest
 
-from cartridges import shared
-from cartridges.modelos.preferencias import SEM_3D, Preferencias
+from kyron import shared
+from kyron.modelos.preferencias import SEM_3D, Preferencias
 
 
 def _preferencias(tem_3d=True):

@@ -13,10 +13,10 @@ from unittest.mock import MagicMock
 import pytest
 from PySide6.QtCore import Qt
 
-from cartridges import shared
-from cartridges.modelos import big_picture as modulo_bp
-from cartridges.modelos.controle import ControleDaGrade
-from cartridges.xinput import (
+from kyron import shared
+from kyron.modelos import big_picture as modulo_bp
+from kyron.modelos.controle import ControleDaGrade
+from kyron.xinput import (
     ACELERAR_APOS_US,
     INTERVALO_ACELERADO_US,
     INTERVALO_NORMAL_US,
@@ -37,7 +37,7 @@ from tests.apoio_qml_biblioteca import _esperar
 
 @pytest.fixture(autouse=True)
 def _sem_som(monkeypatch):
-    from cartridges.modelos import regras_do_big_picture as regras  # noqa: PLC0415
+    from kyron.modelos import regras_do_big_picture as regras  # noqa: PLC0415
 
     monkeypatch.setattr(regras, "tocar_tique", lambda: None)
 

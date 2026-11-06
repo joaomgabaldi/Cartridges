@@ -11,8 +11,8 @@ from types import SimpleNamespace
 
 from PySide6.QtCore import Qt
 
-from cartridges import shared
-from cartridges.modelos.controle import ControleDaGrade
+from kyron import shared
+from kyron.modelos.controle import ControleDaGrade
 
 
 ATIVO = Qt.ApplicationState.ApplicationActive

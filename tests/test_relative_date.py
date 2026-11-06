@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 
 import pytest
 
-from cartridges.utils import relative_date as rd
+from kyron.utils import relative_date as rd
 
 
 @pytest.fixture

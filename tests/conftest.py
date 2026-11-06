@@ -5,8 +5,8 @@
 r"""Harness de testes do Cartridges (PySide6 + QML).
 
 Nenhum teste lê ou grava os dados reais do usuário: a fixture ``dados_temporarios``
-aponta ``CARTRIDGES_DADOS`` para uma pasta temporária e ``CARTRIDGES_REGISTRO`` para
-uma subchave temporária de ``HKCU\Software\CartridgesTestes``.
+aponta ``KYRON_DADOS`` para uma pasta temporária e ``KYRON_REGISTRO`` para
+uma subchave temporária de ``HKCU\Software\KyronTestes``.
 """
 
 import builtins
@@ -31,16 +31,16 @@ from PySide6.QtCore import QCoreApplication, QEventLoop, QTimer
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-_RAIZ_REGISTRO = r"Software\CartridgesTestes"
+_RAIZ_REGISTRO = r"Software\KyronTestes"
 from tests.apoio_registro import _apagar_chave  # noqa: E402
 
 
-# Antes de qualquer `import cartridges`: o `shared` calcula os caminhos ao ser importado e cairia nos dados reais.
-_DADOS_DA_SESSAO = tempfile.mkdtemp(prefix="cartridges-testes-")
+# Antes de qualquer `import kyron`: o `shared` calcula os caminhos ao ser importado e cairia nos dados reais.
+_DADOS_DA_SESSAO = tempfile.mkdtemp(prefix="kyron-testes-")
 _REGISTRO_DA_SESSAO = f"{_RAIZ_REGISTRO}\\sessao-{uuid.uuid4()}"
-os.environ["CARTRIDGES_DADOS"] = _DADOS_DA_SESSAO
-os.environ["CARTRIDGES_REGISTRO"] = _REGISTRO_DA_SESSAO
-os.environ["CARTRIDGES_LOG_DETALHADO"] = "0"
+os.environ["KYRON_DADOS"] = _DADOS_DA_SESSAO
+os.environ["KYRON_REGISTRO"] = _REGISTRO_DA_SESSAO
+os.environ["KYRON_LOG_DETALHADO"] = "0"
 
 
 def pytest_configure(config):
@@ -58,11 +58,11 @@ builtins.ngettext = (  # type: ignore[attr-defined]
 )
 
 
-from cartridges import shared  # noqa: E402
-from cartridges.utils import window_geometry as _window_geometry  # noqa: E402
+from kyron import shared  # noqa: E402
+from kyron.utils import window_geometry as _window_geometry  # noqa: E402
 
 _MONITORS_REAL = _window_geometry.monitors
-from cartridges.configuracoes import Configuracoes  # noqa: E402
+from kyron.configuracoes import Configuracoes  # noqa: E402
 
 shared.import_time = 1_700_000_000
 
@@ -77,7 +77,7 @@ def import_time_fixo(monkeypatch):
 # teste acorda com `sys.executable` e `shared.app_dir` já desfeitos e rodaria o Ludusavi desta máquina sobre a pasta
 # errada (já baixou o manifesto para `tests/_unset` e criou `~/ludusavi-backup`). Por isso `executavel` só devolve
 # um exe que mora dentro do basetemp; quem quer um "presente" pede `ludusavi_de_verdade`.
-from cartridges.saves import ludusavi as _ludusavi
+from kyron.saves import ludusavi as _ludusavi
 
 EXECUTAVEL_DE_VERDADE = _ludusavi.executavel
 _basetemp: Path | None = None
@@ -169,7 +169,7 @@ def sem_som(monkeypatch):
 @pytest.fixture(autouse=True)
 def sem_cortina_de_verdade(monkeypatch):
     """Sem a fábrica falsa, a cortina (janela TOPMOST do fade) falha ao criar."""
-    from cartridges.utils import cortina_monitor  # noqa: PLC0415
+    from kyron.utils import cortina_monitor  # noqa: PLC0415
 
     def recusa():
         raise OSError("cortina de verdade nos testes")
@@ -180,7 +180,7 @@ def sem_cortina_de_verdade(monkeypatch):
 @pytest.fixture(autouse=True)
 def sem_janela_por_cima_de_verdade(monkeypatch):
     """Sem o `user32_falso`, `janela_por_cima.preparar` falha (e o aviso de conquista não entra)."""
-    from cartridges.utils import janela_por_cima  # noqa: PLC0415
+    from kyron.utils import janela_por_cima  # noqa: PLC0415
 
     def recusa():
         raise AssertionError("o teste tentou falar com o user32 de verdade (janela_por_cima)")
@@ -192,7 +192,7 @@ def sem_janela_por_cima_de_verdade(monkeypatch):
 @pytest.fixture(autouse=True)
 def sem_monitor_de_verdade(monkeypatch):
     """`window_geometry.monitors` devolve um principal e um segundo, falsos; `monitors_de_verdade` restaura o real."""
-    from cartridges.utils import window_geometry  # noqa: PLC0415
+    from kyron.utils import window_geometry  # noqa: PLC0415
 
     monkeypatch.setattr(
         window_geometry,
@@ -206,7 +206,7 @@ def sem_monitor_de_verdade(monkeypatch):
 
 @pytest.fixture
 def monitors_de_verdade(monkeypatch):
-    from cartridges.utils import window_geometry  # noqa: PLC0415
+    from kyron.utils import window_geometry  # noqa: PLC0415
 
     monkeypatch.setattr(window_geometry, "monitors", _MONITORS_REAL)
 
@@ -214,7 +214,7 @@ def monitors_de_verdade(monkeypatch):
 @pytest.fixture(autouse=True)
 def sem_placa_de_verdade(monkeypatch):
     """Sem um `criar` falso, a placa "Identificar monitores" falha em vez de aparecer na tela."""
-    from cartridges.utils import window_geometry  # noqa: PLC0415
+    from kyron.utils import window_geometry  # noqa: PLC0415
 
     def recusa(*_args, **_kwargs):
         raise AssertionError("placa: nenhuma janela vai a um monitor nos testes")
@@ -260,7 +260,7 @@ class User32Falso:
         return self.estilos.get(int(hwnd), 0)
 
     def _SetWindowLongPtrW(self, hwnd, indice, valor):
-        from cartridges.utils import janela_por_cima as jpc  # noqa: PLC0415
+        from kyron.utils import janela_por_cima as jpc  # noqa: PLC0415
 
         if indice == jpc.GWLP_HWNDPARENT:
             antes, self.donos[int(hwnd)] = self.donos.get(int(hwnd), 0), int(valor)
@@ -308,7 +308,7 @@ class User32Falso:
 @pytest.fixture
 def user32_falso(monkeypatch):
     """Troca o user32 do `janela_por_cima` pelo `User32Falso`."""
-    from cartridges.utils import janela_por_cima  # noqa: PLC0415
+    from kyron.utils import janela_por_cima  # noqa: PLC0415
 
     falso = User32Falso()
     monkeypatch.setattr(janela_por_cima, "_api", lambda: falso)
@@ -321,8 +321,8 @@ def sem_jogo_de_verdade(monkeypatch):
 
     Também zera a sessão (`shared.sessao`), os rastreadores ativos e o vigia das conquistas entre os testes.
     """
-    from cartridges import jogo, process_session, session_window  # noqa: PLC0415
-    from cartridges.conquistas import sessao as sessao_conquistas  # noqa: PLC0415
+    from kyron import jogo, process_session, session_window  # noqa: PLC0415
+    from kyron.conquistas import sessao as sessao_conquistas  # noqa: PLC0415
 
     def recusa(*_args, **_kwargs):
         raise AssertionError("run_executable: nenhum jogo é iniciado nos testes")
@@ -340,7 +340,7 @@ def sem_jogo_de_verdade(monkeypatch):
 @pytest.fixture(autouse=True)
 def sem_relancar_de_verdade(monkeypatch):
     """O `_popen` do `relancar()` levanta; quem prova o comando troca o `_popen`."""
-    from cartridges import app as modulo_app  # noqa: PLC0415
+    from kyron import app as modulo_app  # noqa: PLC0415
 
     def recusa(*_args, **_kwargs):
         raise AssertionError("relancar: o app não é reaberto nos testes")
@@ -355,7 +355,7 @@ def sem_instalador_de_verdade(monkeypatch, tmp_path):
 
     Devolve a lista dos caminhos pedidos; quem prova o guarda de propósito a esvazia.
     """
-    from cartridges.utils import app_updater  # noqa: PLC0415
+    from kyron.utils import app_updater  # noqa: PLC0415
 
     chamadas: list = []
 
@@ -376,9 +376,9 @@ def sem_navegador_de_verdade(monkeypatch):
 
     Devolve a lista das URLs pedidas; quem prova o guarda de propósito a esvazia.
     """
-    from cartridges.conquistas.xbox import login as login_xbox  # noqa: PLC0415
-    from cartridges.modelos import contas as modelo_das_contas  # noqa: PLC0415
-    from cartridges.utils import open_uri  # noqa: PLC0415
+    from kyron.conquistas.xbox import login as login_xbox  # noqa: PLC0415
+    from kyron.modelos import contas as modelo_das_contas  # noqa: PLC0415
+    from kyron.utils import open_uri  # noqa: PLC0415
 
     chamadas: list[str] = []
 
@@ -465,7 +465,7 @@ def avisos(monkeypatch):
 @pytest.fixture(autouse=True)
 def sem_steam_no_registro(monkeypatch):
     """Quem precisa de uma Steam monta a sua em ``tmp_path``."""
-    from cartridges.conquistas import arquivos  # noqa: PLC0415
+    from kyron.conquistas import arquivos  # noqa: PLC0415
 
     monkeypatch.setattr(arquivos, "_valor_do_registro", lambda *_a: None)
     monkeypatch.setattr(arquivos, "_inteiro_do_registro", lambda *_a: None)
@@ -474,7 +474,7 @@ def sem_steam_no_registro(monkeypatch):
 @pytest.fixture(autouse=True)
 def sem_ubisoft_no_registro(monkeypatch):
     """Quem precisa de instalações da Ubisoft troca `locais._do_registro`."""
-    from cartridges.conquistas.ubisoft import locais  # noqa: PLC0415
+    from kyron.conquistas.ubisoft import locais  # noqa: PLC0415
 
     monkeypatch.setattr(locais, "_do_registro", lambda: {})
 
@@ -482,7 +482,7 @@ def sem_ubisoft_no_registro(monkeypatch):
 @pytest.fixture(autouse=True)
 def sem_ea_no_registro(monkeypatch):
     """Quem precisa de instalações da EA troca `ea.jogo.chaves_do_registro`."""
-    from cartridges.conquistas.ea import jogo  # noqa: PLC0415
+    from kyron.conquistas.ea import jogo  # noqa: PLC0415
 
     monkeypatch.setattr(jogo, "chaves_do_registro", lambda: [])
 
@@ -493,7 +493,7 @@ def sem_ludusavi(request, monkeypatch):
     de fora; os demais que precisem dele disponível trocam `backup_de_saves.disponivel`."""
     if request.module.__name__.startswith("test_saves_"):
         return
-    from cartridges.saves import backup_de_saves  # noqa: PLC0415
+    from kyron.saves import backup_de_saves  # noqa: PLC0415
 
     monkeypatch.setattr(backup_de_saves, "disponivel", lambda: False)
 
@@ -529,7 +529,7 @@ def sem_thread_de_backup_sobrando():
         for thread in threading.enumerate()
         if thread.is_alive()
         and getattr(getattr(thread, "_target", None), "__module__", "")
-        == "cartridges.saves.backup_de_saves"
+        == "kyron.saves.backup_de_saves"
     ]
     assert not sobraram, f"threads de backup_de_saves ainda vivas depois do teste: {sobraram}"
 
@@ -599,7 +599,7 @@ class FakeGame:
         return self.removed and not self.blacklisted and self.status == "beaten"
 
     def get_cover_path(self) -> Path | None:
-        from cartridges.utils.save_cover import ANIMATED_SUFFIXES  # noqa: PLC0415
+        from kyron.utils.save_cover import ANIMATED_SUFFIXES  # noqa: PLC0415
 
         for suffix in (*ANIMATED_SUFFIXES, ".tiff"):
             cover_path = shared.covers_dir / f"{self.game_id}{suffix}"
@@ -624,7 +624,7 @@ def make_game():
 @pytest.fixture
 def store():
     """Uma ``Store`` limpa, sem gerenciadores: ``add_game`` não liga sinais nem roda o pipeline."""
-    from cartridges.store.store import Store  # noqa: PLC0415
+    from kyron.store.store import Store  # noqa: PLC0415
 
     instance = Store()
     shared.store = instance
@@ -665,7 +665,7 @@ def sem_area_de_trabalho(monkeypatch):
     def proibida(*_args, **_kwargs):
         raise AssertionError("o teste tentou abrir a área de trabalho de verdade (IDesktopWallpaper)")
 
-    from cartridges.utils import session_wallpaper  # noqa: PLC0415
+    from kyron.utils import session_wallpaper  # noqa: PLC0415
 
     monkeypatch.setattr(session_wallpaper, "_AreaDeTrabalho", proibida)
 
@@ -673,7 +673,7 @@ def sem_area_de_trabalho(monkeypatch):
 @pytest.fixture(autouse=True)
 def sem_fita_de_verdade(monkeypatch):
     """O `_dispositivo` (a tinytuya, com rede) falha alto; quem prova a conversa o troca por um módulo falso (`falsas`)."""
-    from cartridges.utils import session_fita  # noqa: PLC0415
+    from kyron.utils import session_fita  # noqa: PLC0415
 
     def proibido(*_args, **_kwargs):
         raise AssertionError("o teste tentou falar com uma fita de verdade (tinytuya)")
@@ -685,8 +685,8 @@ def sem_fita_de_verdade(monkeypatch):
 def sem_tuya_de_verdade(request, monkeypatch):
     """A nuvem da Tuya e a varredura da rede falham alto. Quem prova o assistente troca `fita_wizard._nuvem` e
     `session_fita.enderecos_na_rede`; quem prova a própria `enderecos_na_rede` leva a marca `varredura_real`."""
-    from cartridges import fita_wizard  # noqa: PLC0415
-    from cartridges.utils import session_fita  # noqa: PLC0415
+    from kyron import fita_wizard  # noqa: PLC0415
+    from kyron.utils import session_fita  # noqa: PLC0415
 
     def proibido(*_args, **_kwargs):
         raise AssertionError("tuya: nenhuma busca na nuvem nem na rede nos testes")
@@ -700,8 +700,8 @@ def sem_tuya_de_verdade(request, monkeypatch):
 def dados_temporarios(tmp_path, monkeypatch):
     """Pasta e subchave de registro próprias de cada teste."""
     registro = f"{_RAIZ_REGISTRO}\\{uuid.uuid4()}"
-    monkeypatch.setenv("CARTRIDGES_DADOS", str(tmp_path))
-    monkeypatch.setenv("CARTRIDGES_REGISTRO", registro)
+    monkeypatch.setenv("KYRON_DADOS", str(tmp_path))
+    monkeypatch.setenv("KYRON_REGISTRO", registro)
     yield tmp_path
     _apagar_chave(winreg.HKEY_CURRENT_USER, registro)
 

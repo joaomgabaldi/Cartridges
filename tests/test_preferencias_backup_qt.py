@@ -16,16 +16,16 @@ from PySide6.QtGui import QGuiApplication, QWindow
 from PySide6.QtQml import QQmlComponent, QQmlEngine, QQmlExpression
 from PySide6.QtQuick import QQuickItem
 
-from cartridges import shared
-from cartridges.modelos import backup_da_biblioteca as modulo
-from cartridges.modelos import tarefas
-from cartridges.modelos.backup_da_biblioteca import BackupDasPreferencias
-from cartridges.modelos.preferencias import Preferencias
-from cartridges.saves import backup_de_saves, pasta
-from cartridges.utils import backup, redefinir
+from kyron import shared
+from kyron.modelos import backup_da_biblioteca as modulo
+from kyron.modelos import tarefas
+from kyron.modelos.backup_da_biblioteca import BackupDasPreferencias
+from kyron.modelos.preferencias import Preferencias
+from kyron.saves import backup_de_saves, pasta
+from kyron.utils import backup, redefinir
 from tests import apoio_aplicativo
 
-QML = Path(__file__).resolve().parent.parent / "cartridges" / "qml"
+QML = Path(__file__).resolve().parent.parent / "kyron" / "qml"
 AGUARDE = "Aguarde o fim do backup ou da restauração dos saves e tente novamente."
 URL = QUrl.fromLocalFile("X:/backup.zip")
 
@@ -84,7 +84,7 @@ def _achar(raiz, nome):
 class _Pagina:
     def __init__(self, preferencias, arquivo="PaginaDoBackup.qml"):
         self.motor = QQmlEngine()
-        from cartridges.modelos.provedor_de_icones import ProvedorDeIcones  # noqa: PLC0415
+        from kyron.modelos.provedor_de_icones import ProvedorDeIcones  # noqa: PLC0415
         self.motor.addImageProvider("icone", ProvedorDeIcones())
         self.motor.rootContext().setContextProperty("preferencias", preferencias)
         componente = QQmlComponent(self.motor, QUrl.fromLocalFile(str(QML / arquivo)))
@@ -219,7 +219,7 @@ def test_restaurar_saves_some_sem_o_ludusavi_e_o_grupo_fica_com_as_outras_linhas
 def test_grupo_some_quando_nenhuma_linha_aparece_e_volta_com_uma(app_qt):
     """O grupo conta as linhas pela regra (`aparece`); sem nenhuma ele some, e com uma ele volta."""
     motor = QQmlEngine()
-    from cartridges.modelos.provedor_de_icones import ProvedorDeIcones  # noqa: PLC0415
+    from kyron.modelos.provedor_de_icones import ProvedorDeIcones  # noqa: PLC0415
     motor.addImageProvider("icone", ProvedorDeIcones())
     componente = QQmlComponent(motor)
     componente.setData(

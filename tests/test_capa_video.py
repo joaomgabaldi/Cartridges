@@ -11,8 +11,8 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
-from cartridges import shared
-from cartridges.utils import capa_video
+from kyron import shared
+from kyron.utils import capa_video
 
 precisa_do_ffmpeg = pytest.mark.skipif(
     capa_video.executavel() is None, reason="ffmpeg não encontrado no PATH"

@@ -11,10 +11,10 @@ from PySide6.QtGui import QFont, QFontMetricsF
 from PySide6.QtQml import QQmlEngine, QQmlExpression
 from PySide6.QtTest import QTest
 
-from cartridges import shared
-from cartridges.jogo import Jogo
-from cartridges.modelos import sessao as modulo_da_sessao
-from cartridges.process_session import ProcessSession
+from kyron import shared
+from kyron.jogo import Jogo
+from kyron.modelos import sessao as modulo_da_sessao
+from kyron.process_session import ProcessSession
 from tests.apoio_qml_biblioteca import _achar, _App, _esperar, _jogos
 from tests.apoio_qml_big_picture import _aberto_com, _entrar, _itens
 from tests.apoio_qml_detalhes import _abrir_pelo_cartao, _clicar, _foco_dentro_de

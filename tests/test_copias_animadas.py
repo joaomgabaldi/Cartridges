@@ -11,9 +11,9 @@ import threading
 import pytest
 from PIL import Image
 
-from cartridges import shared
-from cartridges.modelos import tarefas
-from cartridges.utils import copias_animadas
+from kyron import shared
+from kyron.modelos import tarefas
+from kyron.utils import copias_animadas
 
 
 def _animada(caminho, duracoes, formato="WEBP", tons=None):
@@ -991,7 +991,7 @@ def test_gancho_que_levanta_nao_prende_o_lote(fila, tarefas_criadas, geradas, mo
 
 def test_capa_nova_avisa_a_grade_quando_a_copia_fica_pronta(fila, tarefas_criadas, geradas, monkeypatch, tmp_path):
     """O ``apagar`` da troca não pode levar o ``preparar`` da capa nova: a grade é avisada das duas cópias."""
-    from cartridges.utils import save_cover  # noqa: PLC0415
+    from kyron.utils import save_cover  # noqa: PLC0415
 
     entregas = []  # a entrega à principal de verdade chega depois do que a principal já fez
     monkeypatch.setattr(copias_animadas, "entregar_na_tela", lambda funcao, *args: entregas.append((funcao, args)))

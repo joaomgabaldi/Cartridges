@@ -9,10 +9,10 @@ import json
 
 import pytest
 
-from cartridges import shared
-from cartridges.importer.importer import Importer
-from cartridges.store.store import alvo_do_comando
-from cartridges.utils import session_log
+from kyron import shared
+from kyron.importer.importer import Importer
+from kyron.store.store import alvo_do_comando
+from kyron.utils import session_log
 
 
 @pytest.mark.parametrize(

@@ -2,9 +2,9 @@
 
 import os
 
-from cartridges import shared
-from cartridges.conquistas import catalogo
-from cartridges.conquistas.ubisoft import pacote
+from kyron import shared
+from kyron.conquistas import catalogo
+from kyron.conquistas.ubisoft import pacote
 from tests.apoio_conquistas import PNG_MINIMO, gravar_pacote, pastas  # noqa: F401
 
 PT = {

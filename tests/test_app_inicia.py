@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""O ponto de entrada `python -m cartridges` e o que ele monta."""
+"""O ponto de entrada `python -m kyron` e o que ele monta."""
 
 import json
 import os
@@ -15,12 +15,12 @@ from PySide6.QtCore import QCoreApplication, QEventLoop, QObject, QTimer, QUrl
 from PySide6.QtQml import QQmlComponent, QQmlEngine
 from PySide6.QtQuick import QQuickItem
 
-from cartridges import shared
-from cartridges.jogo import Jogo
-from cartridges.modelos.biblioteca import ModeloDaBiblioteca
+from kyron import shared
+from kyron.jogo import Jogo
+from kyron.modelos.biblioteca import ModeloDaBiblioteca
 
 RAIZ = Path(__file__).resolve().parent.parent
-QML = RAIZ / "cartridges" / "qml"
+QML = RAIZ / "kyron" / "qml"
 
 
 def _ficha(pasta, game_id, nome):
@@ -36,12 +36,12 @@ def test_app_carrega_e_sai(tmp_path):
     (games / "quebrada.json").write_text("{ isto nao e json", encoding="utf-8")
     ambiente = {
         **os.environ,
-        "CARTRIDGES_DADOS": str(tmp_path),
-        "CARTRIDGES_REGISTRO": rf"Software\CartridgesTestes\app-{uuid.uuid4()}",
+        "KYRON_DADOS": str(tmp_path),
+        "KYRON_REGISTRO": rf"Software\KyronTestes\app-{uuid.uuid4()}",
         "QT_QPA_PLATFORM": "offscreen",
     }
     resultado = subprocess.run(
-        [sys.executable, "-m", "cartridges", "--sair-apos-carregar"],
+        [sys.executable, "-m", "kyron", "--sair-apos-carregar"],
         cwd=RAIZ,
         env=ambiente,
         capture_output=True,
@@ -55,7 +55,7 @@ def test_app_carrega_e_sai(tmp_path):
 
 def _carregar(url, **propriedades):
     motor = QQmlEngine()
-    from cartridges.modelos.provedor_de_icones import ProvedorDeIcones  # noqa: PLC0415
+    from kyron.modelos.provedor_de_icones import ProvedorDeIcones  # noqa: PLC0415
     motor.addImageProvider("icone", ProvedorDeIcones())
     componente = QQmlComponent(motor, QUrl.fromLocalFile(str(QML / url)))
     objeto = componente.createWithInitialProperties(propriedades)
@@ -82,7 +82,7 @@ def test_a_grade_cria_um_cartao_por_jogo(app_qt):
 
 
 def test_dialogo_de_confirmacao_usa_o_texto_aprovado(app_qt):
-    from cartridges.ponte import Ponte  # noqa: PLC0415
+    from kyron.ponte import Ponte  # noqa: PLC0415
 
     ponte = Ponte()
     pedidos = []
@@ -106,10 +106,10 @@ def test_dialogo_de_confirmacao_usa_o_texto_aprovado(app_qt):
 
 def test_primeiro_lancamento_pede_confirmacao(app_qt, monkeypatch):
     """Um jogo restaurado de um backup só inicia depois de a pessoa conferir o comando."""
-    from cartridges.ponte import Ponte  # noqa: PLC0415
+    from kyron.ponte import Ponte  # noqa: PLC0415
 
     executados = []
-    monkeypatch.setattr("cartridges.jogo.run_executable", lambda comando, admin: executados.append((comando, admin)))
+    monkeypatch.setattr("kyron.jogo.run_executable", lambda comando, admin: executados.append((comando, admin)))
     ponte = Ponte()
     pedidos = []
     ponte.confirmacaoPedida.connect(lambda titulo, corpo: pedidos.append((titulo, corpo)))
@@ -135,7 +135,7 @@ def test_primeiro_lancamento_pede_confirmacao(app_qt, monkeypatch):
 
 
 def test_aviso_chega_como_texto(app_qt):
-    from cartridges.ponte import Ponte  # noqa: PLC0415
+    from kyron.ponte import Ponte  # noqa: PLC0415
 
     ponte = Ponte()
     jogo = Jogo({"game_id": "a", "source": "imported", "name": "<b>Alfa</b>"})
@@ -146,7 +146,7 @@ def test_aviso_chega_como_texto(app_qt):
 
 def test_iniciar_roda_o_executavel_do_jogo(app_qt, monkeypatch):
     lancados = []
-    monkeypatch.setattr("cartridges.jogo.run_executable", lambda comando, admin: lancados.append((comando, admin)))
+    monkeypatch.setattr("kyron.jogo.run_executable", lambda comando, admin: lancados.append((comando, admin)))
     modelo = ModeloDaBiblioteca()
     jogo = Jogo({"game_id": "a", "source": "imported", "name": "Alfa", "executable": "fake.exe"})
     jogo.save = lambda: None
@@ -159,7 +159,7 @@ def test_iniciar_roda_o_executavel_do_jogo(app_qt, monkeypatch):
 _QML_QUE_FALHA = r"""
 import json, sys
 from types import SimpleNamespace
-from cartridges import app as modulo_app
+from kyron import app as modulo_app
 
 chamadas = []
 modulo_app.session_fita = SimpleNamespace(migrar_roxo_antigo=lambda: chamadas.append("migrar"), abrir=lambda: chamadas.append("abrir"), fechar=lambda: chamadas.append("fechar"))
@@ -174,8 +174,8 @@ class MotorQueNaoCarrega(modulo_app.QQmlApplicationEngine):
 modulo_app.QQmlApplicationEngine = MotorQueNaoCarrega
 # R2: o `AplicacaoQt` que o `main()` cria, guardado para conferir quem recebe o `saindo`.
 from PySide6.QtCore import SIGNAL
-from cartridges import shared
-from cartridges.utils import session_fita, session_wallpaper
+from kyron import shared
+from kyron.utils import session_fita, session_wallpaper
 instancias = []
 
 
@@ -209,8 +209,8 @@ def test_qml_que_nao_carrega_nao_deixa_as_fitas_acesas_e_o_saindo_encerra_a_sess
     """
     ambiente = {
         **os.environ,
-        "CARTRIDGES_DADOS": str(tmp_path),
-        "CARTRIDGES_REGISTRO": rf"Software\CartridgesTestes\app-{uuid.uuid4()}",
+        "KYRON_DADOS": str(tmp_path),
+        "KYRON_REGISTRO": rf"Software\KyronTestes\app-{uuid.uuid4()}",
         "QT_QPA_PLATFORM": "offscreen",
     }
     resultado = subprocess.run(
@@ -229,7 +229,7 @@ def test_qml_que_nao_carrega_nao_deixa_as_fitas_acesas_e_o_saindo_encerra_a_sess
 _CONTEXTO_VIVO = r"""
 import gc, json, sys
 from types import SimpleNamespace
-from cartridges import app as modulo_app
+from kyron import app as modulo_app
 
 modulo_app.session_fita = SimpleNamespace(migrar_roxo_antigo=lambda: None, abrir=lambda: None, fechar=lambda: None)
 modulo_app.session_wallpaper = SimpleNamespace(restaurar_orfaos=lambda: None)
@@ -257,8 +257,8 @@ def test_tudo_o_que_vai_ao_contexto_do_qml_sobrevive_ao_fim_do_abrir(tmp_path):
     """Sem dono Python o objeto morre quando o `_abrir` devolve e a biblioteca abre em branco (grade vazia)."""
     ambiente = {
         **os.environ,
-        "CARTRIDGES_DADOS": str(tmp_path),
-        "CARTRIDGES_REGISTRO": rf"Software\CartridgesTestes\app-{uuid.uuid4()}",
+        "KYRON_DADOS": str(tmp_path),
+        "KYRON_REGISTRO": rf"Software\KyronTestes\app-{uuid.uuid4()}",
         "QT_QPA_PLATFORM": "offscreen",
     }
     resultado = subprocess.run(
@@ -272,7 +272,7 @@ def test_tudo_o_que_vai_ao_contexto_do_qml_sobrevive_ao_fim_do_abrir(tmp_path):
 
 def test_encerrar_roda_todo_passo_mesmo_com_um_que_falha(caplog):
     """Uma falha num passo do fechamento não pula o drenar das gravações (o tempo da sessão no jogo)."""
-    from cartridges.app import _encerrar_em_ordem  # noqa: PLC0415
+    from kyron.app import _encerrar_em_ordem  # noqa: PLC0415
 
     feitos = []
 

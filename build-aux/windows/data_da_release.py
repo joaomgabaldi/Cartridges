@@ -6,7 +6,7 @@
 
 """Põe a data na <release> do topo do metainfo, para a CI do instalador.
 
-A versão vem de ``cartridges/shared.py: VERSION`` e as novidades já estão
+A versão vem de ``kyron/shared.py: VERSION`` e as novidades já estão
 escritas na <release> do topo; aqui só muda a data.
 
 Uso: python data_da_release.py <metainfo.xml.in> <versão> <AAAA-MM-DD>

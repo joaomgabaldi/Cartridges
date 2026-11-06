@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Os seletores de capa e de logo do SteamGridDB (`cartridges.modelos.seletores`).
+"""Os seletores de capa e de logo do SteamGridDB (`kyron.modelos.seletores`).
 
 Nenhum teste fala com a rede: o SteamGridDB e o download são falsos. Os modelos são testados sem
 tela; a interface (`SeletorDeImagens.qml`) tem os seus testes em `test_qml_edicao.py`.
@@ -17,11 +17,11 @@ from types import SimpleNamespace
 import pytest
 from PySide6.QtCore import QEventLoop, QTimer
 
-from cartridges import shared
-from cartridges.modelos import seletores
-from cartridges.utils.name_cleaner import clean_for_search
-from cartridges.utils.busca_do_seletor import tamanho_baixado
-from cartridges.utils.steamgriddb import SgdbAuthError, SgdbError
+from kyron import shared
+from kyron.modelos import seletores
+from kyron.utils.name_cleaner import clean_for_search
+from kyron.utils.busca_do_seletor import tamanho_baixado
+from kyron.utils.steamgriddb import SgdbAuthError, SgdbError
 from tests.apoio_seletores import (  # noqa: F401  (as fixtures vêm junto)
     Destino,
     SgdbFalso,
@@ -128,7 +128,7 @@ def test_fechar_o_seletor_durante_a_conversao_mantem_a_capa_do_editor(edicao, te
     """Quem desistiu (fechou o seletor) não vê a capa mudar depois; nada de temporário sobra."""
     import threading  # noqa: PLC0415
 
-    from cartridges import edicao as regra  # noqa: PLC0415
+    from kyron import edicao as regra  # noqa: PLC0415
 
     liberar = threading.Event()
     original = regra.preparar_capa
@@ -360,7 +360,7 @@ def test_logos_vem_na_ordem_da_pagina(baixar, temp):
 def test_busca_do_seletor_sem_gi():
     codigo = (
         "import builtins, sys; builtins._ = lambda m: m; sys.path.insert(0, sys.argv[1]);"
-        "import cartridges.utils.busca_do_seletor, cartridges.modelos.seletores;"
+        "import kyron.utils.busca_do_seletor, kyron.modelos.seletores;"
         "sys.exit(1 if 'gi' in sys.modules else 0)"
     )
     resultado = subprocess.run([sys.executable, "-c", codigo, str(RAIZ)], capture_output=True, text=True, check=False)
@@ -372,7 +372,7 @@ def test_busca_do_seletor_sem_gi():
 
 @pytest.fixture
 def edicao(app_qt, store, baixar, temp):
-    from cartridges.modelos.edicao import ModeloDaEdicao  # noqa: PLC0415
+    from kyron.modelos.edicao import ModeloDaEdicao  # noqa: PLC0415
 
     modelo = ModeloDaEdicao(SimpleNamespace(pedir_dialogo=lambda *a: None))
     for seletor in (modelo.seletorDeCapa, modelo.seletorDeLogo):

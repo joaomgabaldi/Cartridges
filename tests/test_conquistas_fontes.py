@@ -5,12 +5,12 @@ from types import SimpleNamespace
 
 import pytest
 
-from cartridges.conquistas import fontes, historico
-from cartridges.conquistas.ea import api as ea_api, conta as ea_conta, jogo as ea_jogo
-from cartridges.conquistas.epic import api as epic_api, conta as epic_conta
-from cartridges.conquistas.fontes import Fonte
-from cartridges.conquistas.ubisoft import locais
-from cartridges.conquistas.xbox import api, conta
+from kyron.conquistas import fontes, historico
+from kyron.conquistas.ea import api as ea_api, conta as ea_conta, jogo as ea_jogo
+from kyron.conquistas.epic import api as epic_api, conta as epic_conta
+from kyron.conquistas.fontes import Fonte
+from kyron.conquistas.ubisoft import locais
+from kyron.conquistas.xbox import api, conta
 from tests.apoio_conquistas import criar, pastas  # noqa: F401
 
 _AUMID = 'start "" "shell:AppsFolder\\Microsoft.Cod_8wekyb3d8bbwe!Game"'

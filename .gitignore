@@ -23,11 +23,11 @@ __pycache__/
 /capturas/
 
 # Gravado so pelo montar_app_qt.py
-cartridges/instalacao.json
+kyron/instalacao.json
 
 # QWindowKit: dependencias baixadas e a DLL compilada
 /build-aux/windows/qwk/_deps/
-/cartridges/janela/*.dll
+/kyron/janela/*.dll
 
 # Pastas de teste manual (atalhos de mentira)
 /_dev/

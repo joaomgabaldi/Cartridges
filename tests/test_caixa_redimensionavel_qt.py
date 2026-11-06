@@ -8,8 +8,8 @@ from PySide6.QtCore import QMetaObject, QPoint, Qt
 from PySide6.QtQml import QQmlEngine, QQmlExpression
 from PySide6.QtTest import QTest
 
-from cartridges import shared
-from cartridges.utils import caixa_redimensionavel as caixa
+from kyron import shared
+from kyron.utils import caixa_redimensionavel as caixa
 from tests.apoio_qml_biblioteca import _achar, _App, _esperar, _jogos
 from tests.apoio_qml_detalhes import _abrir_pelo_cartao
 

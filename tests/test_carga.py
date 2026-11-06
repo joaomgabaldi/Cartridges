@@ -6,9 +6,9 @@
 
 import json
 
-from cartridges import shared
-from cartridges.carga import carregar_jogos_do_disco, sanitize_game_fields
-from cartridges.jogo import Jogo
+from kyron import shared
+from kyron.carga import carregar_jogos_do_disco, sanitize_game_fields
+from kyron.jogo import Jogo
 
 
 class _StoreDeMentira:
@@ -158,7 +158,7 @@ def test_campo_do_aviso_dos_saves_de_tipo_errado_cai_no_saneador():
 
 
 def test_campo_do_backup_desligado_persiste_e_tipo_errado_cai_no_saneador(app_dirs):
-    from cartridges.store.managers.file_manager import FileManager  # noqa: PLC0415
+    from kyron.store.managers.file_manager import FileManager  # noqa: PLC0415
 
     dados = {"source": "shortcuts", "game_id": "shortcuts_d", "name": "D", "executable": "x", "added": 0}
     jogo = Jogo({**dados, "backup_dos_saves_desligado": True})
@@ -175,8 +175,8 @@ def test_campo_do_backup_desligado_persiste_e_tipo_errado_cai_no_saneador(app_di
 
 
 def test_file_manager_grava_exatamente_as_chaves_da_ficha(app_dirs):
-    from cartridges.jogo import PERSISTED_ATTRS  # noqa: PLC0415
-    from cartridges.store.managers.file_manager import FileManager  # noqa: PLC0415
+    from kyron.jogo import PERSISTED_ATTRS  # noqa: PLC0415
+    from kyron.store.managers.file_manager import FileManager  # noqa: PLC0415
 
     jogo = Jogo(_ficha("shortcuts_f"))
     FileManager().main(jogo, {})

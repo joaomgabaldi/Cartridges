@@ -15,10 +15,10 @@ from pathlib import Path
 
 import pytest
 
-from cartridges import shared
-from cartridges.jogo import Jogo
-from cartridges.store.managers import async_manager
-from cartridges.store.managers.file_manager import FileManager
+from kyron import shared
+from kyron.jogo import Jogo
+from kyron.store.managers import async_manager
+from kyron.store.managers.file_manager import FileManager
 
 _RAIZ = Path(__file__).resolve().parent.parent
 
@@ -64,7 +64,7 @@ def test_gravacao_depois_de_encerrar_roda_na_hora():
 def test_rede_nao_segura_a_saida():
     codigo = (
         "import time\n"
-        "from cartridges.store.managers import async_manager\n"
+        "from kyron.store.managers import async_manager\n"
         "class G(async_manager.AsyncManager):\n"
         "    def main(self, game, dados):\n"
         "        time.sleep(30)\n"
@@ -74,8 +74,8 @@ def test_rede_nao_segura_a_saida():
     )
     ambiente = {
         **os.environ,
-        "CARTRIDGES_DADOS": os.environ["CARTRIDGES_DADOS"],
-        "CARTRIDGES_REGISTRO": os.environ["CARTRIDGES_REGISTRO"],
+        "KYRON_DADOS": os.environ["KYRON_DADOS"],
+        "KYRON_REGISTRO": os.environ["KYRON_REGISTRO"],
     }
     inicio = time.monotonic()
     resultado = subprocess.run(

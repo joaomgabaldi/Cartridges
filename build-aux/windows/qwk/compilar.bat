@@ -16,5 +16,5 @@ cmake -S "%DEPS%\qwindowkit" -B "%DEPS%\build-qwk" -G Ninja -DCMAKE_BUILD_TYPE=R
 cmake --build "%DEPS%\build-qwk" --target install || exit /b 1
 
 cmake -S "%AQUI%." -B "%DEPS%\build-ponte" -G Ninja -DCMAKE_BUILD_TYPE=Release ^
-  -DCMAKE_PREFIX_PATH="%DEPS%\qt;%DEPS%\qwk" -DCMAKE_INSTALL_PREFIX="%AQUI%..\..\..\cartridges\janela" || exit /b 1
+  -DCMAKE_PREFIX_PATH="%DEPS%\qt;%DEPS%\qwk" -DCMAKE_INSTALL_PREFIX="%AQUI%..\..\..\kyron\janela" || exit /b 1
 cmake --build "%DEPS%\build-ponte" --target install || exit /b 1

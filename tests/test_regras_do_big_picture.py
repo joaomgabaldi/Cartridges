@@ -13,9 +13,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from cartridges.modelos import regras_do_big_picture as regras
-from cartridges.modelos.ordem import Linha
-from cartridges.xinput import intervalo_de_repeticao_us
+from kyron.modelos import regras_do_big_picture as regras
+from kyron.modelos.ordem import Linha
+from kyron.xinput import intervalo_de_repeticao_us
 
 RAIZ = Path(__file__).resolve().parent.parent
 DADOS = RAIZ / "data"
@@ -30,7 +30,7 @@ def _linha(jogo_id, jogado_em=0, removido=False, nome=None):
 
 
 def test_regras_sem_gi_nem_qt():
-    codigo = "import builtins, sys; builtins._ = lambda s: s; import cartridges.modelos.regras_do_big_picture; assert not [m for m in sys.modules if m == 'gi' or m.startswith(('gi.', 'PySide6'))], sorted(sys.modules)"
+    codigo = "import builtins, sys; builtins._ = lambda s: s; import kyron.modelos.regras_do_big_picture; assert not [m for m in sys.modules if m == 'gi' or m.startswith(('gi.', 'PySide6'))], sorted(sys.modules)"
     saida = subprocess.run([sys.executable, "-c", codigo], cwd=RAIZ, capture_output=True, text=True, check=False)
     assert saida.returncode == 0, saida.stderr
 

@@ -2,11 +2,11 @@
 
 import pytest
 
-from cartridges.conquistas import catalogo, historico, progresso
-from cartridges.conquistas.catalogo import Catalogo, ConquistaInfo
-from cartridges.conquistas.formatos import Desbloqueio
-from cartridges.conquistas.progresso import Linha, aparencia, dica, montar
-from cartridges.conquistas.xbox import conta
+from kyron.conquistas import catalogo, historico, progresso
+from kyron.conquistas.catalogo import Catalogo, ConquistaInfo
+from kyron.conquistas.formatos import Desbloqueio
+from kyron.conquistas.progresso import Linha, aparencia, dica, montar
+from kyron.conquistas.xbox import conta
 from tests.apoio_conquistas import com_fonte
 
 
@@ -91,7 +91,7 @@ def test_fonte_gravada_manda_mais_que_o_appid_atual(make_game):
 
 
 def test_cartao_da_epic_some_sem_conta(make_game, monkeypatch):
-    from cartridges.conquistas.epic import conta as conta_epic  # noqa: PLC0415
+    from kyron.conquistas.epic import conta as conta_epic  # noqa: PLC0415
 
     game = make_game()
     catalogo.guardar("epic-ns1", Catalogo((ConquistaInfo("EPIC:1", "T", "", "", "", False),), 0, False))

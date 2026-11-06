@@ -1,9 +1,9 @@
 """Managers dos .ini no pipeline: busca (antes da Steam) e aplicação (depois)."""
 
-from cartridges.jogo import Jogo
-from cartridges.store.managers.aplicacao_dos_inis_manager import AplicacaoDosInisManager
-from cartridges.store.managers.emulador_manager import EmuladorManager
-from cartridges.store.managers.steam_api_manager import SteamAPIManager, _keep_user_edits
+from kyron.jogo import Jogo
+from kyron.store.managers.aplicacao_dos_inis_manager import AplicacaoDosInisManager
+from kyron.store.managers.emulador_manager import EmuladorManager
+from kyron.store.managers.steam_api_manager import SteamAPIManager, _keep_user_edits
 
 
 def _jogo(executavel, **campos) -> Jogo:
@@ -91,7 +91,7 @@ def test_steam_appid_do_atalho_pula_a_adocao(store, tmp_path):
 
 
 def test_pipeline_de_ponta_a_ponta(store, tmp_path, schema):
-    from cartridges.store.pipeline import Pipeline  # noqa: PLC0415
+    from kyron.store.pipeline import Pipeline  # noqa: PLC0415
 
     pasta = _montar(tmp_path)
     schema.set_string("nome-do-jogador", "Ana")

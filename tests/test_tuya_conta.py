@@ -4,9 +4,9 @@
 
 """A conta da Tuya salva pelo assistente, criptografada com o DPAPI de verdade."""
 
-from cartridges import shared
-from cartridges.utils import tuya_conta
-from cartridges.utils.tuya_conta import Conta
+from kyron import shared
+from kyron.utils import tuya_conta
+from kyron.utils.tuya_conta import Conta
 
 
 def test_ida_e_volta_recupera_as_credenciais():

@@ -11,9 +11,9 @@ from types import SimpleNamespace
 import pytest
 from PySide6.QtCore import QObject, Qt, Signal
 
-from cartridges import shared
-from cartridges.modelos.controle import ControleDaGrade
-from cartridges.xinput import (
+from kyron import shared
+from kyron.modelos.controle import ControleDaGrade
+from kyron.xinput import (
     REPEAT_DELAY_US,
     REPEAT_INTERVAL_US,
     RUMBLE_MOVE,
@@ -226,7 +226,7 @@ def test_passar_vibra_o_tique_leve_so_com_a_preferencia(m):
 
 def test_xinput_nao_importa_gi_nem_qt():
     codigo = (
-        "import sys, cartridges.xinput\n"
+        "import sys, kyron.xinput\n"
         "ruins = [n for n in sys.modules if n == 'gi' or n.startswith(('gi.', 'PySide6', 'PyQt'))]\n"
         "print(ruins)\n"
     )

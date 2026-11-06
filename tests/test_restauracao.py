@@ -7,8 +7,8 @@ foi encontrado. Sem o arquivo, nada disto roda."""
 
 import json
 
-from cartridges import shared
-from cartridges.utils import restauracao
+from kyron import shared
+from kyron.utils import restauracao
 
 
 def test_sem_arquivo_nao_ha_fluxo():
@@ -85,7 +85,7 @@ def test_ids_que_dependem_de_atalho(tmp_path):
 
 
 def _importer_com(store, game_ids_varridos):
-    from cartridges.importer.importer import Importer  # noqa: PLC0415
+    from kyron.importer.importer import Importer  # noqa: PLC0415
 
     importer = Importer()
     importer.scanned_source_ids = {"shortcuts"}
@@ -105,7 +105,7 @@ def test_pendente_nao_vira_desinstalado(store, make_game):
 
 
 def test_resolver_pendencias_so_depois_de_varrer_os_atalhos(store, make_game):
-    from cartridges.importer.importer import Importer  # noqa: PLC0415
+    from kyron.importer.importer import Importer  # noqa: PLC0415
 
     store.add_game(make_game(game_id="achado"), {}, run_pipeline=False)
     restauracao.gravar(["achado"], 1)
@@ -121,8 +121,8 @@ def test_resolver_pendencias_so_depois_de_varrer_os_atalhos(store, make_game):
 
 
 def test_biblioteca_esconde_pendente(app_qt):
-    from cartridges.jogo import Jogo  # noqa: PLC0415
-    from cartridges.modelos.biblioteca import ModeloDaBiblioteca  # noqa: PLC0415
+    from kyron.jogo import Jogo  # noqa: PLC0415
+    from kyron.modelos.biblioteca import ModeloDaBiblioteca  # noqa: PLC0415
 
     modelo = ModeloDaBiblioteca()
     restauracao.gravar(["pendente"], 1)
@@ -146,7 +146,7 @@ def test_biblioteca_esconde_pendente(app_qt):
 
 import pytest  # noqa: E402
 
-from cartridges.utils import session_log  # noqa: E402
+from kyron.utils import session_log  # noqa: E402
 
 
 @pytest.fixture
@@ -265,8 +265,8 @@ def test_mesclar_dados(store, make_game, pasta_de_atalhos):
 
 
 def test_mesclar_soma_as_conquistas(store, make_game, pasta_de_atalhos):
-    from cartridges.conquistas import historico  # noqa: PLC0415
-    from cartridges.conquistas.formatos import Desbloqueio  # noqa: PLC0415
+    from kyron.conquistas import historico  # noqa: PLC0415
+    from kyron.conquistas.formatos import Desbloqueio  # noqa: PLC0415
 
     caminho, restaurado, novo = _cenario_conflito(store, make_game, pasta_de_atalhos)
     historico.registrar("gt", [Desbloqueio("A", 5)])
@@ -281,8 +281,8 @@ def test_manter_backup_soma_as_conquistas_do_novo(
 ):
     """Conquista desbloqueada é fato, não versão que se escolhe: o jogo novo
     sai, mas o que ele tinha vai para o restaurado."""
-    from cartridges.conquistas import historico  # noqa: PLC0415
-    from cartridges.conquistas.formatos import Desbloqueio  # noqa: PLC0415
+    from kyron.conquistas import historico  # noqa: PLC0415
+    from kyron.conquistas.formatos import Desbloqueio  # noqa: PLC0415
 
     caminho, restaurado, novo = _cenario_conflito(store, make_game, pasta_de_atalhos)
     historico.registrar("gt", [Desbloqueio("A", 5)])
@@ -296,8 +296,8 @@ def test_manter_backup_soma_as_conquistas_do_novo(
 def test_manter_este_pc_soma_as_conquistas_do_restaurado(
     store, make_game, pasta_de_atalhos
 ):
-    from cartridges.conquistas import historico  # noqa: PLC0415
-    from cartridges.conquistas.formatos import Desbloqueio  # noqa: PLC0415
+    from kyron.conquistas import historico  # noqa: PLC0415
+    from kyron.conquistas.formatos import Desbloqueio  # noqa: PLC0415
 
     caminho, restaurado, novo = _cenario_conflito(store, make_game, pasta_de_atalhos)
     historico.registrar("gt", [Desbloqueio("A", 5), Desbloqueio("B", 9)])
@@ -338,7 +338,7 @@ def test_excluir_pendente_apaga_de_vez(store, make_game):
 
 
 def test_importacao_da_restauracao_varre_atalhos_mesmo_com_a_fonte_desligada(schema, monkeypatch):
-    from cartridges import aplicativo as aplicativo_module  # noqa: PLC0415
+    from kyron import aplicativo as aplicativo_module  # noqa: PLC0415
 
     fontes = []
 

@@ -17,10 +17,10 @@ from PySide6.QtCore import QMetaObject, Qt
 from PySide6.QtGui import QColor
 from PySide6.QtQuick import QQuickItem
 
-from cartridges import shared
-from cartridges.modelos import preferencias as preferencias_mod
-from cartridges.modelos.preferencias import Preferencias
-from cartridges.utils import session_fita
+from kyron import shared
+from kyron.modelos import preferencias as preferencias_mod
+from kyron.modelos.preferencias import Preferencias
+from kyron.utils import session_fita
 from tests.apoio_fita import falsas, pastas, sem_fade, sem_vigia  # noqa: F401
 from tests.apoio_qml_biblioteca import _App, _esperar, _jogos
 from tests.apoio_qml_preferencias import _avaliar
@@ -386,9 +386,9 @@ def test_session_fita_sem_gdk():
     codigo = (
         "import builtins, sys; builtins._ = lambda m: m; "
         "builtins.ngettext = lambda s, p, n: s if n == 1 else p; "
-        "from cartridges.utils import session_fita; "
+        "from kyron.utils import session_fita; "
         "assert not hasattr(session_fita, 'cor_para_rgba') and not hasattr(session_fita, 'rgba_para_cor'); "
-        "import cartridges.modelos.preferencias; "
+        "import kyron.modelos.preferencias; "
         "assert 'gi' not in sys.modules"
     )
     subprocess.run([sys.executable, "-c", codigo], check=True, cwd=Path(__file__).resolve().parent.parent, timeout=60)
@@ -581,7 +581,7 @@ def test_a3_reacender_das_preferencias_nao_devolve_nem_perde_fita(p, falsas, mon
 
 
 def test_b4_versao_da_varredura_e_resposta_da_consulta_nova(monkeypatch, schema):  # noqa: ARG001
-    from cartridges.fita_wizard import com_enderecos  # noqa: PLC0415
+    from kyron.fita_wizard import com_enderecos  # noqa: PLC0415
     from tests.apoio_fita import FitaFalsa, Msg  # noqa: PLC0415
 
     achados = {"192.168.0.150": {"gwId": "eb0", "version": "3.4"}}
@@ -602,7 +602,7 @@ def test_b4_versao_da_varredura_e_resposta_da_consulta_nova(monkeypatch, schema)
 
 
 def test_conftest_bloqueia_a_tuya():
-    from cartridges import fita_wizard  # noqa: PLC0415
+    from kyron import fita_wizard  # noqa: PLC0415
 
     mensagem = "tuya: nenhuma busca na nuvem nem na rede nos testes"
     with pytest.raises(AssertionError, match=mensagem):
@@ -613,7 +613,7 @@ def test_conftest_bloqueia_a_tuya():
 
 def _thread_presa(monkeypatch):
     """A thread da busca capturada: o teste a roda quando quiser."""
-    import cartridges.fita_wizard as wizard_module  # noqa: PLC0415
+    import kyron.fita_wizard as wizard_module  # noqa: PLC0415
 
     tarefas = []
     monkeypatch.setattr(
@@ -629,7 +629,7 @@ def _thread_presa(monkeypatch):
 
 
 def test_resultado_da_busca_depois_de_fechar_e_descartado(p, monkeypatch, flush_idle):
-    import cartridges.fita_wizard as wizard_module  # noqa: PLC0415
+    import kyron.fita_wizard as wizard_module  # noqa: PLC0415
 
     tarefas = _thread_presa(monkeypatch)
     monkeypatch.setattr(
@@ -661,7 +661,7 @@ def test_resultado_da_busca_depois_de_fechar_e_descartado(p, monkeypatch, flush_
 def test_segredo_nunca_vai_ao_log(p, monkeypatch, caplog, flush_idle):
     import logging  # noqa: PLC0415
 
-    import cartridges.fita_wizard as wizard_module  # noqa: PLC0415
+    import kyron.fita_wizard as wizard_module  # noqa: PLC0415
 
     def nuvem(_regiao, chave, segredo):
         raise RuntimeError(f"401 em https://api/?id={chave}&secret={segredo}")

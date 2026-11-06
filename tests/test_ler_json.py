@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from cartridges.utils import game_logo, ler_json
+from kyron.utils import game_logo, ler_json
 
 
 def _abrir_negando(monkeypatch, vezes: int) -> list[int]:

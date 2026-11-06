@@ -42,8 +42,8 @@ def preparar_main(monkeypatch, abrir, eventos: list) -> None:
 
     ``abrir(app, argv, abertura)`` faz o papel do `_abrir`; ``eventos`` recebe "log", "release" e "relancar".
     """
-    from cartridges import app as modulo_app  # noqa: PLC0415
-    from cartridges.utils import single_instance  # noqa: PLC0415
+    from kyron import app as modulo_app  # noqa: PLC0415
+    from kyron.utils import single_instance  # noqa: PLC0415
 
     monkeypatch.setattr(single_instance, "acquire", lambda: True)
     monkeypatch.setattr(single_instance, "release", lambda: eventos.append("release"))

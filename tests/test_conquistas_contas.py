@@ -4,13 +4,13 @@ from types import SimpleNamespace
 
 import pytest
 
-from cartridges.conquistas import contas, fontes
-from cartridges.conquistas.fontes import Fonte
+from kyron.conquistas import contas, fontes
+from kyron.conquistas.fontes import Fonte
 from tests.apoio_conquistas import pastas  # noqa: F401
 
 
 def test_xbox_esta_no_registro():
-    from cartridges.conquistas.xbox import loja  # noqa: PLC0415
+    from kyron.conquistas.xbox import loja  # noqa: PLC0415
 
     assert contas.lojas()["xbox"] is loja
     assert loja.TIPO == "xbox"
@@ -49,13 +49,13 @@ def test_chave_do_catalogo_pergunta_a_loja(loja_falsa):
 
 
 def test_epic_esta_no_registro():
-    from cartridges.conquistas.epic import loja  # noqa: PLC0415
+    from kyron.conquistas.epic import loja  # noqa: PLC0415
 
     assert contas.lojas()["epic"] is loja and loja.TIPO == "epic"
 
 
 def test_ea_esta_no_registro(monkeypatch):
-    from cartridges.conquistas.ea import conta, loja  # noqa: PLC0415
+    from kyron.conquistas.ea import conta, loja  # noqa: PLC0415
 
     assert contas.lojas()["ea"] is loja and loja.TIPO == "ea"
     assert contas.da_fonte(Fonte("ea", "x")) is loja
@@ -66,13 +66,13 @@ def test_ea_esta_no_registro(monkeypatch):
 
 
 def test_historico_guarda_conta_de_toda_loja_do_registro():
-    from cartridges.conquistas import historico  # noqa: PLC0415
+    from kyron.conquistas import historico  # noqa: PLC0415
 
     assert {prefixo.rstrip(":") for prefixo in historico._FONTES_COM_CONTA_GUARDADA} == set(contas.lojas()) | {"ubisoft"}
 
 
 def test_resolver_da_epic(make_game, monkeypatch, pastas):  # noqa: F811
-    from cartridges.conquistas.epic import api, loja  # noqa: PLC0415
+    from kyron.conquistas.epic import api, loja  # noqa: PLC0415
 
     monkeypatch.setattr(api, "namespace_do_app", lambda app: "n1" if app == "Sugar" else "")
     url = 'start "" "com.epicgames.launcher://apps/Sugar?action=launch"'

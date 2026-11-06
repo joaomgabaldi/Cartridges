@@ -8,9 +8,9 @@ import time
 import pytest
 import requests
 
-from cartridges import shared
-from cartridges.conquistas.ea import conta
-from cartridges.utils import dpapi
+from kyron import shared
+from kyron.conquistas.ea import conta
+from kyron.utils import dpapi
 from tests.apoio_xbox import Resposta, rede_falsa
 
 _AVISO = "A conta EA foi desconectada. Entre novamente nas Preferências."

@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""A busca na Steam, o HowLongToBeat e o jogo do Ludusavi no editor (`cartridges.modelos`).
+"""A busca na Steam, o HowLongToBeat e o jogo do Ludusavi no editor (`kyron.modelos`).
 
 Nenhum teste fala com a rede: a Steam e o HowLongToBeat são falsos. O Ludusavi é só a leitura de um
 `manifest.yaml` numa pasta temporária; o `ludusavi.exe` desta máquina nunca roda. A interface
@@ -14,10 +14,10 @@ from types import SimpleNamespace
 
 import pytest
 
-from cartridges import shared
-from cartridges.modelos import edicao as modulo_edicao
-from cartridges.modelos.edicao import ModeloDaEdicao
-from cartridges.utils.steam import SteamGameNotFoundError, SteamNotAGameError
+from kyron import shared
+from kyron.modelos import edicao as modulo_edicao
+from kyron.modelos.edicao import ModeloDaEdicao
+from kyron.utils.steam import SteamGameNotFoundError, SteamNotAGameError
 from tests.apoio_edicao import jogo
 from tests.apoio_seletores import DADOS, HltbFalso, SteamFalsa, esperar as _esperar
 
@@ -395,7 +395,7 @@ def test_ludusavi_arquivo_que_sumiu_mostra_o_erro(edicao):
 def test_ludusavi_leitura_que_chega_depois_de_fechar_e_descartada(edicao, monkeypatch):
     _manifesto()
     soltar = threading.Event()
-    from cartridges.saves import ludusavi  # noqa: PLC0415
+    from kyron.saves import ludusavi  # noqa: PLC0415
 
     original = ludusavi.nomes_do_manifesto
 

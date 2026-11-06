@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from cartridges.conquistas import arquivos, formatos
-from cartridges.conquistas.arquivos import ArquivoDeConquista
+from kyron.conquistas import arquivos, formatos
+from kyron.conquistas.arquivos import ArquivoDeConquista
 from tests.apoio_conquistas import criar, pastas  # noqa: F401
 
 # A fixture autouse de `conftest.py` troca o leitor por um que devolve None.

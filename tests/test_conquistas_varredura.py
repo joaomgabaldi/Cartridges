@@ -6,10 +6,10 @@ from types import SimpleNamespace
 
 import pytest
 
-from cartridges import shared
-from cartridges.conquistas import catalogo, historico, sessao, varredura
-from cartridges.conquistas.formatos import Desbloqueio
-from cartridges.conquistas.varredura import VarreduraConquistas
+from kyron import shared
+from kyron.conquistas import catalogo, historico, sessao, varredura
+from kyron.conquistas.formatos import Desbloqueio
+from kyron.conquistas.varredura import VarreduraConquistas
 from tests.apoio_conquistas import criar, gravar_pacote, gravar_spool, pastas  # noqa: F401
 
 
@@ -712,7 +712,7 @@ _AUMID = 'start "" "shell:AppsFolder\\Pkg.Jogo_abc!Game"'
 @pytest.fixture
 def xbox(monkeypatch):
     """Conta conectada e uma API falsa que devolve o que o teste puser em `estado`."""
-    from cartridges.conquistas.xbox import api, conta  # noqa: PLC0415
+    from kyron.conquistas.xbox import api, conta  # noqa: PLC0415
 
     estado = SimpleNamespace(desbloqueios=[], titulo="7", falha=None, chamadas=0, xuid="111")
     monkeypatch.setattr(conta, "conectada", lambda: True)
@@ -742,7 +742,7 @@ def test_varredura_grava_a_fonte_steam(store, make_game, pastas, flush_idle):
 
 
 def test_varrer_jogo_mantem_o_cartao_do_jogo_da_steam(store, make_game, pastas, flush_idle, monkeypatch):
-    from cartridges.conquistas import fontes  # noqa: PLC0415
+    from kyron.conquistas import fontes  # noqa: PLC0415
 
     class Sincrona(_ThreadFalsa):
         def start(self):
@@ -785,7 +785,7 @@ def test_jogo_do_xbox_entra_e_grava_a_fonte(store, make_game, pastas, flush_idle
 
 
 def test_fonte_pendente_do_xbox_nunca_e_gravada(store, make_game, pastas, flush_idle, xbox):
-    from cartridges.conquistas.xbox import api  # noqa: PLC0415
+    from kyron.conquistas.xbox import api  # noqa: PLC0415
 
     xbox.falha = api.FalhaDeRede()
     game = _registrado(store, make_game, 1, executable=_AUMID)
@@ -830,7 +830,7 @@ def test_varredura_de_um_jogo_do_xbox_fica_calada(store, make_game, pastas, avis
 
 
 def test_reconectar_nao_avisa_o_que_ja_existia(store, make_game, pastas, avisos, flush_idle, xbox, monkeypatch):
-    from cartridges.conquistas.xbox import conta  # noqa: PLC0415
+    from kyron.conquistas.xbox import conta  # noqa: PLC0415
 
     game = _registrado(store, make_game, 1, executable=_AUMID)
     historico.registrar(game.game_id, [Desbloqueio("XBOX:1", 100)], fonte="xbox:7", conta="111")
@@ -881,7 +881,7 @@ def test_varredura_do_xbox_grava_a_conta_com_a_fonte(store, make_game, pastas, f
 
 
 def test_rede_fora_no_xbox_para_os_outros(store, make_game, pastas, flush_idle, xbox):
-    from cartridges.conquistas.xbox import api  # noqa: PLC0415
+    from kyron.conquistas.xbox import api  # noqa: PLC0415
 
     xbox.falha = api.FalhaDeRede()
     jogos = [_registrado(store, make_game, n, executable=_AUMID.replace("Jogo", f"J{n}")) for n in (1, 2)]
@@ -890,7 +890,7 @@ def test_rede_fora_no_xbox_para_os_outros(store, make_game, pastas, flush_idle, 
 
 
 def test_rede_fora_no_xbox_poupa_tambem_a_steam(store, make_game, pastas, flush_idle, xbox, monkeypatch):
-    from cartridges.conquistas.xbox import api  # noqa: PLC0415
+    from kyron.conquistas.xbox import api  # noqa: PLC0415
 
     chamadas = []
 
@@ -910,7 +910,7 @@ def test_rede_fora_no_xbox_poupa_tambem_a_steam(store, make_game, pastas, flush_
 
 
 def test_conta_caida_no_meio_pula_os_outros_xbox(store, make_game, pastas, flush_idle, xbox, monkeypatch):
-    from cartridges.conquistas.xbox import api, conta  # noqa: PLC0415
+    from kyron.conquistas.xbox import api, conta  # noqa: PLC0415
 
     estado = {"conectada": True}
     monkeypatch.setattr(conta, "conectada", lambda: estado["conectada"])
@@ -935,7 +935,7 @@ def test_pacote_sem_xbox_live_nao_vira_fonte(store, make_game, pastas, flush_idl
 
 
 def test_xbox_sem_conquistas_grava_a_fonte(store, make_game, pastas, flush_idle, xbox, monkeypatch):
-    from cartridges.conquistas.xbox import api  # noqa: PLC0415
+    from kyron.conquistas.xbox import api  # noqa: PLC0415
 
     monkeypatch.setattr(api, "ler", lambda titulo: api.Leitura(catalogo.Catalogo((), 0, False), []))
     game = _registrado(store, make_game, 1, executable=_AUMID)
@@ -961,7 +961,7 @@ def test_xbox_de_jogo_excluido_no_meio_nao_grava(store, make_game, pastas, flush
 
 
 def test_xbox_desconectado_no_meio_nao_grava(store, make_game, pastas, flush_idle, xbox, monkeypatch):
-    from cartridges.conquistas.xbox import conta  # noqa: PLC0415
+    from kyron.conquistas.xbox import conta  # noqa: PLC0415
 
     game = _registrado(store, make_game, 1, executable=_AUMID)
     leitura, _ = varredura.ler_da_conta(game, varredura.Fonte("xbox", ""))
@@ -1000,7 +1000,7 @@ def test_ler_xbox_titulo_pendente_sem_xbox_live_e_nada(store, make_game, xbox):
 
 
 def test_ler_xbox_sem_rede(store, make_game, xbox):
-    from cartridges.conquistas.xbox import api  # noqa: PLC0415
+    from kyron.conquistas.xbox import api  # noqa: PLC0415
 
     game = _registrado(store, make_game, 1, executable=_AUMID)
     xbox.falha = api.FalhaDeRede()
@@ -1033,7 +1033,7 @@ def test_executavel_editado_entre_a_leitura_e_a_entrega_descarta_a_leitura(
 def test_executavel_editado_durante_a_leitura_da_conta_nao_grava(
     store, make_game, pastas, avisos, flush_idle, xbox, monkeypatch
 ):
-    from cartridges.conquistas.xbox import api  # noqa: PLC0415
+    from kyron.conquistas.xbox import api  # noqa: PLC0415
 
     game = _registrado(store, make_game, 1, executable=_AUMID)
     ler_falso = api.ler
@@ -1058,7 +1058,7 @@ _URL_EPIC = 'start "" "com.epicgames.launcher://apps/ns1%3Aitem%3ASugar?action=l
 @pytest.fixture
 def epic(monkeypatch):
     """Conta Epic conectada e uma API falsa que devolve o que o teste puser em `estado`."""
-    from cartridges.conquistas.epic import api, conta  # noqa: PLC0415
+    from kyron.conquistas.epic import api, conta  # noqa: PLC0415
 
     estado = SimpleNamespace(desbloqueios=[], falha=None, chamadas=0, conta="c1", biblioteca="ns9")
     monkeypatch.setattr(conta, "conectada", lambda: True)
@@ -1130,7 +1130,7 @@ def test_pendente_fora_da_biblioteca_fica_sem_fonte(store, make_game, pastas, fl
 
 
 def test_rede_fora_na_epic_para_os_outros(store, make_game, pastas, flush_idle, epic):
-    from cartridges.conquistas.epic import api  # noqa: PLC0415
+    from kyron.conquistas.epic import api  # noqa: PLC0415
 
     jogos = [_registrado(store, make_game, n, executable=_URL_EPIC) for n in (1, 2)]
     epic.falha = api.FalhaDeRede()
@@ -1139,7 +1139,7 @@ def test_rede_fora_na_epic_para_os_outros(store, make_game, pastas, flush_idle, 
 
 
 def test_epic_sem_conta_nao_vai_a_rede_e_fica_oculta(store, make_game, pastas, flush_idle, epic, monkeypatch):
-    from cartridges.conquistas.epic import conta  # noqa: PLC0415
+    from kyron.conquistas.epic import conta  # noqa: PLC0415
 
     monkeypatch.setattr(conta, "conectada", lambda: False)
     _goldberg(pastas, "570", [("ACH_A", 100)])  # sinal real da Steam: cairia para ela se pudesse
@@ -1163,8 +1163,8 @@ def test_outra_conta_epic_e_primeira_leitura(store, make_game, pastas, avisos, f
 @pytest.fixture
 def ea(monkeypatch):
     """Conta EA conectada, jogo candidato e uma API falsa que devolve o que o teste puser."""
-    from cartridges.conquistas import fontes  # noqa: PLC0415
-    from cartridges.conquistas.ea import api, conta, jogo  # noqa: PLC0415
+    from kyron.conquistas import fontes  # noqa: PLC0415
+    from kyron.conquistas.ea import api, conta, jogo  # noqa: PLC0415
 
     estado = SimpleNamespace(desbloqueios=[], chamadas=0, persona="p1", guardado=None, conjunto="1_2_3")
     monkeypatch.setattr(conta, "conectada", lambda: True)

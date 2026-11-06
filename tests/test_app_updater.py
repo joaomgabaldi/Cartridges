@@ -15,9 +15,9 @@ from pathlib import Path
 
 import pytest
 
-from cartridges import shared
-from cartridges.utils import app_updater
-from cartridges.utils.app_updater import (
+from kyron import shared
+from kyron.utils import app_updater
+from kyron.utils.app_updater import (
     AppUpdater,
     DownloadCancelled,
     Release,
@@ -430,7 +430,7 @@ def test_app_updater_sem_gi():
     # O `_` que o `app.py` põe nos builtins; sem ele o `jogo.py` nem importa.
     codigo = (
         "import builtins, sys; builtins._ = lambda m: m; "
-        "import cartridges.utils.app_updater; sys.exit('gi' in sys.modules)"
+        "import kyron.utils.app_updater; sys.exit('gi' in sys.modules)"
     )
     resultado = subprocess.run(
         [sys.executable, "-c", codigo],
@@ -582,9 +582,9 @@ def test_cada_download_tem_o_proprio_part(tmp_path, monkeypatch):
 def test_pergunta_espera_os_saves(monkeypatch):
     """Atualizar fecha o app: com o backup ou a restauração dos saves em curso, a
     pergunta espera, como espera a sessão."""
-    from cartridges.process_session import ProcessSession
-    from cartridges.saves import backup_de_saves
-    from cartridges.session_window import SessionWindow
+    from kyron.process_session import ProcessSession
+    from kyron.saves import backup_de_saves
+    from kyron.session_window import SessionWindow
 
     adiadas = _relogio_falso(monkeypatch)
     monkeypatch.setattr(ProcessSession, "active", None)
@@ -604,7 +604,7 @@ def test_pergunta_espera_os_saves(monkeypatch):
 
 
 def test_b1_a_pergunta_da_versao_nova_espera_a_sessao(monkeypatch):
-    from cartridges.process_session import ProcessSession
+    from kyron.process_session import ProcessSession
 
     adiadas = _relogio_falso(monkeypatch)
     monkeypatch.setattr(ProcessSession, "active", object())
@@ -631,7 +631,7 @@ def test_b25_o_download_do_instalador_tem_teto(tmp_path, monkeypatch, informado)
 
 
 def test_b28_dialogo_de_atualizacao_diz_o_que_acontece():
-    raiz = Path(__file__).parent.parent / "cartridges"
+    raiz = Path(__file__).parent.parent / "kyron"
     qml = (raiz / "qml/DialogoDaAtualizacao.qml").read_text(encoding="utf-8")
     assert "Deseja baixar e instalar a atualização agora? O aplicativo será fechado durante a instalação." in qml
     assert '"Agora não"' in qml

@@ -12,13 +12,13 @@ from PySide6.QtQml import QQmlComponent, QQmlEngine, QQmlExpression
 from PySide6.QtQuick import QQuickWindow
 from PySide6.QtTest import QTest
 
-from cartridges.conquistas.ea import conta as ea_conta
-from cartridges.conquistas.epic import conta as epic_conta
-from cartridges.conquistas.xbox import conta as xbox_conta
-from cartridges.modelos.contas import ContasDasLojas
+from kyron.conquistas.ea import conta as ea_conta
+from kyron.conquistas.epic import conta as epic_conta
+from kyron.conquistas.xbox import conta as xbox_conta
+from kyron.modelos.contas import ContasDasLojas
 from tests.apoio_qml_biblioteca import _achar, _esperar
 
-QML = Path(__file__).resolve().parent.parent / "cartridges" / "qml"
+QML = Path(__file__).resolve().parent.parent / "kyron" / "qml"
 _COD = "0123456789abcdef0123456789abcdef"
 _CURL = "curl 'https://accounts.ea.com/connect/auth' -H 'cookie: remid=AAA; _nx_mpcid=BBB'"
 
@@ -48,7 +48,7 @@ class _Tela:
     def __init__(self, avisos, abrir=lambda _url: None, em_thread=_sincrono):
         self.contas = ContasDasLojas(avisos, em_thread=em_thread, abrir=abrir)
         self.motor = QQmlEngine()
-        from cartridges.modelos.provedor_de_icones import ProvedorDeIcones  # noqa: PLC0415
+        from kyron.modelos.provedor_de_icones import ProvedorDeIcones  # noqa: PLC0415
         self.motor.addImageProvider("icone", ProvedorDeIcones())
         self.motor.rootContext().setContextProperty("contasDeTeste", self.contas)
         componente = QQmlComponent(self.motor)

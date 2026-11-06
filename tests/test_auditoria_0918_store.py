@@ -8,8 +8,8 @@ from types import SimpleNamespace
 import pytest
 from PIL import Image
 
-from cartridges import shared
-from cartridges.utils import session_wallpaper
+from kyron import shared
+from kyron.utils import session_wallpaper
 
 # O conftest troca a `_AreaDeTrabalho` por uma guarda a cada teste; a classe de verdade é lida aqui, na importação.
 _AREA_DE_TRABALHO = session_wallpaper._AreaDeTrabalho
@@ -174,7 +174,7 @@ def test_b7_pasta_que_nao_se_cria_so_loga(tmp_path, monkeypatch):
 
 
 def test_b9_bomba_nao_recursa_no_convert_cover(monkeypatch, tmp_path):
-    from cartridges.utils.save_cover import convert_cover  # noqa: PLC0415
+    from kyron.utils.save_cover import convert_cover  # noqa: PLC0415
 
     arquivo = tmp_path / "enorme.png"
     Image.new("RGB", (100, 100)).save(arquivo)

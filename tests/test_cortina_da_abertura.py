@@ -6,8 +6,8 @@
 
 from PySide6.QtCore import QObject, Signal
 
-from cartridges.janela import cortina_da_abertura as modulo
-from cartridges.janela.cortina_da_abertura import CortinaDaAbertura
+from kyron.janela import cortina_da_abertura as modulo
+from kyron.janela.cortina_da_abertura import CortinaDaAbertura
 
 
 class _Item:

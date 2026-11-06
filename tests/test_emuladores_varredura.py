@@ -4,10 +4,10 @@ from pathlib import Path
 
 import pytest
 
-from cartridges import shared
-from cartridges.emuladores import varredura
-from cartridges.jogo import Jogo
-from cartridges.utils import ligacao_zerado
+from kyron import shared
+from kyron.emuladores import varredura
+from kyron.jogo import Jogo
+from kyron.utils import ligacao_zerado
 
 
 def _jogo(exe, jid="shortcuts_1", **campos) -> Jogo:
@@ -35,7 +35,7 @@ def _sem_fila(monkeypatch):
 def refresh(monkeypatch):
     chamadas = []
     falso = type("R", (), {"start": lambda self, jogos: chamadas.append(list(jogos))})()
-    monkeypatch.setattr("cartridges.metadata_refresh.get_metadata_refresh", lambda: falso)
+    monkeypatch.setattr("kyron.metadata_refresh.get_metadata_refresh", lambda: falso)
     ligados = []
     monkeypatch.setattr(ligacao_zerado, "agendar", ligados.append)
     return chamadas, ligados

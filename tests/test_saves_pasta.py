@@ -10,8 +10,8 @@ from pathlib import Path
 
 import pytest
 
-from cartridges import shared
-from cartridges.saves import pasta
+from kyron import shared
+from kyron.saves import pasta
 
 
 @pytest.fixture(autouse=True)

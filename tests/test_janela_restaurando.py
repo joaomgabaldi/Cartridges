@@ -11,9 +11,9 @@ import pytest
 from PySide6.QtCore import QEventLoop, Qt, QTimer, QUrl
 from PySide6.QtQml import QQmlApplicationEngine
 
-from cartridges.modelos.restaurando import Restaurando, entregar_so_ao_mudar
+from kyron.modelos.restaurando import Restaurando, entregar_so_ao_mudar
 
-QML = Path(__file__).resolve().parent.parent / "cartridges" / "qml" / "JanelaRestaurando.qml"
+QML = Path(__file__).resolve().parent.parent / "kyron" / "qml" / "JanelaRestaurando.qml"
 
 
 def _esperar(ms=100):
@@ -36,7 +36,7 @@ def _achar(item, nome):
 @pytest.fixture
 def janela(app_qt):  # noqa: ARG001
     motor = QQmlApplicationEngine()
-    from cartridges.modelos.provedor_de_icones import ProvedorDeIcones  # noqa: PLC0415
+    from kyron.modelos.provedor_de_icones import ProvedorDeIcones  # noqa: PLC0415
     motor.addImageProvider("icone", ProvedorDeIcones())
     restaurando = Restaurando(motor)
     motor.rootContext().setContextProperty("restaurando", restaurando)

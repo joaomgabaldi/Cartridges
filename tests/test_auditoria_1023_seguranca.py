@@ -16,11 +16,11 @@ from pathlib import Path
 
 import pytest
 
-from cartridges import shared
-from cartridges.importer import shortcuts_source as ss
-from cartridges.saves import conferencia
-from cartridges.saves.ludusavi import Previa
-from cartridges.utils import game_logo, session_wallpaper
+from kyron import shared
+from kyron.importer import shortcuts_source as ss
+from kyron.saves import conferencia
+from kyron.saves.ludusavi import Previa
+from kyron.utils import game_logo, session_wallpaper
 
 # cmd_safe: `%` expande variáveis mesmo entre aspas
 
@@ -109,7 +109,7 @@ def test_alvo_unc_nao_e_consultado_na_varredura(tmp_path, schema, monkeypatch):
 
 
 def test_restauracao_de_saves_recusa_a_pasta_do_app(tmp_path):
-    from cartridges.conquistas.arquivos import Pastas  # noqa: PLC0415
+    from kyron.conquistas.arquivos import Pastas  # noqa: PLC0415
 
     local = Path(shared.app_dir).parent
     pastas = Pastas(
@@ -155,7 +155,7 @@ def test_sidecar_com_nome_solto_continua_valendo(app_dirs):
 
 
 def test_restauracao_marca_os_comandos_a_conferir(app_dirs):
-    from cartridges.utils import backup  # noqa: PLC0415
+    from kyron.utils import backup  # noqa: PLC0415
 
     def gravar(nome, **dados):
         (shared.games_dir / f"{nome}.json").write_text(json.dumps(dados), encoding="utf-8")
@@ -175,7 +175,7 @@ def test_restauracao_marca_os_comandos_a_conferir(app_dirs):
 
 
 def test_comando_com_caminho_unc_nao_e_vigiado(monkeypatch):
-    from cartridges.utils import process_monitor  # noqa: PLC0415
+    from kyron.utils import process_monitor  # noqa: PLC0415
 
     listados = []
     monkeypatch.setattr(process_monitor.os, "scandir", lambda p: listados.append(p) or iter(()))
@@ -186,7 +186,7 @@ def test_comando_com_caminho_unc_nao_e_vigiado(monkeypatch):
 
 
 def test_backup_nao_traz_pasta_de_atalhos_de_rede(schema):  # noqa: ARG001
-    from cartridges.utils import backup  # noqa: PLC0415
+    from kyron.utils import backup  # noqa: PLC0415
 
     backup.aplicar_configuracoes({"settings": {"shortcuts-location": "\\\\203.0.113.9\\x"}})
     assert shared.schema.get_string("shortcuts-location") != "\\\\203.0.113.9\\x"

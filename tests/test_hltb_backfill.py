@@ -8,9 +8,9 @@ from types import SimpleNamespace
 import pytest
 from PySide6.QtCore import QEventLoop, QTimer
 
-from cartridges.modelos import tarefas
-from cartridges.utils import hltb, hltb_backfill
-from cartridges.utils.passada_agendada import PassadaAgendada
+from kyron.modelos import tarefas
+from kyron.utils import hltb, hltb_backfill
+from kyron.utils.passada_agendada import PassadaAgendada
 
 
 def _rodar(limite=0.15):

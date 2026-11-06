@@ -8,8 +8,8 @@ import time
 import pytest
 import requests
 
-from cartridges import shared
-from cartridges.conquistas.xbox import conta
+from kyron import shared
+from kyron.conquistas.xbox import conta
 from tests.apoio_xbox import Resposta, RespostaSemFim, rede_falsa, respostas_de_login
 
 

@@ -18,8 +18,8 @@ from pathlib import Path
 
 import pytest
 
-from cartridges import shared
-from cartridges.utils import app_updater
+from kyron import shared
+from kyron.utils import app_updater
 
 _RAIZ = Path(__file__).resolve().parent.parent
 _spec = importlib.util.spec_from_file_location("montar_app_qt", _RAIZ / "build-aux" / "windows" / "montar_app_qt.py")
@@ -215,13 +215,13 @@ def test_workflow_final_monta_o_canal_final_so_na_main():
 
 def test_verificacao_exige_o_que_a_capa_de_video_usa():
     texto = (_RAIZ / "build-aux" / "windows" / "verificar_pasta.py").read_text(encoding="utf-8")
-    for exigido in ("libwebp_anim", "capa_video.converter(", "pyca/cryptography", "CARTRIDGES_DADOS", "CARTRIDGES_REGISTRO"):
+    for exigido in ("libwebp_anim", "capa_video.converter(", "pyca/cryptography", "KYRON_DADOS", "KYRON_REGISTRO"):
         assert exigido in texto, exigido
 
 
 def test_verificacao_recusa_o_canal_final_fora_da_ci(tmp_path):
     # A pasta do canal final aponta para os dados reais: nesta máquina ela nunca roda.
-    pacote = tmp_path / "app" / "cartridges"
+    pacote = tmp_path / "app" / "kyron"
     pacote.mkdir(parents=True)
     (pacote / "instalacao.json").write_text(json.dumps({"canal": "final"}), encoding="utf-8")
     ambiente = {k: v for k, v in os.environ.items() if k != "GITHUB_ACTIONS"}

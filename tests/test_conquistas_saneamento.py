@@ -2,7 +2,7 @@
 
 import pytest
 
-from cartridges.conquistas.saneamento import numero_finito
+from kyron.conquistas.saneamento import numero_finito
 
 
 @pytest.mark.parametrize("valor", [0, 1, -1, 4.5, 100, 10**300])

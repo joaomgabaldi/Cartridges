@@ -22,14 +22,14 @@ import tempfile
 from pathlib import Path
 
 destino = Path(sys.argv[1]).resolve()
-canal = json.loads((destino / "app" / "cartridges" / "instalacao.json").read_text(encoding="utf-8"))["canal"]
+canal = json.loads((destino / "app" / "kyron" / "instalacao.json").read_text(encoding="utf-8"))["canal"]
 if canal == "final" and os.environ.get("GITHUB_ACTIONS") != "true":
     sys.exit("A pasta do canal final só roda na CI.")
 assert Path(sys.prefix).samefile(destino / "python"), f"o Python veio de {sys.prefix}"
 
 temporaria = Path(tempfile.mkdtemp(prefix="verificar-pasta-"))
-os.environ["CARTRIDGES_DADOS"] = str(temporaria / "dados")
-os.environ["CARTRIDGES_REGISTRO"] = "Software\\CartridgesVerificacao"
+os.environ["KYRON_DADOS"] = str(temporaria / "dados")
+os.environ["KYRON_REGISTRO"] = "Software\\KyronVerificacao"
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
 # Nada de fora da pasta: nem outro Python, nem outro ffmpeg, nem DLL do runner.
 os.environ["PATH"] = str(Path(os.environ["SystemRoot"], "System32"))
@@ -47,9 +47,9 @@ ssl.create_default_context(cafile=certifi.where())
 requests.Session().close()
 assert tinytuya.AESCipher.CRYPTOLIB == "pyca/cryptography", tinytuya.AESCipher.CRYPTOLIB
 
-import cartridges.app  # noqa: E402, F401 (instala o `_` nos builtins, como no app)
+import kyron.app  # noqa: E402, F401 (instala o `_` nos builtins, como no app)
 
-pacote = destino / "app" / "cartridges"
+pacote = destino / "app" / "kyron"
 # Todo .py, não `pkgutil.walk_packages`: ele pula as pastas sem `__init__.py`.
 for fonte in pacote.rglob("*.py"):
     partes = fonte.relative_to(pacote.parent).with_suffix("").parts
@@ -57,9 +57,9 @@ for fonte in pacote.rglob("*.py"):
         continue
     importlib.import_module(".".join(partes[:-1] if partes[-1] == "__init__" else partes))
 
-from cartridges import shared  # noqa: E402
-from cartridges.saves import ludusavi  # noqa: E402
-from cartridges.utils import capa_video  # noqa: E402
+from kyron import shared  # noqa: E402
+from kyron.saves import ludusavi  # noqa: E402
+from kyron.utils import capa_video  # noqa: E402
 
 assert Path(shared.__file__).is_relative_to(destino), shared.__file__
 assert ludusavi.executavel() == destino / "bin" / "ludusavi.exe", ludusavi.executavel()

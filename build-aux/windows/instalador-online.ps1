@@ -50,6 +50,6 @@ Etapa 'Atualizando o repositório local'
 git pull --ff-only origin main
 if ($LASTEXITCODE) { Falha 'O git pull falhou.' }
 
-$versao = (Select-String -Path cartridges\shared.py -Pattern '^VERSION = "(.*)"').Matches[0].Groups[1].Value
+$versao = (Select-String -Path kyron\shared.py -Pattern '^VERSION = "(.*)"').Matches[0].Groups[1].Value
 Etapa "Abrindo a pré-release v$versao"
 gh release view "v$versao" --web

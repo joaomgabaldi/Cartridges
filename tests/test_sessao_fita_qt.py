@@ -12,10 +12,10 @@ from types import SimpleNamespace
 
 import pytest
 
-from cartridges import shared
-from cartridges.modelos.sessao import ModeloDaSessao
-from cartridges.session_window import SessionWindow
-from cartridges.utils import session_fita, session_log, session_wallpaper, window_geometry
+from kyron import shared
+from kyron.modelos.sessao import ModeloDaSessao
+from kyron.session_window import SessionWindow
+from kyron.utils import session_fita, session_log, session_wallpaper, window_geometry
 
 AVISO_DA_TELA = "A iluminação não acompanhou a tela de Hollow Knight. Use o modo janela sem bordas."
 

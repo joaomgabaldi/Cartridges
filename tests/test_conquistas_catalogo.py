@@ -10,9 +10,9 @@ from pathlib import Path
 import pytest
 from requests.exceptions import ConnectionError as ErroDeConexao
 
-from cartridges import shared
-from cartridges.conquistas import arquivos, catalogo
-from cartridges.conquistas.catalogo import Catalogo, ConquistaInfo
+from kyron import shared
+from kyron.conquistas import arquivos, catalogo
+from kyron.conquistas.catalogo import Catalogo, ConquistaInfo
 from tests.apoio_conquistas import kv_bytes, schema_de_teste
 
 SCHEMA = {

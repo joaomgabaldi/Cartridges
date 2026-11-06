@@ -9,7 +9,7 @@ Um teste nunca importa outro `test_*.py`: importar um arquivo de teste de outro 
 
 from PySide6.QtCore import QObject, Signal
 
-from cartridges.jogo import Jogo
+from kyron.jogo import Jogo
 
 
 class _Loja:

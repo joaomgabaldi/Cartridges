@@ -2,10 +2,10 @@
 
 import zipfile
 
-from cartridges import shared
-from cartridges.conquistas import historico
-from cartridges.conquistas.formatos import Desbloqueio
-from cartridges.utils import backup
+from kyron import shared
+from kyron.conquistas import historico
+from kyron.conquistas.formatos import Desbloqueio
+from kyron.utils import backup
 
 
 def test_backup_leva_o_historico(tmp_path):

@@ -8,10 +8,10 @@ import time
 import pytest
 from PySide6.QtCore import QTimer
 
-from cartridges.conquistas import arquivos, catalogo, fontes, historico, vigia, vigia_da_conta
-from cartridges.conquistas.catalogo import Catalogo, ConquistaInfo
-from cartridges.conquistas.formatos import Desbloqueio
-from cartridges.conquistas.fontes import Fonte
+from kyron.conquistas import arquivos, catalogo, fontes, historico, vigia, vigia_da_conta
+from kyron.conquistas.catalogo import Catalogo, ConquistaInfo
+from kyron.conquistas.formatos import Desbloqueio
+from kyron.conquistas.fontes import Fonte
 from tests.apoio_conquistas import com_fonte, criar, kv_bytes, pastas, schema_de_teste  # noqa: F401
 
 CAT = Catalogo(
@@ -769,7 +769,7 @@ def test_desbloqueadas_poe_o_100_na_ultima_do_catalogo():
 
 
 def test_completou_so_na_virada_para_100():
-    from cartridges.conquistas import progresso  # noqa: PLC0415
+    from kyron.conquistas import progresso  # noqa: PLC0415
 
     metade = progresso.montar(CAT, {"ACH_A": 1})
     tudo = progresso.montar(CAT, {"ACH_A": 1, "ACH_B": 2})

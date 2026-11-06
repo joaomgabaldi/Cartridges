@@ -10,7 +10,7 @@ import pytest
 from PySide6.QtCore import QMetaObject, QPointF, Qt
 from PySide6.QtTest import QTest
 
-from cartridges import shared
+from kyron import shared
 from tests.apoio_qml_biblioteca import QML, _achar, _esperar
 from tests.apoio_qml_detalhes import _clicar
 from tests.apoio_qml_preferencias import (  # noqa: F401  (as fixtures vêm junto)
@@ -24,7 +24,7 @@ from tests.apoio_qml_preferencias import (  # noqa: F401  (as fixtures vêm junt
 
 
 def _com_refresh_falso(monkeypatch):
-    from cartridges import metadata_refresh  # noqa: PLC0415
+    from kyron import metadata_refresh  # noqa: PLC0415
 
     class Falso(metadata_refresh.MetadataRefresh):
         def start(self, games, only_missing=False):
@@ -38,7 +38,7 @@ def _com_refresh_falso(monkeypatch):
 @pytest.fixture
 def calibracao_aberta(app, fitas_espiadas, monkeypatch):
     """O assistente aberto sobre duas fitas, sem acender nada."""
-    from cartridges.utils import session_fita  # noqa: PLC0415
+    from kyron.utils import session_fita  # noqa: PLC0415
 
     session_fita.gravar_fitas(
         [session_fita.Fita("Sala", "eb0", "192.0.2.10", "k"), session_fita.Fita("Quarto", "eb1", "192.0.2.11", "k")]
@@ -221,7 +221,7 @@ def test_progresso_dos_metadados_fica_abaixo_do_cartao(app, monkeypatch):
 
 
 def test_balao_da_cor_abre_na_paleta_e_o_mais_leva_ao_seletor(app, fitas_espiadas):
-    from cartridges.utils import session_fita  # noqa: PLC0415
+    from kyron.utils import session_fita  # noqa: PLC0415
 
     shared.schema.set_boolean("session-fita", True)
     _abrir(app, "monitores")
@@ -261,7 +261,7 @@ def _arg(valor):
 
 
 def test_clicar_num_tom_da_paleta_escolhe_a_cor(app, fitas_espiadas):
-    from cartridges.utils import session_fita  # noqa: PLC0415
+    from kyron.utils import session_fita  # noqa: PLC0415
 
     shared.schema.set_boolean("session-fita", True)
     _abrir(app, "monitores")
@@ -358,7 +358,7 @@ def test_calibracao_botoes_na_base_e_amostra_sem_borda(calibracao_aberta):
 
 
 def test_calibracao_todos_os_dispositivos_sem_cartao(app, fitas_espiadas, monkeypatch):  # noqa: ARG001
-    from cartridges.utils import session_fita  # noqa: PLC0415
+    from kyron.utils import session_fita  # noqa: PLC0415
 
     session_fita.gravar_fitas(
         [session_fita.Fita("Sala", "eb0", "192.0.2.10", "k"), session_fita.Fita("Quarto", "eb1", "192.0.2.11", "k")]

@@ -22,9 +22,9 @@ from types import SimpleNamespace
 import pytest
 from PIL import Image
 
-from cartridges import shared
-from cartridges.utils import session_wallpaper
-from cartridges.utils.wallhaven import consultas
+from kyron import shared
+from kyron.utils import session_wallpaper
+from kyron.utils.wallhaven import consultas
 
 
 def _arte(largura: int, altura: int) -> Image.Image:
@@ -183,7 +183,7 @@ class TestConsultas:
 
 class TestBuscaPorFormato:
     def test_formato_vira_ratios_e_o_minimo_vira_atleast(self, monkeypatch) -> None:
-        from cartridges.utils import download, wallhaven  # noqa: PLC0415
+        from kyron.utils import download, wallhaven  # noqa: PLC0415
 
         pedidos = []
 
@@ -213,7 +213,7 @@ class TestBuscaPorFormato:
     def test_melhor_para_desce_do_formato_pedido_para_qualquer_um(
         self, monkeypatch
     ) -> None:
-        from cartridges.utils import wallhaven  # noqa: PLC0415
+        from kyron.utils import wallhaven  # noqa: PLC0415
 
         degraus = []
 

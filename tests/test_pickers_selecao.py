@@ -2,15 +2,15 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Escolher uma capa ou um logo não interrompe a busca que ainda baixa miniaturas, e como o download corre (seletores do SteamGridDB, `cartridges.modelos.seletores`)."""
+"""Escolher uma capa ou um logo não interrompe a busca que ainda baixa miniaturas, e como o download corre (seletores do SteamGridDB, `kyron.modelos.seletores`)."""
 
 import logging
 
 import pytest
 import requests
 
-from cartridges.modelos import seletores
-from cartridges.utils.download import (
+from kyron.modelos import seletores
+from kyron.utils.download import (
     MAX_ANIMATED_IMAGE_BYTES,
     MAX_IMAGE_BYTES,
     DownloadCancelado,

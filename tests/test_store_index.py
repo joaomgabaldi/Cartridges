@@ -16,7 +16,7 @@ import threading
 import pytest
 from PySide6.QtCore import Qt
 
-from cartridges.store.store import Store, _is_derived_command, _path_key
+from kyron.store.store import Store, _is_derived_command, _path_key
 
 A_ID = "shortcuts_aaaaaaaaaaaaaaaa"
 B_ID = "shortcuts_bbbbbbbbbbbbbbbb"
@@ -628,7 +628,7 @@ def test_atomic_dump_replaces_without_leaving_scratch(tmp_path) -> None:
     voltava zerado. Agora é tmp + replace, o idioma do FileManager."""
     import json
 
-    from cartridges.store.store import _dump_json_atomic
+    from kyron.store.store import _dump_json_atomic
 
     target = tmp_path / "g.json"
     target.write_text('{"old": true}', encoding="utf-8")
@@ -642,7 +642,7 @@ def test_atomic_dump_replaces_without_leaving_scratch(tmp_path) -> None:
 def test_a_failed_atomic_dump_keeps_the_original(tmp_path) -> None:
     import json
 
-    from cartridges.store.store import _dump_json_atomic
+    from kyron.store.store import _dump_json_atomic
 
     target = tmp_path / "g.json"
     target.write_text('{"old": true}', encoding="utf-8")

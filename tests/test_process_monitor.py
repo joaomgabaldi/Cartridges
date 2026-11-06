@@ -11,7 +11,7 @@ import os
 
 import pytest
 
-from cartridges.utils import process_monitor as pm
+from kyron.utils import process_monitor as pm
 
 pytestmark = pytest.mark.skipif(
     os.name != "nt", reason="process_monitor binds kernel32 at import"
@@ -391,7 +391,7 @@ def test_an_empty_package_family_is_never_running():
 )
 def test_aumid_from_command(command, expected):
     """Also the "is this a Store game?" test, so "" has to mean no."""
-    from cartridges.utils.run_executable import aumid_from_command
+    from kyron.utils.run_executable import aumid_from_command
 
     assert aumid_from_command(command) == expected
 

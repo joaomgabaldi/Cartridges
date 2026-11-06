@@ -6,12 +6,12 @@
 
 import pytest
 
-from cartridges import shared
+from kyron import shared
 
 
 def jogo(store, numero, **campos):
     """Um ``Game`` de verdade, já registrado na store (sem pipeline)."""
-    from cartridges.jogo import Jogo  # noqa: PLC0415
+    from kyron.jogo import Jogo  # noqa: PLC0415
 
     game = Jogo(
         {
@@ -33,7 +33,7 @@ def jogo(store, numero, **campos):
 
 
 def test_steam_so_processa_removido_com_a_marca(store, monkeypatch):
-    from cartridges.store.managers import steam_api_manager  # noqa: PLC0415
+    from kyron.store.managers import steam_api_manager  # noqa: PLC0415
 
     gerente = steam_api_manager.SteamAPIManager()
     monkeypatch.setattr(gerente, "resolve_tags", lambda *_a: ([], False))
@@ -52,7 +52,7 @@ def test_steam_so_processa_removido_com_a_marca(store, monkeypatch):
 
 
 def test_hltb_so_processa_removido_com_a_marca(store, monkeypatch):
-    from cartridges.store.managers import hltb_manager  # noqa: PLC0415
+    from kyron.store.managers import hltb_manager  # noqa: PLC0415
 
     gerente = hltb_manager.HLTBManager()
     monkeypatch.setattr(gerente, "_fetch", lambda _g: {"hltb_id": 42})
@@ -66,7 +66,7 @@ def test_hltb_so_processa_removido_com_a_marca(store, monkeypatch):
 
 
 def test_blacklisted_continua_pulado_mesmo_com_a_marca(store, monkeypatch):
-    from cartridges.store.managers import hltb_manager  # noqa: PLC0415
+    from kyron.store.managers import hltb_manager  # noqa: PLC0415
 
     gerente = hltb_manager.HLTBManager()
     monkeypatch.setattr(gerente, "_fetch", lambda _g: {"hltb_id": 42})
@@ -80,7 +80,7 @@ def test_blacklisted_continua_pulado_mesmo_com_a_marca(store, monkeypatch):
 
 
 def test_zerado_com_o_mesmo_appid_ou_nome_bloqueia(store):
-    from cartridges.utils import zerado_manual  # noqa: PLC0415
+    from kyron.utils import zerado_manual  # noqa: PLC0415
 
     dota = jogo(store, 10, name="Dota 2", removed=True, status="beaten", steam_appid="570")
 
@@ -89,7 +89,7 @@ def test_zerado_com_o_mesmo_appid_ou_nome_bloqueia(store):
 
 
 def test_nome_compara_sem_pontuacao_e_sem_maiusculas(store):
-    from cartridges.utils import zerado_manual  # noqa: PLC0415
+    from kyron.utils import zerado_manual  # noqa: PLC0415
 
     wukong = jogo(store, 11, name="Black Myth: Wukong", removed=True, status="beaten")
 
@@ -97,7 +97,7 @@ def test_nome_compara_sem_pontuacao_e_sem_maiusculas(store):
 
 
 def test_jogo_da_biblioteca_bloqueia(store):
-    from cartridges.utils import zerado_manual  # noqa: PLC0415
+    from kyron.utils import zerado_manual  # noqa: PLC0415
 
     celeste = jogo(store, 12, name="Celeste")
 
@@ -105,7 +105,7 @@ def test_jogo_da_biblioteca_bloqueia(store):
 
 
 def test_blacklisted_nao_conta(store):
-    from cartridges.utils import zerado_manual  # noqa: PLC0415
+    from kyron.utils import zerado_manual  # noqa: PLC0415
 
     jogo(store, 13, name="Celeste", blacklisted=True)
 
@@ -113,7 +113,7 @@ def test_blacklisted_nao_conta(store):
 
 
 def test_desinstalado_mais_recente_e_o_escolhido(store):
-    from cartridges.utils import zerado_manual  # noqa: PLC0415
+    from kyron.utils import zerado_manual  # noqa: PLC0415
 
     jogo(store, 14, name="Icarus", removed=True, last_played=10)
     recente = jogo(store, 15, name="Icarus", removed=True, last_played=20)
@@ -137,9 +137,9 @@ class ManagerFalso:
 
 
 def managers_falsos(store):
-    from cartridges.store.managers.hltb_manager import HLTBManager  # noqa: PLC0415
-    from cartridges.store.managers.sgdb_manager import SgdbManager  # noqa: PLC0415
-    from cartridges.store.managers.steam_api_manager import (  # noqa: PLC0415
+    from kyron.store.managers.hltb_manager import HLTBManager  # noqa: PLC0415
+    from kyron.store.managers.sgdb_manager import SgdbManager  # noqa: PLC0415
+    from kyron.store.managers.steam_api_manager import (  # noqa: PLC0415
         SteamAPIManager,
     )
 
@@ -153,7 +153,7 @@ def managers_falsos(store):
 
 
 def test_adicionar_pela_steam_cria_zerado_e_busca_os_dados(store):
-    from cartridges.utils import zerado_manual  # noqa: PLC0415
+    from kyron.utils import zerado_manual  # noqa: PLC0415
 
     chamados = managers_falsos(store)
 
@@ -170,7 +170,7 @@ def test_adicionar_pela_steam_cria_zerado_e_busca_os_dados(store):
 
 
 def test_adicionar_so_pelo_nome_nao_busca_nada(store):
-    from cartridges.utils import zerado_manual  # noqa: PLC0415
+    from kyron.utils import zerado_manual  # noqa: PLC0415
 
     chamados = managers_falsos(store)
 
@@ -182,7 +182,7 @@ def test_adicionar_so_pelo_nome_nao_busca_nada(store):
 
 
 def test_adicionar_repetido_nao_cria(store):
-    from cartridges.utils import zerado_manual  # noqa: PLC0415
+    from kyron.utils import zerado_manual  # noqa: PLC0415
 
     jogo(store, 16, name="Hades", removed=True, status="beaten")
 
@@ -191,7 +191,7 @@ def test_adicionar_repetido_nao_cria(store):
 
 
 def test_adicionar_desinstalado_marca_em_vez_de_criar(store):
-    from cartridges.utils import zerado_manual  # noqa: PLC0415
+    from kyron.utils import zerado_manual  # noqa: PLC0415
 
     antigo = jogo(store, 17, name="Hades", removed=True, playtime=3600)
 
@@ -205,14 +205,14 @@ def test_adicionar_desinstalado_marca_em_vez_de_criar(store):
 
 
 def resultado(appid, nome):
-    from cartridges.utils.title_match import TitleMatch  # noqa: PLC0415
+    from kyron.utils.title_match import TitleMatch  # noqa: PLC0415
 
     return ({"id": appid, "name": nome}, TitleMatch(100, "teste"))
 
 
 @pytest.fixture
 def seletor(store, app_qt):  # noqa: ARG001
-    from cartridges.modelos.zerados_manuais import SeletorDeZerados  # noqa: PLC0415
+    from kyron.modelos.zerados_manuais import SeletorDeZerados  # noqa: PLC0415
 
     modelo = SeletorDeZerados()
     modelo.abrir()
@@ -291,7 +291,7 @@ def test_apagar_a_busca_volta_aos_desinstalados(store, seletor):
 
 def _situacao_por_varredura(nome, appid=None):
     """A regra antiga, jogo a jogo, para conferir o índice contra ela."""
-    from cartridges.utils import zerado_manual  # noqa: PLC0415
+    from kyron.utils import zerado_manual  # noqa: PLC0415
 
     procuradas = zerado_manual._chaves(nome, appid)
     na_biblioteca, desinstalados = None, []
@@ -312,7 +312,7 @@ def _situacao_por_varredura(nome, appid=None):
 
 
 def test_situacao_com_indice_decide_como_a_varredura(store):
-    from cartridges.utils import zerado_manual  # noqa: PLC0415
+    from kyron.utils import zerado_manual  # noqa: PLC0415
 
     jogo(store, 10, name="Hades", steam_appid="1145360")
     jogo(store, 11, name="Hades II")

@@ -13,8 +13,8 @@ import pytest
 from PIL import Image, UnidentifiedImageError
 from PySide6.QtCore import QEventLoop, QTimer
 
-from cartridges import shared
-from cartridges.utils.save_cover import save_cover
+from kyron import shared
+from kyron.utils.save_cover import save_cover
 
 
 def make_image(path, color="blue"):
@@ -81,7 +81,7 @@ def test_remover_capa_apaga_as_copias():
 @pytest.fixture
 def entregas(monkeypatch):
     """Troca a entrega à thread principal por um registro."""
-    from cartridges.utils import save_cover as modulo
+    from kyron.utils import save_cover as modulo
 
     registro = []
     monkeypatch.setattr(
@@ -100,7 +100,7 @@ def _gif(caminho):
 def test_capa_animada_nova_prepara_as_copias(tmp_path, schema, entregas):
     """Com o autoplay desligado (o padrão) também: quem liga a opção depois
     encontra as cópias prontas."""
-    from cartridges.utils import save_cover as modulo
+    from kyron.utils import save_cover as modulo
 
     nova = _gif(tmp_path / "nova.gif")
     save_cover("g1", nova)
@@ -112,7 +112,7 @@ def test_capa_animada_nova_prepara_as_copias(tmp_path, schema, entregas):
 def test_capa_provisoria_entrega_as_copias_que_ja_tem(tmp_path, schema, entregas, monkeypatch):
     """As cópias que a prévia da edição já gerou (as de um vídeo saem junto com
     ele) passam a ser as do jogo, e o ``preparar`` não as gera de novo."""
-    from cartridges.utils import copias_animadas
+    from kyron.utils import copias_animadas
 
     provisoria = _gif(tmp_path / "provisoria.gif")
     grade, detalhes = copias_animadas.tamanhos()
@@ -140,7 +140,7 @@ def _apng(caminho):
 
 
 def test_apng_vira_apng_com_todos_os_quadros(tmp_path):
-    from cartridges.utils.save_cover import convert_cover
+    from kyron.utils.save_cover import convert_cover
 
     origem = _apng(tmp_path / "capa.png")
 
@@ -151,13 +151,13 @@ def test_apng_vira_apng_com_todos_os_quadros(tmp_path):
 
 
 def test_png_de_um_quadro_continua_tiff(tmp_path):
-    from cartridges.utils.save_cover import convert_cover
+    from kyron.utils.save_cover import convert_cover
 
     assert convert_cover(make_image(tmp_path / "capa.png")).suffix == ".tiff"
 
 
 def test_capa_apng_prepara_as_copias(tmp_path, schema, entregas):
-    from cartridges.utils import save_cover as modulo
+    from kyron.utils import save_cover as modulo
 
     nova = _apng(tmp_path / "nova.apng")
     save_cover("g1", nova)
@@ -175,8 +175,8 @@ def test_trocar_apng_por_gif_nao_deixa_as_duas(tmp_path, schema, entregas):
 def test_pedido_no_meio_da_troca_nao_deixa_copia_da_capa_velha(tmp_path, monkeypatch):
     """A capa na tela ainda é a velha até o ``new_cover`` (por idle) e pode pedir
     a cópia durante a troca: o que for gerado da velha não sobrevive a ela."""
-    from cartridges.utils import copias_animadas
-    from cartridges.utils import save_cover as modulo
+    from kyron.utils import copias_animadas
+    from kyron.utils import save_cover as modulo
 
     def animada(caminho, cor):
         caminho.parent.mkdir(parents=True, exist_ok=True)
@@ -232,7 +232,7 @@ def test_capa_estatica_ou_removida_nao_prepara(tmp_path, schema, entregas):
 
 
 def test_imagem_mais_alta_que_a_capa_e_esticada(tmp_path):
-    from cartridges.utils.save_cover import composite_cover  # noqa: PLC0415
+    from kyron.utils.save_cover import composite_cover  # noqa: PLC0415
 
     imagem = composite_cover(make_image_sized(tmp_path / "alta.png", (400, 900)))
 
@@ -241,7 +241,7 @@ def test_imagem_mais_alta_que_a_capa_e_esticada(tmp_path):
 
 def test_imagem_pouco_mais_larga_ainda_e_esticada(tmp_path):
     # 600x800: esticar para 600x900 distorce 11 %, dentro dos 12 % tolerados.
-    from cartridges.utils.save_cover import composite_cover  # noqa: PLC0415
+    from kyron.utils.save_cover import composite_cover  # noqa: PLC0415
 
     imagem = composite_cover(make_image_sized(tmp_path / "quase.png", (600, 800)))
 
@@ -249,7 +249,7 @@ def test_imagem_pouco_mais_larga_ainda_e_esticada(tmp_path):
 
 
 def test_imagem_larga_vai_ao_centro_sobre_o_proprio_desfoque(tmp_path):
-    from cartridges.utils.save_cover import composite_cover  # noqa: PLC0415
+    from kyron.utils.save_cover import composite_cover  # noqa: PLC0415
 
     imagem = composite_cover(make_image_sized(tmp_path / "larga.png", (1200, 400)))
 
@@ -258,7 +258,7 @@ def test_imagem_larga_vai_ao_centro_sobre_o_proprio_desfoque(tmp_path):
 
 
 def test_arquivo_ilegivel_levanta(tmp_path):
-    from cartridges.utils.save_cover import UnreadableCoverError, composite_cover  # noqa: PLC0415
+    from kyron.utils.save_cover import UnreadableCoverError, composite_cover  # noqa: PLC0415
 
     ruim = tmp_path / "ruim.png"
     ruim.write_bytes(b"nada")
@@ -277,7 +277,7 @@ def make_image_sized(path, size):
 
 def test_convert_cover_nao_deixa_temporario_se_o_pillow_falha(tmp_path, monkeypatch):
     """O Pillow falha no meio da gravação: nem capa pela metade nem ``.tmp`` sobram."""
-    from cartridges.utils.save_cover import convert_cover  # noqa: PLC0415
+    from kyron.utils.save_cover import convert_cover  # noqa: PLC0415
 
     capa = make_image(tmp_path / "capa.png")
     temporarios = tmp_path / "temporarios"
@@ -295,7 +295,7 @@ def test_convert_cover_nao_deixa_temporario_se_o_pillow_falha(tmp_path, monkeypa
 
 
 def test_convert_cover_nao_deixa_temporario_numa_falha_inesperada(tmp_path, monkeypatch):
-    from cartridges.utils.save_cover import convert_cover  # noqa: PLC0415
+    from kyron.utils.save_cover import convert_cover  # noqa: PLC0415
 
     capa = make_image(tmp_path / "capa.png")
     temporarios = tmp_path / "temporarios"
@@ -314,7 +314,7 @@ def test_convert_cover_nao_deixa_temporario_numa_falha_inesperada(tmp_path, monk
 
 
 def test_save_cover_com_destino_que_falha_nao_deixa_tmp(tmp_path, monkeypatch):
-    from cartridges.utils import save_cover as modulo  # noqa: PLC0415
+    from kyron.utils import save_cover as modulo  # noqa: PLC0415
 
     def copiar_pela_metade(origem, destino):  # noqa: ARG001
         destino.write_bytes(b"metade")
@@ -362,7 +362,7 @@ def test_save_cover_de_jogo_fora_da_store_nao_quebra(tmp_path):
 
 
 def test_convert_cover_sem_redimensionar_devolve_o_original(tmp_path):
-    from cartridges.utils.save_cover import convert_cover  # noqa: PLC0415
+    from kyron.utils.save_cover import convert_cover  # noqa: PLC0415
 
     origem = make_image(tmp_path / "capa.png")
 
@@ -370,7 +370,7 @@ def test_convert_cover_sem_redimensionar_devolve_o_original(tmp_path):
 
 
 def test_convert_cover_ilegivel_devolve_none(tmp_path):
-    from cartridges.utils.save_cover import convert_cover  # noqa: PLC0415
+    from kyron.utils.save_cover import convert_cover  # noqa: PLC0415
 
     ruim = tmp_path / "ruim.png"
     ruim.write_bytes(b"nada")
@@ -381,7 +381,7 @@ def test_convert_cover_ilegivel_devolve_none(tmp_path):
 
 def test_formato_que_o_pillow_nao_le_mas_o_qt_le_vira_capa(tmp_path, monkeypatch):
     """Um formato que o Pillow não lê mas o Qt lê (`QImageReader`) vira capa; sem resize, a TIFF do Qt é a própria saída."""
-    from cartridges.utils import save_cover as modulo  # noqa: PLC0415
+    from kyron.utils import save_cover as modulo  # noqa: PLC0415
 
     origem = tmp_path / "so_o_qt.xyz"  # PNG por dentro; a extensão não é do Pillow, e ele "não o lê"
     Image.new("RGB", (300, 200), "blue").save(origem, format="PNG")
@@ -412,13 +412,13 @@ def test_modulos_desta_tarefa_nao_importam_gi():
     import sys  # noqa: PLC0415
 
     modulos = [
-        "cartridges.utils.save_cover",
-        "cartridges.utils.steamgriddb",
-        "cartridges.utils.passada_agendada",
-        "cartridges.utils.hltb_backfill",
-        "cartridges.modelos.tarefas",
-        "cartridges.store.managers.sgdb_manager",
-        "cartridges.store.managers.exibicao_manager",
+        "kyron.utils.save_cover",
+        "kyron.utils.steamgriddb",
+        "kyron.utils.passada_agendada",
+        "kyron.utils.hltb_backfill",
+        "kyron.modelos.tarefas",
+        "kyron.store.managers.sgdb_manager",
+        "kyron.store.managers.exibicao_manager",
     ]
     codigo = (
         "import builtins, sys\n"

@@ -3,10 +3,10 @@
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-from cartridges import shared
-from cartridges.modelos.avisos import FilaDeAvisos
-from cartridges.modelos.novidades import Novidades
-from cartridges.utils import backup
+from kyron import shared
+from kyron.modelos.avisos import FilaDeAvisos
+from kyron.modelos.novidades import Novidades
+from kyron.utils import backup
 from tests.apoio_novidades import CheckerFalso
 
 _GSCHEMA = Path(__file__).parent.parent / "data" / "io.github.joaomgabaldi.Cartridges.gschema.xml.in"

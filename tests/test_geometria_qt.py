@@ -20,15 +20,15 @@ from PySide6.QtCore import QEventLoop, QTimer, QUrl
 from PySide6.QtGui import QGuiApplication, QWindow
 from PySide6.QtQml import QQmlComponent, QQmlEngine
 
-from cartridges import shared
-from cartridges.modelos import tarefas
-from cartridges.modelos.tarefas import PainelDasTarefas
-from cartridges.saves import backup_de_saves
-from cartridges.utils import window_geometry
-from cartridges.utils.window_geometry import UNSET, Geometry, GeometriaDaJanela
+from kyron import shared
+from kyron.modelos import tarefas
+from kyron.modelos.tarefas import PainelDasTarefas
+from kyron.saves import backup_de_saves
+from kyron.utils import window_geometry
+from kyron.utils.window_geometry import UNSET, Geometry, GeometriaDaJanela
 
 RAIZ = Path(__file__).resolve().parent.parent
-QML = RAIZ / "cartridges" / "qml"
+QML = RAIZ / "kyron" / "qml"
 
 
 def _esperar(ms=50):
@@ -251,7 +251,7 @@ def test_nada_gravado_nao_mexe_na_janela(win32_falso):
 
 def _principal(geometria):
     motor = QQmlEngine()
-    from cartridges.modelos.provedor_de_icones import ProvedorDeIcones  # noqa: PLC0415
+    from kyron.modelos.provedor_de_icones import ProvedorDeIcones  # noqa: PLC0415
     motor.addImageProvider("icone", ProvedorDeIcones())
     motor.rootContext().setContextProperty("geometria", geometria)
     componente = QQmlComponent(motor, QUrl.fromLocalFile(str(QML / "Principal.qml")))
@@ -353,7 +353,7 @@ def test_fechar_grava_a_geometria_primeiro(monkeypatch):
 
     No `quit()` do reinício e da atualização o `closing` já gravou e este passo vira no-op. Aqui só a ordem.
     """
-    from cartridges import app as modulo_app  # noqa: PLC0415
+    from kyron import app as modulo_app  # noqa: PLC0415
 
     passos = []
 
@@ -379,15 +379,15 @@ def test_window_geometry_sem_gi(tmp_path):
         """
         import sys
         sys.modules["gi"] = None
-        from cartridges.utils import window_geometry
+        from kyron.utils import window_geometry
         assert not hasattr(window_geometry, "apply_size")
         assert not hasattr(window_geometry, "apply_placement")
         assert window_geometry._hwnd(object()) is None
         print("ok")
         """
     )
-    ambiente = {**os.environ, "CARTRIDGES_DADOS": str(tmp_path), "QT_QPA_PLATFORM": "offscreen"}
-    ambiente["CARTRIDGES_REGISTRO"] = rf"Software\CartridgesTestes\geometria-{uuid.uuid4()}"
+    ambiente = {**os.environ, "KYRON_DADOS": str(tmp_path), "QT_QPA_PLATFORM": "offscreen"}
+    ambiente["KYRON_REGISTRO"] = rf"Software\KyronTestes\geometria-{uuid.uuid4()}"
     resultado = subprocess.run(
         [sys.executable, "-c", script], cwd=RAIZ, env=ambiente, capture_output=True, text=True, timeout=60, check=False
     )

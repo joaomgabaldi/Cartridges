@@ -10,16 +10,16 @@ A generator that raises is closed, so the loop ends with the same ``StopIteratio
 
 import pytest
 
-from cartridges import shared
-from cartridges.aplicativo import Aplicativo
-from cartridges.errors.friendly_error import FriendlyError
-from cartridges.importer.importer import Importer
-from cartridges.importer.source import SourceScanError
+from kyron import shared
+from kyron.aplicativo import Aplicativo
+from kyron.errors.friendly_error import FriendlyError
+from kyron.importer.importer import Importer
+from kyron.importer.source import SourceScanError
 
 
 @pytest.fixture(autouse=True)
 def tarefas_vazias(app_qt, flush_idle):  # noqa: ARG001
-    from cartridges.modelos import tarefas  # noqa: PLC0415
+    from kyron.modelos import tarefas  # noqa: PLC0415
 
     yield
     flush_idle(0.05)
@@ -238,7 +238,7 @@ def test_a_tombstone_is_not_removed_again(importer, make_game, store):
 
 
 def test_importacao_sem_jogo_novo_nao_vira_tarefa(importer, monkeypatch, flush_idle):
-    from cartridges.modelos import tarefas  # noqa: PLC0415
+    from kyron.modelos import tarefas  # noqa: PLC0415
 
     monkeypatch.setattr(importer, "finish_import", lambda: None)
     importer.n_source_tasks_created = 1
@@ -251,7 +251,7 @@ def test_importacao_sem_jogo_novo_nao_vira_tarefa(importer, monkeypatch, flush_i
 
 
 def test_jogo_novo_vira_tarefa_que_termina_com_a_importacao(importer, monkeypatch, flush_idle):
-    from cartridges.modelos import tarefas  # noqa: PLC0415
+    from kyron.modelos import tarefas  # noqa: PLC0415
 
     monkeypatch.setattr(importer, "finish_import", lambda: None)
     importer.n_source_tasks_created = 1
@@ -269,7 +269,7 @@ def test_jogo_novo_vira_tarefa_que_termina_com_a_importacao(importer, monkeypatc
 
 
 def test_monitor_so_atualiza_a_tarefa_quando_o_progresso_muda(importer, monkeypatch, flush_idle):
-    from cartridges.modelos import tarefas  # noqa: PLC0415
+    from kyron.modelos import tarefas  # noqa: PLC0415
 
     monkeypatch.setattr(importer, "finish_import", lambda: None)
     importer.n_source_tasks_created = 1

@@ -8,7 +8,7 @@ import contextlib
 
 import pytest
 
-from cartridges.utils import steam
+from kyron.utils import steam
 
 
 def resposta(payload):

@@ -11,9 +11,9 @@ from PySide6.QtQml import QQmlEngine, QQmlExpression
 from PySide6.QtQuick import QQuickItem
 from PySide6.QtTest import QTest
 
-from cartridges import shared
-from cartridges.jogo import Jogo
-from cartridges.utils import session_fita
+from kyron import shared
+from kyron.jogo import Jogo
+from kyron.utils import session_fita
 from tests.apoio_edicao import jogo
 from tests.apoio_fita import pastas  # noqa: F401  # a pasta descartável das fitas (autouse)
 from tests.apoio_qml_biblioteca import _achar, _App, _esperar
@@ -515,7 +515,7 @@ def test_segunda_escolha_apaga_a_primeira(app, tmp_path):
 
 def test_capa_provisoria_descartada_abandona_as_copias(app, tmp_path, monkeypatch):
     """Trocar a provisória e fechar sem aplicar: a geração das cópias dela sai da fila junto com o arquivo."""
-    from cartridges.utils import copias_animadas  # noqa: PLC0415
+    from kyron.utils import copias_animadas  # noqa: PLC0415
 
     abandonadas = []
     monkeypatch.setattr(copias_animadas, "abandonar", abandonadas.append)
@@ -557,7 +557,7 @@ def test_aplicar_grava_a_capa_e_a_provisoria_sai_depois(app, tmp_path):
 
 
 def test_capa_presa_nao_aborta_o_aplicar(app, tmp_path, monkeypatch):
-    from cartridges import edicao as regra  # noqa: PLC0415
+    from kyron import edicao as regra  # noqa: PLC0415
 
     def presa(*_args):
         raise PermissionError(5, "Acesso negado")
@@ -601,7 +601,7 @@ def test_capa_ilegivel_na_previa_mostra_a_capa_padrao(app):
 
 
 def test_logo_titulo_e_restaurar(app):
-    from cartridges.edicao import Escolha  # noqa: PLC0415
+    from kyron.edicao import Escolha  # noqa: PLC0415
 
     app.edicao.abrir("shortcuts_z2")
     assert app.edicao.logoSubtitulo == "Automático (SteamGridDB)" and app.edicao.logoRestauravel is False
@@ -620,7 +620,7 @@ def test_logo_titulo_e_restaurar(app):
 
 
 def test_logo_de_arquivo_e_gravado_no_aplicar(app, tmp_path):
-    from cartridges.utils import game_logo  # noqa: PLC0415
+    from kyron.utils import game_logo  # noqa: PLC0415
 
     arquivo = _imagem(tmp_path / "logo.png")
     app.edicao.abrir("shortcuts_z2")
@@ -631,7 +631,7 @@ def test_logo_de_arquivo_e_gravado_no_aplicar(app, tmp_path):
 
 
 def test_papel_de_parede_desabilitado_com_um_monitor(app, monkeypatch):
-    from cartridges.modelos import edicao as modelo  # noqa: PLC0415
+    from kyron.modelos import edicao as modelo  # noqa: PLC0415
 
     monkeypatch.setattr(modelo, "_segundo_monitor", lambda: False)
     app.edicao.abrir("shortcuts_z2")
@@ -649,7 +649,7 @@ def test_papel_de_parede_desabilitado_com_um_monitor(app, monkeypatch):
 
 
 def test_video_sem_ffmpeg_mostra_o_erro(app, tmp_path, monkeypatch):
-    from cartridges.utils import capa_video  # noqa: PLC0415
+    from kyron.utils import capa_video  # noqa: PLC0415
 
     monkeypatch.setattr(capa_video, "executavel", lambda: None)
     pedidos = []
@@ -664,8 +664,8 @@ def test_video_sem_ffmpeg_mostra_o_erro(app, tmp_path, monkeypatch):
 
 
 def test_a_grade_e_a_pagina_largam_a_copia_animada_antes_de_gravar_a_capa(app, tmp_path, monkeypatch):
-    from cartridges import edicao as regra  # noqa: PLC0415
-    from cartridges.utils import copias_animadas  # noqa: PLC0415
+    from kyron import edicao as regra  # noqa: PLC0415
+    from kyron.utils import copias_animadas  # noqa: PLC0415
 
     capa = shared.covers_dir / "shortcuts_z2.gif"
     _imagem(capa)
@@ -698,7 +698,7 @@ def test_a_grade_e_a_pagina_largam_a_copia_animada_antes_de_gravar_a_capa(app, t
 @pytest.fixture
 def sgdb(app, tmp_path, monkeypatch, schema):
     """O SteamGridDB e o download falsos nos dois seletores; %TEMP% de mentira."""
-    from cartridges.modelos import seletores  # noqa: PLC0415
+    from kyron.modelos import seletores  # noqa: PLC0415
     from tests.apoio_seletores import DownloadFalso, SgdbFalso  # noqa: PLC0415
 
     temp = tmp_path / "temp"
@@ -762,7 +762,7 @@ def test_pulsa_do_clique_ate_o_primeiro_dado(app, sgdb, monkeypatch):
     """Entre o clique e o primeiro dado (DNS, TLS, um servidor lento) a barra fica indeterminada."""
     import threading  # noqa: PLC0415
 
-    from cartridges.modelos import seletores  # noqa: PLC0415
+    from kyron.modelos import seletores  # noqa: PLC0415
     from tests.apoio_seletores import png_bytes  # noqa: PLC0415
 
     liberar = threading.Event()
@@ -809,7 +809,7 @@ def test_seletor_de_logo_usar_o_titulo(app, sgdb):
 
 
 def test_seletor_de_logo_escolhe_e_o_aplicar_grava(app, sgdb):
-    from cartridges.utils import game_logo  # noqa: PLC0415
+    from kyron.utils import game_logo  # noqa: PLC0415
 
     app.edicao.abrir("shortcuts_z2")
     _abrir_seletor(app, "botaoEscolherLogoSgdb", "seletorDeLogo")
@@ -851,7 +851,7 @@ def test_textos_do_seletor_em_texto_puro(app, sgdb):
 
 
 def test_save_cover_fora_do_aplicar_limpa_a_capa_da_sessao(app, tmp_path):
-    from cartridges.utils.save_cover import save_cover  # noqa: PLC0415
+    from kyron.utils.save_cover import save_cover  # noqa: PLC0415
 
     jogo_ = shared.store.get("shortcuts_z2")
     provisoria = _imagem(tmp_path / "provisoria.png", (600, 900), "red")
@@ -872,7 +872,7 @@ def test_save_cover_fora_do_aplicar_limpa_a_capa_da_sessao(app, tmp_path):
 @pytest.fixture
 def steam(app, monkeypatch):
     """A Steam e o HowLongToBeat falsos; nada fala com a rede."""
-    from cartridges.modelos import edicao as modulo  # noqa: PLC0415
+    from kyron.modelos import edicao as modulo  # noqa: PLC0415
     from tests.apoio_seletores import HltbFalso, SteamFalsa  # noqa: PLC0415
 
     falsa = SteamFalsa()
@@ -945,7 +945,7 @@ def test_buscar_metadados_pelo_botao_do_titulo(app, steam):
 
 
 def test_buscar_metadados_com_varios_candidatos_abre_o_seletor(app, steam):
-    from cartridges.utils.steam import SteamGameNotFoundError  # noqa: PLC0415
+    from kyron.utils.steam import SteamGameNotFoundError  # noqa: PLC0415
 
     steam.erro_do_resolve = SteamGameNotFoundError()
     app.edicao.abrir("shortcuts_z1")
@@ -1064,9 +1064,9 @@ def wallhaven(app, tmp_path, monkeypatch):
 
     from PIL import Image  # noqa: PLC0415
 
-    from cartridges.modelos import edicao as modelo  # noqa: PLC0415
-    from cartridges.modelos import seletores  # noqa: PLC0415
-    from cartridges.utils.session_wallpaper import Monitor  # noqa: PLC0415
+    from kyron.modelos import edicao as modelo  # noqa: PLC0415
+    from kyron.modelos import seletores  # noqa: PLC0415
+    from kyron.utils.session_wallpaper import Monitor  # noqa: PLC0415
     from tests.apoio_seletores import DownloadFalso, WallhavenFalso  # noqa: PLC0415
 
     temp = tmp_path / "temp"
@@ -1110,7 +1110,7 @@ def test_seletor_de_papel_modal_esc_fecha_e_devolve_o_foco(app, wallhaven):
 
 
 def test_seletor_de_papel_escolhe_ajusta_e_o_aplicar_grava(app, wallhaven):
-    from cartridges.utils import session_wallpaper  # noqa: PLC0415
+    from kyron.utils import session_wallpaper  # noqa: PLC0415
 
     app.edicao.abrir("shortcuts_z2")
     _abrir_seletor(app, "botaoEscolherPapelWallhaven", "seletorDePapel")
@@ -1394,7 +1394,7 @@ def test_sem_avisos_do_qml_na_pagina_nos_dialogos_e_nos_seletores(app_qt, store,
 
 
 def test_abrir_pasta_que_falha_avisa_que_nao_foi_possivel(app, monkeypatch):
-    from cartridges.modelos import edicao as modelo_da_edicao  # noqa: PLC0415
+    from kyron.modelos import edicao as modelo_da_edicao  # noqa: PLC0415
 
     abertas, dialogos = [], []
     monkeypatch.setattr(modelo_da_edicao, "game_folder", lambda _comando: r"C:\Jogos")
@@ -1412,7 +1412,7 @@ def test_abrir_pasta_que_falha_avisa_que_nao_foi_possivel(app, monkeypatch):
 
 
 def test_abrir_pasta_que_funciona_nao_avisa(app, monkeypatch):
-    from cartridges.modelos import edicao as modelo_da_edicao  # noqa: PLC0415
+    from kyron.modelos import edicao as modelo_da_edicao  # noqa: PLC0415
 
     dialogos = []
     monkeypatch.setattr(modelo_da_edicao, "game_folder", lambda _comando: r"C:\Jogos")
@@ -1442,7 +1442,7 @@ def test_tab_ate_um_campo_abaixo_da_dobra_rola_o_editor(app):
 
 
 def test_aviso_fechado_devolve_o_foco_ao_ultimo_campo_e_nao_ao_nome(app, monkeypatch):
-    from cartridges.modelos import edicao as modelo_da_edicao  # noqa: PLC0415
+    from kyron.modelos import edicao as modelo_da_edicao  # noqa: PLC0415
 
     dialogos = []
     monkeypatch.setattr(modelo_da_edicao, "game_folder", lambda _comando: r"C:\Jogos")
@@ -1846,7 +1846,7 @@ def test_anel_de_foco_do_titulo_tem_os_cantos_de_cima_arredondados(app):
 
 
 def test_idioma_e_nome_proprios_so_com_ini_e_aplicam_ao_salvar(app, monkeypatch):
-    from cartridges.emuladores import aplicacao  # noqa: PLC0415
+    from kyron.emuladores import aplicacao  # noqa: PLC0415
 
     chamados = []
     monkeypatch.setattr(aplicacao, "aplicar_no_jogo", lambda j: chamados.append(j.game_id) or True)
@@ -1879,7 +1879,7 @@ def test_idioma_e_nome_proprios_so_com_ini_e_aplicam_ao_salvar(app, monkeypatch)
 
 
 def test_campos_proprios_mostram_o_que_o_ini_traz(app, monkeypatch, tmp_path):
-    from cartridges.emuladores import aplicacao, idiomas  # noqa: PLC0415
+    from kyron.emuladores import aplicacao, idiomas  # noqa: PLC0415
 
     monkeypatch.setattr(aplicacao, "aplicar_no_jogo", lambda j: aplicacao.APLICADO)
     ini = tmp_path / "steam_emu.ini"

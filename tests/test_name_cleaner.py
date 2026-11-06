@@ -10,7 +10,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from cartridges.utils.name_cleaner import (  # noqa: E402
+from kyron.utils.name_cleaner import (  # noqa: E402
     clean_for_search,
     clean_game_name,
 )

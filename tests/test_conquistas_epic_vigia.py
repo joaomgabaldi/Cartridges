@@ -1,9 +1,9 @@
 """O vigia da sessão da Epic: o vigia da conta com a loja da Epic."""
 
-from cartridges.conquistas import historico
-from cartridges.conquistas.epic import api, conta
-from cartridges.conquistas.epic import vigia as vigia_epic
-from cartridges.conquistas.formatos import Desbloqueio
+from kyron.conquistas import historico
+from kyron.conquistas.epic import api, conta
+from kyron.conquistas.epic import vigia as vigia_epic
+from kyron.conquistas.formatos import Desbloqueio
 
 
 def _sincrono(trabalho, entregar):

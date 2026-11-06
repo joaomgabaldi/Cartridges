@@ -3,7 +3,7 @@
 import os
 from pathlib import Path
 
-from cartridges.conquistas.ubisoft import locais
+from kyron.conquistas.ubisoft import locais
 from tests.apoio_conquistas import gravar_pacote, gravar_spool, pastas  # noqa: F401
 
 # O de verdade: o conftest troca `_do_registro` em todo teste.

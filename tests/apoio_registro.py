@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Apoio dos testes que mexem no registro de testes (HKCU, Software, CartridgesTestes).
+"""Apoio dos testes que mexem no registro de testes (HKCU, Software, KyronTestes).
 
 Módulo à parte, e não o `conftest`: importar `tests.conftest` roda o arquivo
 uma segunda vez.

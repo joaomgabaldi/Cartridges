@@ -8,9 +8,9 @@ The clock is monotonic because an NTP correction or a resume from sleep moves ``
 
 import pytest
 
-from cartridges import process_session as ps
-from cartridges import shared
-from cartridges.process_session import ProcessSession
+from kyron import process_session as ps
+from kyron import shared
+from kyron.process_session import ProcessSession
 from tests.apoio_sessao import SessaoFalsa
 
 PACKAGED = "explorer.exe shell:AppsFolder\\Microsoft.Halo_8wekyb3d8bbwe!Game"
@@ -88,7 +88,7 @@ class TimerFalso:
 @pytest.fixture
 def session_window(monkeypatch):
     """Capture the manual window instead of building a real one."""
-    import cartridges.session_window as sw
+    import kyron.session_window as sw
 
     built: list = []
 

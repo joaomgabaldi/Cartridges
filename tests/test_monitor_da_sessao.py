@@ -16,10 +16,10 @@ from PIL import Image
 from PySide6.QtCore import QCoreApplication, Qt
 from PySide6.QtGui import QWindow
 
-from cartridges import app, shared
-from cartridges.modelos.avisos import FilaDeAvisos
-from cartridges.modelos.sessao import ModeloDaSessao
-from cartridges.utils import session_wallpaper, window_geometry
+from kyron import app, shared
+from kyron.modelos.avisos import FilaDeAvisos
+from kyron.modelos.sessao import ModeloDaSessao
+from kyron.utils import session_wallpaper, window_geometry
 
 RAIZ = Path(__file__).resolve().parent.parent
 PRINCIPAL = window_geometry.Monitor("\\\\.\\DISPLAY1", 0, 0, 1920, 1080, True)
@@ -203,7 +203,7 @@ def test_hwnd_da_qwindow():
 def test_window_geometry_importa_sem_gi():
     codigo = (
         "import builtins, sys; builtins._ = lambda m: m; sys.path.insert(0, sys.argv[1]);"
-        "import cartridges.utils.window_geometry, cartridges.utils.session_wallpaper, cartridges.modelos.sessao;"
+        "import kyron.utils.window_geometry, kyron.utils.session_wallpaper, kyron.modelos.sessao;"
         "sys.exit(1 if 'gi' in sys.modules else 0)"
     )
     resultado = subprocess.run([sys.executable, "-c", codigo, str(RAIZ)], capture_output=True, text=True, check=False)

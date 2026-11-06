@@ -34,8 +34,8 @@ from pathlib import Path
 
 import pytest
 
-from cartridges.saves import ludusavi
-from cartridges.saves.ludusavi import LudusaviFalhou, Previa, Versao
+from kyron.saves import ludusavi
+from kyron.saves.ludusavi import LudusaviFalhou, Previa, Versao
 
 DADOS = Path(__file__).parent / "dados" / "ludusavi"
 

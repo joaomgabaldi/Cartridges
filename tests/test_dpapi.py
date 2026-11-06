@@ -1,6 +1,6 @@
 """O DPAPI do Windows, usado pela conta da Tuya e pela conta Microsoft."""
 
-from cartridges.utils import dpapi
+from kyron.utils import dpapi
 
 
 def test_cifra_e_decifra():

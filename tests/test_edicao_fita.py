@@ -10,9 +10,9 @@ import pytest
 from PIL import Image
 from PySide6.QtGui import QColor
 
-from cartridges import edicao as regra
-from cartridges.modelos.edicao import ModeloDaEdicao
-from cartridges.utils import session_fita
+from kyron import edicao as regra
+from kyron.modelos.edicao import ModeloDaEdicao
+from kyron.utils import session_fita
 from tests.apoio_edicao import jogo
 from tests.apoio_fita import pastas  # noqa: F401  # a pasta descartável das fitas (autouse)
 

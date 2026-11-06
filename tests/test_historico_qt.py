@@ -10,11 +10,11 @@ from time import time
 import pytest
 from PIL import Image
 
-from cartridges.jogo import Jogo
-from cartridges.modelos import historico as modulo
-from cartridges.modelos.historico import HistoricoDeSessoes
-from cartridges.session_history import dia_mais_perto, format_session_date, geometria_do_grafico, sem_lacunas_longas
-from cartridges.utils import session_log
+from kyron.jogo import Jogo
+from kyron.modelos import historico as modulo
+from kyron.modelos.historico import HistoricoDeSessoes
+from kyron.session_history import dia_mais_perto, format_session_date, geometria_do_grafico, sem_lacunas_longas
+from kyron.utils import session_log
 
 
 class _Loja:

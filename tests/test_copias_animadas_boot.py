@@ -10,8 +10,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from cartridges import app as app_modulo
-from cartridges.utils import copias_animadas
+from kyron import app as app_modulo
+from kyron.utils import copias_animadas
 
 
 class _ThreadFalsa:

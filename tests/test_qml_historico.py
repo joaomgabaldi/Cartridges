@@ -11,9 +11,9 @@ from PySide6.QtQml import QQmlEngine, QQmlExpression
 from PySide6.QtQuick import QQuickItem
 from PySide6.QtTest import QTest
 
-from cartridges.jogo import Jogo
-from cartridges.modelos import historico as modulo
-from cartridges.utils import session_log
+from kyron.jogo import Jogo
+from kyron.modelos import historico as modulo
+from kyron.utils import session_log
 from tests.apoio_qml_biblioteca import _achar, _App, _assentar, _esperar, _jogos
 from tests.apoio_qml_detalhes import _abrir_pelo_cartao, _clicar
 from tests.apoio_qml_historico import _caixa, _expr, _todos
@@ -662,7 +662,7 @@ from PySide6.QtCore import Qt, QPoint
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtTest import QTest
 app = QGuiApplication(["x"])  # sem a opção dos testes: a animação de saída roda
-from cartridges.utils import session_log
+from kyron.utils import session_log
 agora = int(time.time())
 session_log.load = lambda gid: [{"end": agora - i * 86400, "seconds": 3600} for i in range(30 if gid.endswith("_1") else 2)]
 from tests.apoio_qml_biblioteca import _achar, _App, _esperar, _jogos

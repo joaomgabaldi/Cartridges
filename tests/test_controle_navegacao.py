@@ -12,7 +12,7 @@ não foi verificado.
 import pytest
 from PySide6.QtCore import Qt
 
-from cartridges import shared
+from kyron import shared
 from tests.apoio_qml_biblioteca import _App, _esperar, _jogos
 from tests.apoio_qml_preferencias import _avaliar
 

@@ -11,14 +11,14 @@ from PySide6.QtCore import Qt, QUrl
 from PySide6.QtQml import QQmlComponent, QQmlEngine, QQmlExpression
 from PySide6.QtQuick import QQuickItem, QQuickWindow
 
-from cartridges import shared
-from cartridges.jogo import Jogo
-from cartridges.modelos.big_picture import BigPicture, ProvedorDoFundo
-from cartridges.modelos.avisos import FilaDeAvisos
-from cartridges.modelos.biblioteca import ModeloDaBiblioteca
-from cartridges.modelos.conquistas import ConquistasDoJogo
-from cartridges.modelos.detalhes import DetalhesDoJogo
-from cartridges.modelos.sessao import ModeloDaSessao
+from kyron import shared
+from kyron.jogo import Jogo
+from kyron.modelos.big_picture import BigPicture, ProvedorDoFundo
+from kyron.modelos.avisos import FilaDeAvisos
+from kyron.modelos.biblioteca import ModeloDaBiblioteca
+from kyron.modelos.conquistas import ConquistasDoJogo
+from kyron.modelos.detalhes import DetalhesDoJogo
+from kyron.modelos.sessao import ModeloDaSessao
 from tests.apoio_qml_biblioteca import QML, _achar, _esperar, _LojaFalsa
 
 
@@ -54,7 +54,7 @@ class _Tela:
         self.bp.entrar()  # antes do QML existir: a lista só acompanha a biblioteca visível, e sem fila
         self.bp.filaTerminou()
         self.motor = QQmlEngine()
-        from cartridges.modelos.provedor_de_icones import ProvedorDeIcones  # noqa: PLC0415
+        from kyron.modelos.provedor_de_icones import ProvedorDeIcones  # noqa: PLC0415
         self.motor.addImageProvider("icone", ProvedorDeIcones())
         self.motor.addImageProvider("fundo", ProvedorDoFundo())
         self.motor.addImageProvider("desfoque", self.detalhes.provedor)
@@ -107,7 +107,7 @@ def _aberto_com(monkeypatch, animacoes=True, quantidade=4):
     """O Aplicativo com o Big Picture disponível (o offscreen não tem renderizador 3D) e `quantidade` jogos."""
     from PySide6.QtCore import QMetaObject  # noqa: PLC0415
 
-    from cartridges.modelos import big_picture as modulo  # noqa: PLC0415
+    from kyron.modelos import big_picture as modulo  # noqa: PLC0415
     from tests.apoio_qml_biblioteca import _App, _jogos  # noqa: PLC0415
 
     monkeypatch.setattr(modulo, "tem_3d", lambda _janela: True)

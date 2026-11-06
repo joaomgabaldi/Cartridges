@@ -4,11 +4,11 @@ from types import SimpleNamespace
 
 import pytest
 
-from cartridges import conquista_aviso, shared
-from cartridges.conquistas import historico, sessao
-from cartridges.conquistas.catalogo import ConquistaInfo
-from cartridges.conquistas.vigia import Desbloqueada
-from cartridges.utils import session_fita
+from kyron import conquista_aviso, shared
+from kyron.conquistas import historico, sessao
+from kyron.conquistas.catalogo import ConquistaInfo
+from kyron.conquistas.vigia import Desbloqueada
+from kyron.utils import session_fita
 
 
 class _VigiaFalso:
@@ -209,7 +209,7 @@ class _VigiaXboxFalso:
 
 @pytest.fixture
 def xbox(monkeypatch):
-    from cartridges.conquistas.xbox import conta, vigia as vigia_xbox  # noqa: PLC0415
+    from kyron.conquistas.xbox import conta, vigia as vigia_xbox  # noqa: PLC0415
 
     _VigiaXboxFalso.criados = []
     monkeypatch.setattr(vigia_xbox, "Vigia", _VigiaXboxFalso)
@@ -264,7 +264,7 @@ def test_so_pulso_sem_jogo_ou_sem_fonte(make_game):
 
 @pytest.fixture
 def epic(monkeypatch):
-    from cartridges.conquistas.epic import conta, vigia as vigia_epic  # noqa: PLC0415
+    from kyron.conquistas.epic import conta, vigia as vigia_epic  # noqa: PLC0415
 
     _VigiaXboxFalso.criados = []
     monkeypatch.setattr(vigia_epic, "Vigia", _VigiaXboxFalso)
@@ -299,7 +299,7 @@ def test_jogo_da_epic_sem_conta_nao_e_acompanhado(make_game, epic, monkeypatch):
 
 @pytest.fixture
 def ea(monkeypatch):
-    from cartridges.conquistas.ea import conta, vigia as vigia_ea  # noqa: PLC0415
+    from kyron.conquistas.ea import conta, vigia as vigia_ea  # noqa: PLC0415
 
     _VigiaXboxFalso.criados = []
     monkeypatch.setattr(vigia_ea, "Vigia", _VigiaXboxFalso)
@@ -325,7 +325,7 @@ def test_jogo_da_ea_usa_o_vigia_da_ea_e_so_pulsa(make_game, ea, isolar):
 
 @pytest.fixture
 def ubisoft(monkeypatch):
-    from cartridges.conquistas.ubisoft import vigia as vigia_ubisoft  # noqa: PLC0415
+    from kyron.conquistas.ubisoft import vigia as vigia_ubisoft  # noqa: PLC0415
 
     _VigiaXboxFalso.criados = []
     monkeypatch.setattr(vigia_ubisoft, "Vigia", _VigiaXboxFalso)

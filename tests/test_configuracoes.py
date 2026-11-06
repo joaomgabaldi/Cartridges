@@ -10,9 +10,9 @@ import winreg
 import pytest
 from PySide6.QtCore import QEventLoop, QTimer
 
-from cartridges import shared
-from cartridges.configuracoes import Configuracoes
-from cartridges.utils.thread_principal import eh_thread_principal
+from kyron import shared
+from kyron.configuracoes import Configuracoes
+from kyron.utils.thread_principal import eh_thread_principal
 
 
 @pytest.fixture

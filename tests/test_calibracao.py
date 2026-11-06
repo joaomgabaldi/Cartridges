@@ -6,9 +6,9 @@
 
 import pytest
 
-from cartridges.utils import calibracao
-from cartridges.utils.calibracao import NEUTRA, Calibracao, corrigir
-from cartridges.utils.session_fita import Cor
+from kyron.utils import calibracao
+from kyron.utils.calibracao import NEUTRA, Calibracao, corrigir
+from kyron.utils.session_fita import Cor
 
 
 def _com(indice=0, tom=0, fator=1.0, branco=(0, 0)):

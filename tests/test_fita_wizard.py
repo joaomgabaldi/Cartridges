@@ -10,10 +10,10 @@ from types import SimpleNamespace
 
 import pytest
 
-from cartridges import shared
-from cartridges.fita_wizard import REGIOES, fitas_da_nuvem
-from cartridges.utils import session_fita, tuya_conta
-from cartridges.utils.session_fita import Fita
+from kyron import shared
+from kyron.fita_wizard import REGIOES, fitas_da_nuvem
+from kyron.utils import session_fita, tuya_conta
+from kyron.utils.session_fita import Fita
 
 
 def test_dispositivo_com_chave_vira_fita():
@@ -63,7 +63,7 @@ def test_item_que_nao_e_dicionario_e_pulado():
 
 def test_a_tinytuya_fica_calada_no_arquivo_de_log():
     """A API Secret da conta não pode acabar no `cartridges.log`: a tinytuya a loga em DEBUG, então silenciar a biblioteca não pode sumir."""
-    from cartridges.logging.setup import LIB_LOGGERS  # noqa: PLC0415
+    from kyron.logging.setup import LIB_LOGGERS  # noqa: PLC0415
 
     nivel = logging.getLevelNamesMapping()[LIB_LOGGERS["tinytuya"]["level"]]
     assert nivel >= logging.WARNING
@@ -83,7 +83,7 @@ def pastas(tmp_path, monkeypatch):
 
 def _assistente(monkeypatch):
     """O assistente de verdade, com a thread da rede rodando na hora (mesmo dublê de `threading` do teste do "Testar")."""
-    import cartridges.fita_wizard as wizard_module  # noqa: PLC0415
+    import kyron.fita_wizard as wizard_module  # noqa: PLC0415
 
     monkeypatch.setattr(
         wizard_module,
@@ -169,7 +169,7 @@ def test_assistente_abre_pre_preenchido_com_a_conta_salva(pastas, monkeypatch):
 
 def _nuvem_falsa(monkeypatch, resposta, token="token-valido", error=None):
     """Põe no lugar da fábrica da nuvem uma que devolve ``resposta``, com `token` e `error` como a `tinytuya.Cloud` real; devolve ``(regiao, chave, segredo)`` de cada chamada."""
-    import cartridges.fita_wizard as wizard_module  # noqa: PLC0415
+    import kyron.fita_wizard as wizard_module  # noqa: PLC0415
 
     chamadas = []
     monkeypatch.setattr(
@@ -229,8 +229,8 @@ def test_busca_sem_sucesso_nao_salva_a_conta(pastas, monkeypatch, flush_idle):
 
 def test_o_assistente_grava_o_endereco_que_a_rede_deu(monkeypatch, tmp_path):
     """A nuvem não sabe o IP local; a varredura, feita uma vez aqui, sabe."""
-    from cartridges import shared
-    from cartridges.fita_wizard import com_enderecos
+    from kyron import shared
+    from kyron.fita_wizard import com_enderecos
 
     monkeypatch.setattr(shared, "fitas_arquivo", tmp_path / "fitas.json")
     da_nuvem = [Fita("Centro", "eb1", "", "k", "3.3")]
@@ -242,9 +242,9 @@ def test_o_assistente_grava_o_endereco_que_a_rede_deu(monkeypatch, tmp_path):
 
 def test_fita_que_a_rede_nao_achou_mantem_o_endereco_que_ja_tinha(monkeypatch, tmp_path):
     """Rodar o assistente com uma fita desligada não pode apagar o IP dela."""
-    from cartridges import shared
-    from cartridges.fita_wizard import com_enderecos
-    from cartridges.utils.session_fita import gravar_fitas
+    from kyron import shared
+    from kyron.fita_wizard import com_enderecos
+    from kyron.utils.session_fita import gravar_fitas
 
     monkeypatch.setattr(shared, "fitas_arquivo", tmp_path / "fitas.json")
     gravar_fitas([Fita("Centro", "eb1", "192.168.0.150", "k", "3.3")])
@@ -255,9 +255,9 @@ def test_fita_que_a_rede_nao_achou_mantem_o_endereco_que_ja_tinha(monkeypatch, t
 
 
 def test_rodar_o_assistente_de_novo_mantem_o_brilho_por_dispositivo(monkeypatch, tmp_path):
-    from cartridges import shared
-    from cartridges.fita_wizard import com_enderecos
-    from cartridges.utils.session_fita import gravar_fitas
+    from kyron import shared
+    from kyron.fita_wizard import com_enderecos
+    from kyron.utils.session_fita import gravar_fitas
 
     monkeypatch.setattr(shared, "fitas_arquivo", tmp_path / "fitas.json")
     gravar_fitas([Fita("Centro", "eb1", "192.168.0.150", "k", "3.3", 40)])
@@ -270,8 +270,8 @@ def test_rodar_o_assistente_de_novo_mantem_o_brilho_por_dispositivo(monkeypatch,
 
 
 def test_fita_nunca_vista_na_rede_fica_sem_endereco(monkeypatch, tmp_path):
-    from cartridges import shared
-    from cartridges.fita_wizard import com_enderecos
+    from kyron import shared
+    from kyron.fita_wizard import com_enderecos
 
     monkeypatch.setattr(shared, "fitas_arquivo", tmp_path / "fitas.json")
 
@@ -298,9 +298,9 @@ def test_so_fitas_e_lampadas_entram_na_lista():
 
 
 def test_rodar_o_assistente_de_novo_mantem_a_calibracao(monkeypatch, tmp_path):
-    from cartridges import shared
-    from cartridges.fita_wizard import com_enderecos
-    from cartridges.utils.session_fita import gravar_fitas
+    from kyron import shared
+    from kyron.fita_wizard import com_enderecos
+    from kyron.utils.session_fita import gravar_fitas
 
     calibracao = {"cores": [[-8, 1.0]] + [[0, 1.0]] * 5, "branco": [30, 150]}
     monkeypatch.setattr(shared, "fitas_arquivo", tmp_path / "fitas.json")

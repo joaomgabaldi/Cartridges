@@ -8,11 +8,11 @@ from urllib.parse import quote
 
 from PySide6.QtCore import QCoreApplication, QObject, Qt, Signal
 
-from cartridges.jogo import Jogo
-from cartridges.modelos import detalhes as modulo
-from cartridges.modelos.avisos import FilaDeAvisos
-from cartridges.modelos.detalhes import DetalhesDoJogo
-from cartridges.utils import open_uri
+from kyron.jogo import Jogo
+from kyron.modelos import detalhes as modulo
+from kyron.modelos.avisos import FilaDeAvisos
+from kyron.modelos.detalhes import DetalhesDoJogo
+from kyron.utils import open_uri
 
 
 class _Loja(QObject):
@@ -221,7 +221,7 @@ def test_opcoes_de_status_vem_do_jogo(app_qt):
 
 def test_status_fora_do_filtro_sai_da_pagina_e_excluir_solta_a_linha(app_qt):
     """A grade segue o jogo: o status que sai do filtro tira o cartão; o excluído sai do modelo."""
-    from cartridges.modelos.biblioteca import FiltroDaPagina, FiltrosDaBiblioteca, ModeloDaBiblioteca
+    from kyron.modelos.biblioteca import FiltroDaPagina, FiltrosDaBiblioteca, ModeloDaBiblioteca
 
     jogo = _jogo(status="playing")
     modelo_da_grade = ModeloDaBiblioteca()

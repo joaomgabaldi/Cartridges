@@ -226,7 +226,7 @@ Ao desinstalar, o instalador pergunta se deve remover também a biblioteca e as 
 
 O aplicativo é escrito em Python 3.15 com PySide6 6.12.0 (Qt Quick). A janela sem moldura usa o
 [QWindowKit](https://github.com/stdware/qwindowkit), compilado numa DLL pequena
-(`cartridges/janela/qwk_ponte.dll`) que o repositório não guarda. Os comandos abaixo rodam no
+(`kyron/janela/qwk_ponte.dll`) que o repositório não guarda. Os comandos abaixo rodam no
 PowerShell, a partir da raiz do projeto.
 
 ### Executar do código-fonte
@@ -250,7 +250,7 @@ PowerShell, a partir da raiz do projeto.
 3. Abra o aplicativo:
 
    ```powershell
-   .venv\Scripts\python -m cartridges
+   .venv\Scripts\python -m kyron
    ```
 
 Executado a partir do código-fonte, o aplicativo usa o canal de desenvolvimento: os dados ficam em

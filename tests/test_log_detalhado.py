@@ -8,9 +8,9 @@ import threading
 
 import pytest
 
-from cartridges.logging import detalhado
+from kyron.logging import detalhado
 
-# Módulo de exemplo com __name__ em cartridges.*, para ser reconhecido como do app.
+# Módulo de exemplo com __name__ em kyron.*, para ser reconhecido como do app.
 _FONTE = '''
 def x(a):
     return a + 1
@@ -55,7 +55,7 @@ def abandona():
 
 @pytest.fixture
 def app():
-    espaco = {"__name__": "cartridges.teste_rastreio"}
+    espaco = {"__name__": "kyron.teste_rastreio"}
     exec(compile(_FONTE, "<teste>", "exec"), espaco)  # pylint: disable=exec-used
     detalhado.instalar_rastreio()
     try:
@@ -65,11 +65,11 @@ def app():
 
 
 def _linhas(caplog):
-    return [r.getMessage() for r in caplog.records if r.name == "cartridges.rastreio"]
+    return [r.getMessage() for r in caplog.records if r.name == "kyron.rastreio"]
 
 
 def _com_log(caplog):
-    caplog.set_level(logging.DEBUG, logger="cartridges.rastreio")
+    caplog.set_level(logging.DEBUG, logger="kyron.rastreio")
 
 
 def test_cadeia_em_ordem_com_profundidade(app, caplog):
@@ -77,12 +77,12 @@ def test_cadeia_em_ordem_com_profundidade(app, caplog):
     app.v()
     linhas = _linhas(caplog)
     esperado = [
-        r"^1 > cartridges\.teste_rastreio\.v\(",
-        r"^2 > cartridges\.teste_rastreio\.w\(",
-        r"^3 > cartridges\.teste_rastreio\.x\(",
-        r"^3 < cartridges\.teste_rastreio\.x ",
-        r"^2 < cartridges\.teste_rastreio\.w ",
-        r"^1 < cartridges\.teste_rastreio\.v ",
+        r"^1 > kyron\.teste_rastreio\.v\(",
+        r"^2 > kyron\.teste_rastreio\.w\(",
+        r"^3 > kyron\.teste_rastreio\.x\(",
+        r"^3 < kyron\.teste_rastreio\.x ",
+        r"^2 < kyron\.teste_rastreio\.w ",
+        r"^1 < kyron\.teste_rastreio\.v ",
     ]
     assert len(linhas) == 6
     for linha, padrao in zip(linhas, esperado):
@@ -101,7 +101,7 @@ def test_excecao_registrada_e_profundidade_volta(app, caplog):
     _com_log(caplog)
     assert app.captura() == "ok"
     linhas = _linhas(caplog)
-    assert any(" ! cartridges.teste_rastreio.levanta levantou ValueError" in l for l in linhas)
+    assert any(" ! kyron.teste_rastreio.levanta levantou ValueError" in l for l in linhas)
     caplog.clear()
     app.v()
     assert _linhas(caplog)[0].startswith("1 > ")
@@ -112,7 +112,7 @@ def test_thread_secundaria_e_rastreada(app, caplog):
     t = threading.Thread(target=app.x, args=(1,), name="fio-de-teste")
     t.start()
     t.join()
-    nomes = {r.threadName for r in caplog.records if r.name == "cartridges.rastreio"}
+    nomes = {r.threadName for r in caplog.records if r.name == "kyron.rastreio"}
     assert nomes == {"fio-de-teste"}
 
 
@@ -176,12 +176,12 @@ def test_remover_libera_a_ferramenta(app, caplog):
 
 def test_ativo_variavel_vence_constante(monkeypatch):
     monkeypatch.setattr(detalhado, "ATIVO", True)
-    monkeypatch.setenv("CARTRIDGES_LOG_DETALHADO", "0")
+    monkeypatch.setenv("KYRON_LOG_DETALHADO", "0")
     assert detalhado.ativo() is False
     monkeypatch.setattr(detalhado, "ATIVO", False)
-    monkeypatch.setenv("CARTRIDGES_LOG_DETALHADO", "1")
+    monkeypatch.setenv("KYRON_LOG_DETALHADO", "1")
     assert detalhado.ativo() is True
-    monkeypatch.delenv("CARTRIDGES_LOG_DETALHADO")
+    monkeypatch.delenv("KYRON_LOG_DETALHADO")
     assert detalhado.ativo() is False
     monkeypatch.setattr(detalhado, "ATIVO", True)
     assert detalhado.ativo() is True
@@ -212,17 +212,17 @@ def test_funcao_identica_de_terceiro_nao_esconde_a_do_app(app, caplog):  # pylin
     _com_log(caplog)
     detalhado.remover_rastreio()
     terceiro = _modulo("terceiro.b", _IDENTICA)
-    meu = _modulo("cartridges.a", _IDENTICA)
+    meu = _modulo("kyron.a", _IDENTICA)
     detalhado.instalar_rastreio()
     terceiro.f()
     meu.f()
-    assert any("cartridges.a.f" in l for l in _linhas(caplog))
+    assert any("kyron.a.f" in l for l in _linhas(caplog))
 
 
 def test_ferramenta_ocupada_so_gera_aviso(monkeypatch, caplog):
-    from cartridges.logging import setup  # pylint: disable=import-outside-toplevel
+    from kyron.logging import setup  # pylint: disable=import-outside-toplevel
 
-    monkeypatch.setenv("CARTRIDGES_LOG_DETALHADO", "1")
+    monkeypatch.setenv("KYRON_LOG_DETALHADO", "1")
     sys.monitoring.use_tool_id(sys.monitoring.PROFILER_ID, "outra")
     try:
         setup._ligar_rastreio()  # pylint: disable=protected-access
@@ -234,8 +234,8 @@ def test_ferramenta_ocupada_so_gera_aviso(monkeypatch, caplog):
 @pytest.fixture
 def filtro(app_qt, monkeypatch, caplog):
     """O filtro instalado no app de teste; ao fim sai do app (o app_qt vive a sessão toda)."""
-    monkeypatch.setenv("CARTRIDGES_LOG_DETALHADO", "1")
-    caplog.set_level(logging.DEBUG, logger="cartridges.interface")
+    monkeypatch.setenv("KYRON_LOG_DETALHADO", "1")
+    caplog.set_level(logging.DEBUG, logger="kyron.interface")
     instalado = detalhado.instalar_filtro(app_qt)
     yield instalado
     app_qt.removeEventFilter(instalado)
@@ -243,7 +243,7 @@ def filtro(app_qt, monkeypatch, caplog):
 
 
 def _ui(caplog):
-    return [r.getMessage() for r in caplog.records if r.name == "cartridges.interface"]
+    return [r.getMessage() for r in caplog.records if r.name == "kyron.interface"]
 
 
 @pytest.fixture
@@ -315,7 +315,7 @@ def _criar_qml(fonte, pasta):
     from PySide6.QtQml import QQmlComponent, QQmlEngine  # pylint: disable=import-outside-toplevel
 
     motor = QQmlEngine()
-    from cartridges.modelos.provedor_de_icones import ProvedorDeIcones  # noqa: PLC0415
+    from kyron.modelos.provedor_de_icones import ProvedorDeIcones  # noqa: PLC0415
     motor.addImageProvider("icone", ProvedorDeIcones())
     componente = QQmlComponent(motor)
     componente.setData(fonte, QUrl.fromLocalFile(str(pasta / "Tela.qml")))
@@ -369,9 +369,9 @@ def test_destinatario_destruido_nao_levanta(filtro):
 
 
 def test_desligado_nao_instala(monkeypatch, app_qt):
-    from cartridges.logging import setup  # pylint: disable=import-outside-toplevel
+    from kyron.logging import setup  # pylint: disable=import-outside-toplevel
 
-    monkeypatch.setenv("CARTRIDGES_LOG_DETALHADO", "0")
+    monkeypatch.setenv("KYRON_LOG_DETALHADO", "0")
     assert detalhado.instalar_filtro(app_qt) is None
     chamadas = []
     monkeypatch.setattr(detalhado, "instalar_rastreio", lambda: chamadas.append(1))
@@ -382,7 +382,7 @@ def test_desligado_nao_instala(monkeypatch, app_qt):
 @pytest.fixture
 def config_capturada(monkeypatch):
     """Roda o setup_logging sem mexer no logging do processo: devolve o dicionário entregue ao dictConfig."""
-    from cartridges.logging import setup  # pylint: disable=import-outside-toplevel
+    from kyron.logging import setup  # pylint: disable=import-outside-toplevel
 
     capturado = {}
     monkeypatch.setattr(setup.logging_dot_config, "dictConfig", capturado.update)
@@ -397,7 +397,7 @@ def config_capturada(monkeypatch):
 
 def test_config_ligada_abre_niveis(monkeypatch, config_capturada):
     setup, config = config_capturada
-    monkeypatch.setenv("CARTRIDGES_LOG_DETALHADO", "1")
+    monkeypatch.setenv("KYRON_LOG_DETALHADO", "1")
     setup.setup_logging()
     assert config["loggers"]["urllib3"]["level"] == "DEBUG"
     assert config["loggers"]["PIL"]["level"] == "WARNING" and config["loggers"]["tinytuya"]["level"] == "WARNING"
@@ -409,7 +409,7 @@ def test_config_ligada_abre_niveis(monkeypatch, config_capturada):
 
 def test_config_desligada_igual_a_hoje(monkeypatch, config_capturada):
     setup, config = config_capturada
-    monkeypatch.setenv("CARTRIDGES_LOG_DETALHADO", "0")
+    monkeypatch.setenv("KYRON_LOG_DETALHADO", "0")
     setup.setup_logging()
     assert config["loggers"]["urllib3"]["level"] == "INFO"
     assert config["formatters"]["file_formatter"]["format"] == "%(asctime)s - %(levelname)s: %(message)s"
@@ -421,13 +421,13 @@ def test_depuracao_do_qt_so_no_modo_detalhado(monkeypatch, caplog):
 
     from PySide6.QtCore import QtMsgType  # pylint: disable=import-outside-toplevel
 
-    from cartridges.logging import setup  # pylint: disable=import-outside-toplevel
+    from kyron.logging import setup  # pylint: disable=import-outside-toplevel
 
     caplog.set_level(logging.DEBUG)
     contexto = SimpleNamespace(file=None, line=0)
-    monkeypatch.setenv("CARTRIDGES_LOG_DETALHADO", "0")
+    monkeypatch.setenv("KYRON_LOG_DETALHADO", "0")
     setup._registrar_do_qt(QtMsgType.QtDebugMsg, contexto, "fora")  # pylint: disable=protected-access
-    monkeypatch.setenv("CARTRIDGES_LOG_DETALHADO", "1")
+    monkeypatch.setenv("KYRON_LOG_DETALHADO", "1")
     setup._registrar_do_qt(QtMsgType.QtDebugMsg, contexto, "dentro")  # pylint: disable=protected-access
     mensagens = [r.getMessage() for r in caplog.records]
     assert "Qt-DEBUG: dentro" in mensagens and not any("fora" in m for m in mensagens)
@@ -473,7 +473,7 @@ def test_subclasse_python_com_pai_continua_inteira_sob_o_filtro(filtro):  # pyli
 @pytest.fixture
 def logging_do_processo(monkeypatch):
     """Devolve o logging do processo ao que era e neutraliza os ganchos globais do setup_logging."""
-    from cartridges.logging import setup  # pylint: disable=import-outside-toplevel
+    from kyron.logging import setup  # pylint: disable=import-outside-toplevel
 
     raiz = logging.getLogger()
     antes_raiz = (list(raiz.handlers), raiz.level)
@@ -505,9 +505,9 @@ def logging_do_processo(monkeypatch):
 
 
 def _setup_real(setup, monkeypatch, tmp_path, ligado):
-    from cartridges import shared  # pylint: disable=import-outside-toplevel
+    from kyron import shared  # pylint: disable=import-outside-toplevel
 
-    monkeypatch.setenv("CARTRIDGES_LOG_DETALHADO", "1" if ligado else "0")
+    monkeypatch.setenv("KYRON_LOG_DETALHADO", "1" if ligado else "0")
     monkeypatch.setattr(shared, "log_dir", tmp_path)
     setup.setup_logging()
     return tmp_path / "cartridges.log"
@@ -520,18 +520,18 @@ def _ler_log(arquivo):
 
 
 def test_setup_real_grava_rastreio_e_interface_no_arquivo(logging_do_processo, monkeypatch, tmp_path):
-    modulo = _modulo("cartridges.teste_setup_real", "def f(a):\n    return a\n")
+    modulo = _modulo("kyron.teste_setup_real", "def f(a):\n    return a\n")
     arquivo = _setup_real(logging_do_processo, monkeypatch, tmp_path, True)
     modulo.f(41)
-    logging.getLogger("cartridges.interface").debug("clique em teste")
+    logging.getLogger("kyron.interface").debug("clique em teste")
     texto = _ler_log(arquivo)
-    assert "cartridges.teste_setup_real.f(a=41)" in texto
+    assert "kyron.teste_setup_real.f(a=41)" in texto
     assert "clique em teste" in texto
     assert "[MainThread]" in texto
 
 
 def test_logger_de_modulo_criado_antes_do_setup_continua_escrevendo(logging_do_processo, monkeypatch, tmp_path):
-    previo = logging.getLogger("cartridges.teste_previo_ao_setup")
+    previo = logging.getLogger("kyron.teste_previo_ao_setup")
     for ligado in (True, False):
         detalhado.remover_rastreio()
         arquivo = _setup_real(logging_do_processo, monkeypatch, tmp_path / str(ligado), ligado)

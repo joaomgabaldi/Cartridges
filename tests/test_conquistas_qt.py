@@ -14,14 +14,14 @@ import pytest
 from PySide6.QtCore import QObject, Signal
 from PySide6.QtGui import QColor, QImage
 
-from cartridges import shared
-from cartridges.conquistas import catalogo, historico, icones, progresso
-from cartridges.conquistas.catalogo import Catalogo, ConquistaInfo
-from cartridges.conquistas.formatos import Desbloqueio
-from cartridges.conquistas.xbox import conta
-from cartridges.jogo import Jogo
-from cartridges.modelos import conquistas as modulo
-from cartridges.modelos.conquistas import ConquistasDoJogo, cartao_da_pagina, data_por_extenso, fileira, icone
+from kyron import shared
+from kyron.conquistas import catalogo, historico, icones, progresso
+from kyron.conquistas.catalogo import Catalogo, ConquistaInfo
+from kyron.conquistas.formatos import Desbloqueio
+from kyron.conquistas.xbox import conta
+from kyron.jogo import Jogo
+from kyron.modelos import conquistas as modulo
+from kyron.modelos.conquistas import ConquistasDoJogo, cartao_da_pagina, data_por_extenso, fileira, icone
 from tests.apoio_conquistas import com_fonte
 from tests.apoio_conquistas_qt import _Detalhes, _jogo
 

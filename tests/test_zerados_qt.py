@@ -12,17 +12,17 @@ import pytest
 from PySide6.QtCore import QMetaObject, Qt
 from PySide6.QtTest import QTest
 
-from cartridges import shared
-from cartridges.modelos import zerados_manuais as modulo
-from cartridges.modelos.zerados_manuais import MOTIVO, SeletorDeZerados, candidatos, descricao
-from cartridges.utils import zerado_manual
-from cartridges.utils.steam import SteamError, SteamGameNotFoundError
+from kyron import shared
+from kyron.modelos import zerados_manuais as modulo
+from kyron.modelos.zerados_manuais import MOTIVO, SeletorDeZerados, candidatos, descricao
+from kyron.utils import zerado_manual
+from kyron.utils.steam import SteamError, SteamGameNotFoundError
 from tests.apoio_janela_atualizacao import Janela, achar, avaliar, esperar
 
 
 def jogo(store, numero, **campos):
     """Um ``Jogo`` de verdade, já registrado na store (sem pipeline)."""
-    from cartridges.jogo import Jogo  # noqa: PLC0415
+    from kyron.jogo import Jogo  # noqa: PLC0415
 
     novo = Jogo(
         {
@@ -58,8 +58,8 @@ def test_zerado_e_desinstalado_com_a_marca(campos, esperado):
 
 
 def test_ficha_antiga_com_hidden_carrega_normal(store, write_record):
-    from cartridges.carga import carregar_jogos_do_disco  # noqa: PLC0415
-    from cartridges.jogo import PERSISTED_ATTRS  # noqa: PLC0415
+    from kyron.carga import carregar_jogos_do_disco  # noqa: PLC0415
+    from kyron.jogo import PERSISTED_ATTRS  # noqa: PLC0415
 
     write_record("shortcuts_h", executable="x", hidden=True)
     carregar_jogos_do_disco(store)
@@ -78,7 +78,7 @@ def test_proximo_id_importado_pula_os_usados_e_os_estranhos(store, make_game):
 @pytest.fixture
 def espiao(store):
     """Um manager que só escuta os dois sinais do `Jogo`."""
-    from cartridges.store.managers.manager import Manager  # noqa: PLC0415
+    from kyron.store.managers.manager import Manager  # noqa: PLC0415
 
     class Espiao(Manager):
         signals = {"atualizado", "salvar"}
@@ -163,7 +163,7 @@ def test_atalho_renomeado_de_zerado_e_seguido(store, make_game, tmp_path):
 
 
 def test_tumba_sem_executavel_carrega_e_jogo_vivo_nao(store, write_record):
-    from cartridges.carga import carregar_jogos_do_disco  # noqa: PLC0415
+    from kyron.carga import carregar_jogos_do_disco  # noqa: PLC0415
 
     write_record("imported_1", source="imported", executable="", removed=True, status="beaten")
     write_record("imported_2", source="imported", executable="")
@@ -216,7 +216,7 @@ def test_desmarcar_sem_executavel_nao_ressuscita(tmp_path):
 
 
 def test_apagar_jogo_leva_so_as_sessoes_dele():
-    from cartridges.utils import session_log  # noqa: PLC0415
+    from kyron.utils import session_log  # noqa: PLC0415
 
     session_log.record("a", 60, end=1_700_000_000)
     session_log.record("b", 120, end=1_700_000_100)
@@ -228,8 +228,8 @@ def test_apagar_jogo_leva_so_as_sessoes_dele():
 
 
 def test_excluir_apaga_ficha_capa_sessoes_e_o_lugar_na_store(store, make_game, app_dirs, flush_idle):
-    from cartridges.store.store import _path_key  # noqa: PLC0415
-    from cartridges.utils import session_log  # noqa: PLC0415
+    from kyron.store.store import _path_key  # noqa: PLC0415
+    from kyron.utils import session_log  # noqa: PLC0415
 
     game = make_game(game_id="shortcuts_z", removed=True, status="beaten", shortcut_path=r"C:\Jogos\Z.lnk")
     store.add_game(game, {"skip_save": True})
@@ -250,7 +250,7 @@ def test_excluir_apaga_ficha_capa_sessoes_e_o_lugar_na_store(store, make_game, a
 
 
 def test_zerado_nao_mostra_aviso_de_atualizacao(store, app_qt):  # noqa: ARG001
-    from cartridges.modelos.detalhes import DetalhesDoJogo  # noqa: PLC0415
+    from kyron.modelos.detalhes import DetalhesDoJogo  # noqa: PLC0415
 
     zerado = jogo(store, 32, removed=True, status="beaten", track_updates=True, update_available_ts=5)
     vivo = jogo(store, 33, track_updates=True, update_available_ts=5)

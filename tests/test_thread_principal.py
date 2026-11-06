@@ -10,10 +10,10 @@ import time
 
 from PySide6.QtCore import QCoreApplication, QEventLoop, QTimer
 
-from cartridges.store.managers.async_manager import AsyncManager
-from cartridges.store.pipeline import Pipeline
-from cartridges.utils.na_tela import entregar_na_tela
-from cartridges.utils.thread_principal import eh_thread_principal, na_thread_principal
+from kyron.store.managers.async_manager import AsyncManager
+from kyron.store.pipeline import Pipeline
+from kyron.utils.na_tela import entregar_na_tela
+from kyron.utils.thread_principal import eh_thread_principal, na_thread_principal
 
 
 def _rodar_ate(condicao, limite=5.0):
@@ -131,7 +131,7 @@ def test_excecao_na_tarefa_e_registrada_e_callback_chega(app_qt, caplog):
 
 
 def test_encerrar_descarta_sem_quebrar_quem_chama(app_qt, monkeypatch):
-    from cartridges.store.managers import async_manager  # noqa: PLC0415
+    from kyron.store.managers import async_manager  # noqa: PLC0415
 
     monkeypatch.setattr(async_manager, "_rede", async_manager._PoolDaemon(1, "teste"))  # noqa: SLF001
     monkeypatch.setattr(async_manager, "_gravacao", async_manager.ThreadPoolExecutor(max_workers=1))

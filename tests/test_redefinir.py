@@ -4,8 +4,8 @@
 
 """Redefinir Cartridges: a pasta do app esvaziada e as configurações no padrão."""
 
-from cartridges import shared
-from cartridges.utils import redefinir
+from kyron import shared
+from kyron.utils import redefinir
 
 
 def _app(tmp_path, monkeypatch):

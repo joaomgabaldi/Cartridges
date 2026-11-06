@@ -11,7 +11,7 @@ def test_animacoes_do_sistema_le_o_ajuste_do_windows(monkeypatch):
     import ctypes
     from types import SimpleNamespace
 
-    from cartridges import aplicativo as modulo
+    from kyron import aplicativo as modulo
 
     def falso(valor, sucesso=1):
         def spi(acao, _p1, ponteiro, _p2):
@@ -32,9 +32,9 @@ def test_animacoes_do_sistema_le_o_ajuste_do_windows(monkeypatch):
 @pytest.mark.parametrize("ligado", [True, False])
 def test_mudar_o_autoplay_so_reavalia_o_que_toca(app_qt, monkeypatch, ligado):  # noqa: ARG001
     """As cópias são preparadas com a opção ligada ou não: o "Animar capas" não mexe na tarefa, só no que toca."""
-    from cartridges import shared  # noqa: PLC0415
-    from cartridges.aplicativo import Aplicativo  # noqa: PLC0415
-    from cartridges.utils import copias_animadas  # noqa: PLC0415
+    from kyron import shared  # noqa: PLC0415
+    from kyron.aplicativo import Aplicativo  # noqa: PLC0415
+    from kyron.utils import copias_animadas  # noqa: PLC0415
 
     chamadas = []
     monkeypatch.setattr(copias_animadas, "preparar", chamadas.append)
@@ -53,8 +53,8 @@ def test_a_ligacao_do_autoplay_e_desfeita_ao_destruir_a_janela(app_qt):  # noqa:
     import gc  # noqa: PLC0415
     import weakref  # noqa: PLC0415
 
-    from cartridges import shared  # noqa: PLC0415
-    from cartridges.aplicativo import Aplicativo  # noqa: PLC0415
+    from kyron import shared  # noqa: PLC0415
+    from kyron.aplicativo import Aplicativo  # noqa: PLC0415
 
     referencia = weakref.ref(Aplicativo())
     gc.collect()

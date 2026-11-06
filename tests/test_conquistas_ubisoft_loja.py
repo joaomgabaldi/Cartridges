@@ -2,7 +2,7 @@
 
 import pytest
 
-from cartridges.conquistas.ubisoft import locais, loja
+from kyron.conquistas.ubisoft import locais, loja
 from tests.apoio_conquistas import criar
 
 

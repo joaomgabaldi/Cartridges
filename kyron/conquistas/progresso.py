@@ -1,0 +1,122 @@
+"""O catálogo cruzado com o histórico: o que a página do jogo e a lista mostram.
+
+Só contam as conquistas que existem no catálogo (`resolveUnlockedAchievementCount` do Hydra): um nome estranho no arquivo de um crack fica guardado, mas não infla o "X de Y". Sem catálogo, ou sem fonte gravada no histórico (sem de onde ler o progresso, "0 de N" ficaria parado para sempre), o cartão some.
+"""
+
+from dataclasses import dataclass
+from typing import Any, NamedTuple, Optional
+from xml.sax.saxutils import escape as _escapar
+
+from kyron.conquistas import catalogo, fontes, historico
+from kyron.conquistas.catalogo import Catalogo, ConquistaInfo
+
+
+@dataclass(frozen=True)
+class Linha:
+    info: ConquistaInfo
+    quando: Optional[int]
+
+    @property
+    def desbloqueada(self) -> bool:
+        return self.quando is not None
+
+
+@dataclass(frozen=True)
+class Progresso:
+    desbloqueadas: tuple[Linha, ...]
+    bloqueadas: tuple[Linha, ...]
+
+    @property
+    def total(self) -> int:
+        return len(self.desbloqueadas) + len(self.bloqueadas)
+
+    @property
+    def feitas(self) -> int:
+        return len(self.desbloqueadas)
+
+    @property
+    def fracao(self) -> float:
+        return self.feitas / self.total if self.total else 0.0
+
+    @property
+    def porcentagem(self) -> int:
+        """Inteira, para baixo: 999 de 1000 é 99%, e só tudo desbloqueado é 100%.
+
+        Em inteiros, não em `floor(fracao * 100)`: 29 de 100 dá
+        0.29 * 100 = 28.999999999999996 em ponto flutuante.
+        """
+        return self.feitas * 100 // self.total if self.total else 0
+
+    @property
+    def completo(self) -> bool:
+        return self.total > 0 and self.feitas == self.total
+
+
+def montar(cat: Optional[Catalogo], hist: Optional[dict[str, int]]) -> Optional[Progresso]:
+    if cat is None or not cat.conquistas:
+        return None
+    hist = hist or {}
+    feitas: list[Linha] = []
+    faltam: list[Linha] = []
+    for info in cat.conquistas:
+        quando = hist.get(info.nome.upper())
+        linha = Linha(info, quando)
+        (feitas if quando is not None else faltam).append(linha)
+    # Mais recente primeiro. `sort` é estável, então as sem data (0) ficam no
+    # fim, na ordem do catálogo.
+    feitas.sort(key=lambda linha: linha.quando or 0, reverse=True)
+    faltam.sort(key=lambda linha: linha.info.oculta)
+    return Progresso(tuple(feitas), tuple(faltam))
+
+
+def do_jogo(game: Any) -> Optional[Progresso]:
+    """O progresso do cartão, ou None (cartão oculto): interruptor desligado,
+    sem fonte gravada, conta da loja desconectada ou sem catálogo."""
+    if not getattr(game, "conquistas", True):
+        return None
+    fonte = fontes.gravada(game)
+    if not fontes.ativa(fonte):
+        return None
+    return montar(catalogo.em_cache(fontes.chave_do_catalogo(fonte)), historico.ler(game.game_id))
+
+
+def porcentagem_em_texto(valor: float) -> str:
+    return f"{valor:.1f}%".replace(".", ",")
+
+
+class Aparencia(NamedTuple):
+    """O que um ícone de conquista mostra: de onde vem a imagem, se leva o
+    filtro cinza e se é a interrogação de uma oculta."""
+
+    origem: str
+    cinza: bool
+    oculta: bool
+
+
+def _escondida(linha: Linha, mostrar_ocultas: bool) -> bool:
+    return linha.info.oculta and not linha.desbloqueada and not mostrar_ocultas
+
+
+def aparencia(linha: Linha, mostrar_ocultas: bool) -> Aparencia:
+    """A regra da lista e da tela de sessão: colorida se desbloqueada; a
+    bloqueada usa o ícone cinza da loja ou, sem ele, o mesmo em cinza."""
+    if _escondida(linha, mostrar_ocultas):
+        return Aparencia("", False, True)
+    info = linha.info
+    if linha.desbloqueada:
+        return Aparencia(info.icone, False, False)
+    return Aparencia(info.icone_cinza or info.icone, not info.icone_cinza, False)
+
+
+def dica(linha: Linha, mostrar_ocultas: bool) -> str:
+    if _escondida(linha, mostrar_ocultas):
+        return "<b>{}</b>\n{}".format(
+            _escapar(_("Conquista oculta")), _escapar(_("Os detalhes aparecem depois do desbloqueio."))
+        )
+    info = linha.info
+    partes = [f"<b>{_escapar(info.titulo)}</b>"]
+    if info.descricao:
+        partes.append(_escapar(info.descricao))
+    if info.porcentagem is not None:
+        partes.append(_escapar(_("{} dos jogadores").format(porcentagem_em_texto(info.porcentagem))))
+    return "\n".join(partes)

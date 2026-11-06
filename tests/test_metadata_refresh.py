@@ -14,8 +14,8 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from cartridges.metadata_refresh import MetadataRefresh  # noqa: E402
-from cartridges.utils.steam import STEAM_METADATA_VERSION  # noqa: E402
+from kyron.metadata_refresh import MetadataRefresh  # noqa: E402
+from kyron.utils.steam import STEAM_METADATA_VERSION  # noqa: E402
 
 
 class FakeManager:
@@ -88,14 +88,14 @@ def complete_game(**overrides):
 @pytest.fixture
 def refresh(monkeypatch):
     """A refresh whose managers, store and toasts are stubbed out."""
-    from cartridges import shared  # noqa: PLC0415
+    from kyron import shared  # noqa: PLC0415
 
     monkeypatch.setattr(shared, "store", FakeStore(), raising=False)
     instance = MetadataRefresh()
     monkeypatch.setattr(instance, "_announce", lambda *_a: None)
     yield instance
     # `start` abre uma tarefa na lista global; um teste que não termina a fila a deixaria lá.
-    from cartridges.modelos import tarefas  # noqa: PLC0415
+    from kyron.modelos import tarefas  # noqa: PLC0415
 
     for tarefa in list(tarefas.lista._tarefas):  # noqa: SLF001
         tarefas.lista.remover(tarefa)
@@ -103,7 +103,7 @@ def refresh(monkeypatch):
 
 def drive(refresh_obj, managers, tags=None):
     """Run the queue synchronously; games go into the store first, since the refresh only saves games the library holds."""
-    from cartridges import shared  # noqa: PLC0415
+    from kyron import shared  # noqa: PLC0415
 
     for game in refresh_obj._queue:  # pylint: disable=protected-access
         shared.store.games_by_id[game.game_id] = game
@@ -223,7 +223,7 @@ def test_fraction_is_zero_before_anything_starts(refresh) -> None:
 
 def test_a_wiped_library_is_not_written_back(refresh, monkeypatch) -> None:
     """A refresh still walking its list after a reset must not save the deleted games back to disk."""
-    from cartridges import shared  # noqa: PLC0415
+    from kyron import shared  # noqa: PLC0415
 
     monkeypatch.setattr(refresh, "_finish", lambda: None)
     games = [make_game() for _ in range(3)]
@@ -242,7 +242,7 @@ def test_a_wiped_library_is_not_written_back(refresh, monkeypatch) -> None:
 
 def test_a_reimported_game_is_not_overwritten(refresh) -> None:
     """Same id, different record: writing it would undo the import that replaced it."""
-    from cartridges import shared  # noqa: PLC0415
+    from kyron import shared  # noqa: PLC0415
 
     game = make_game()
     replacement = make_game()
@@ -274,9 +274,9 @@ def _esperar_a_prefetch(antes):
 
 def test_prefetch_failure_does_not_wedge_the_run(refresh, monkeypatch) -> None:
     """Anything escaping the prefetch thread left `running` True, blocking every later refresh."""
-    from cartridges import metadata_refresh, shared  # noqa: PLC0415
-    from cartridges.store.managers.hltb_manager import HLTBManager  # noqa: PLC0415
-    from cartridges.store.managers.steam_api_manager import (  # noqa: PLC0415
+    from kyron import metadata_refresh, shared  # noqa: PLC0415
+    from kyron.store.managers.hltb_manager import HLTBManager  # noqa: PLC0415
+    from kyron.store.managers.steam_api_manager import (  # noqa: PLC0415
         SteamAPIManager,
     )
 
@@ -305,9 +305,9 @@ def test_prefetch_failure_does_not_wedge_the_run(refresh, monkeypatch) -> None:
 
 def test_prefetch_stringifies_a_numeric_appid(refresh, monkeypatch) -> None:
     """A hand-edited record can hold the appid unquoted; the manager looks tags up under `str(appid)`."""
-    from cartridges import metadata_refresh, shared  # noqa: PLC0415
-    from cartridges.store.managers.hltb_manager import HLTBManager  # noqa: PLC0415
-    from cartridges.store.managers.steam_api_manager import (  # noqa: PLC0415
+    from kyron import metadata_refresh, shared  # noqa: PLC0415
+    from kyron.store.managers.hltb_manager import HLTBManager  # noqa: PLC0415
+    from kyron.store.managers.steam_api_manager import (  # noqa: PLC0415
         SteamAPIManager,
     )
 
@@ -346,8 +346,8 @@ def test_prefetch_stringifies_a_numeric_appid(refresh, monkeypatch) -> None:
 @pytest.fixture
 def preferences(monkeypatch):
     """The real preferences model, wired to a refresh under our control."""
-    from cartridges import metadata_refresh  # noqa: PLC0415
-    from cartridges.modelos.preferencias import Preferencias  # noqa: PLC0415
+    from kyron import metadata_refresh  # noqa: PLC0415
+    from kyron.modelos.preferencias import Preferencias  # noqa: PLC0415
 
     instance = MetadataRefresh()
     monkeypatch.setattr(metadata_refresh, "get_metadata_refresh", lambda: instance)
@@ -374,7 +374,7 @@ def test_row_starts_idle(preferences) -> None:
 
 def test_dialog_opened_mid_run_shows_the_current_position(preferences) -> None:
     """Close the dialog at game 12 of 47, reopen it: the bar must still say 12 of 47."""
-    from cartridges.modelos.preferencias import Preferencias  # noqa: PLC0415
+    from kyron.modelos.preferencias import Preferencias  # noqa: PLC0415
 
     _modelo, refresh = preferences
     refresh.running = True
@@ -434,7 +434,7 @@ def test_closed_dialog_stops_following_the_run(preferences) -> None:
 
 def test_row_is_insensitive_when_both_sources_are_off(preferences) -> None:
     """Both managers no-op with their setting off, so the button would walk the library and change nothing."""
-    from cartridges import shared  # noqa: PLC0415
+    from kyron import shared  # noqa: PLC0415
 
     modelo, _refresh = preferences
     alterados = _contar(modelo.biblioteca)
@@ -471,7 +471,7 @@ def test_aviso_do_fim_vai_pela_fila_do_app(avisos) -> None:
 
 
 def test_aviso_do_fim_sem_aplicativo_nao_levanta(monkeypatch) -> None:
-    from cartridges import shared  # noqa: PLC0415
+    from kyron import shared  # noqa: PLC0415
 
     monkeypatch.setattr(shared, "aplicativo", None, raising=False)
     MetadataRefresh._announce(2, 2, False)  # não levanta
@@ -482,7 +482,7 @@ def test_metadata_refresh_sem_gi() -> None:
     codigo = (
         "import builtins, sys; builtins._ = lambda m: m; "
         "builtins.ngettext = lambda s, p, n: s if n == 1 else p; "
-        "import cartridges.metadata_refresh; "
+        "import kyron.metadata_refresh; "
         "assert 'gi' not in sys.modules"
     )
     subprocess.run([sys.executable, "-c", codigo], check=True, cwd=Path(__file__).resolve().parent.parent, timeout=60)
@@ -493,7 +493,7 @@ def test_metadata_refresh_sem_gi() -> None:
 
 def test_only_missing_runs_just_the_sources_each_game_needs(refresh) -> None:
     """A (times) costs one HowLongToBeat lookup; B (controller support), C (genre), D (developer) cost Steam only. B shows only through the older stamp."""
-    from cartridges import shared  # noqa: PLC0415
+    from kyron import shared  # noqa: PLC0415
 
     game_a = complete_game(hltb_main=0)
     game_b = complete_game(controller_support=None, steam_checked=0)
@@ -517,7 +517,7 @@ def test_only_missing_runs_just_the_sources_each_game_needs(refresh) -> None:
 
 def test_fetch_everything_ignores_what_is_already_there(refresh) -> None:
     """The other half of the promise: "fetch everything" really does."""
-    from cartridges import shared  # noqa: PLC0415
+    from kyron import shared  # noqa: PLC0415
 
     games = [complete_game() for _ in range(3)]
     for game in games:
@@ -554,7 +554,7 @@ def test_a_game_needing_nothing_gets_no_lookups(refresh) -> None:
 
 def test_fetch_everything_forces_the_completion_times_too(refresh) -> None:
     """HowLongToBeat skips games that already have times unless told otherwise, so "fetch everything" needs the flag."""
-    from cartridges import shared  # noqa: PLC0415
+    from kyron import shared  # noqa: PLC0415
 
     game = complete_game()
     shared.store.games_by_id[game.game_id] = game
@@ -572,7 +572,7 @@ def test_fetch_everything_forces_the_completion_times_too(refresh) -> None:
 
 def test_only_missing_never_forces_them(refresh) -> None:
     """In only-missing mode games with times are not queued for HowLongToBeat, so forcing a refetch would waste requests."""
-    from cartridges import shared  # noqa: PLC0415
+    from kyron import shared  # noqa: PLC0415
 
     game = complete_game(hltb_main=0)
     shared.store.games_by_id[game.game_id] = game
@@ -608,7 +608,7 @@ def test_a_readable_stamp_is_honoured_whatever_its_type(
     refresh, as_type, expected
 ) -> None:
     """A number written as a string is still a number; derived from the constant so a version bump cannot leave it stale."""
-    from cartridges.utils.steam import STEAM_METADATA_VERSION  # noqa: PLC0415
+    from kyron.utils.steam import STEAM_METADATA_VERSION  # noqa: PLC0415
 
     stamp = as_type(STEAM_METADATA_VERSION)
     assert refresh.needs_steam(_fully_looked_up(stamp)) is expected
@@ -616,14 +616,14 @@ def test_a_readable_stamp_is_honoured_whatever_its_type(
 
 def test_a_fractional_stamp_errs_towards_looking_again(refresh) -> None:
     """Truncation has to round down, never up onto the current version."""
-    from cartridges.utils.steam import STEAM_METADATA_VERSION  # noqa: PLC0415
+    from kyron.utils.steam import STEAM_METADATA_VERSION  # noqa: PLC0415
 
     assert refresh.needs_steam(_fully_looked_up(STEAM_METADATA_VERSION - 0.5)) is True
 
 
 def test_a_usable_stamp_still_short_circuits(refresh) -> None:
     """The guard must not turn every game into work."""
-    from cartridges.utils.steam import STEAM_METADATA_VERSION
+    from kyron.utils.steam import STEAM_METADATA_VERSION
 
     game = make_game(genre="g", appid="440")
     game.developer = "d"
@@ -637,7 +637,7 @@ def test_a_usable_stamp_still_short_circuits(refresh) -> None:
 
 def test_only_missing_mode_fills_gaps_without_reverting_edits() -> None:
     """Only-missing fills only empty editable fields (name, developer); non-editable ones (Metacritic etc.) always update."""
-    from cartridges.store.managers.steam_api_manager import _keep_user_edits
+    from kyron.store.managers.steam_api_manager import _keep_user_edits
 
     game = SimpleNamespace(
         name="Witcher 3",

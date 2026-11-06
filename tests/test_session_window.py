@@ -6,10 +6,10 @@
 
 import pytest
 
-from cartridges import session_window as sw
-from cartridges import shared
-from cartridges.session_window import SessionWindow
-from cartridges.utils import session_log
+from kyron import session_window as sw
+from kyron import shared
+from kyron.session_window import SessionWindow
+from kyron.utils import session_log
 from tests.apoio_sessao import SessaoFalsa
 
 
