@@ -43,7 +43,7 @@ from kyron import shared
 from kyron.saves import backup_de_saves
 from kyron.utils.thread_principal import na_thread_principal
 
-RELEASES_URL = "https://api.github.com/repos/joaomgabaldi/Cartridges/releases/latest"
+RELEASES_URL = "https://api.github.com/repos/joaomgabaldi/kyron/releases/latest"
 
 # Só a janela de progresso, sem perguntas nem reiniciar o Windows. O [Run] do Cartridges.iss.in não tem skipifsilent e reabre o app no fim. Falhas depois de o app fechar só aparecem no log do Inno, em %TEMP%\Setup Log AAAA-MM-DD #NNN.txt.
 # /FORCECLOSEAPPLICATIONS: em modo silencioso, um processo que não fecha com educação faz o instalador desistir e desfazer tudo. Risco: encerra também o app se o fechamento não acabou (`session_fita.fechar()` leva até 8 s; a chave órfã das fitas é desfeita na reabertura).
