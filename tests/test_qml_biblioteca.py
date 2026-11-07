@@ -8,7 +8,7 @@ import time
 from pathlib import Path
 
 import pytest
-from PySide6.QtCore import QEventLoop, QMetaObject, QObject, Qt, QTimer, QUrl, Signal
+from PySide6.QtCore import QEventLoop, QMetaObject, QObject, QPointF, Qt, QTimer, QUrl, Signal
 from PySide6.QtQml import QQmlComponent, QQmlEngine
 from PySide6.QtQuick import QQuickItem, QQuickWindow
 from PySide6.QtQuickControls2 import QQuickStyle
@@ -970,6 +970,28 @@ def test_roda_do_mouse_anda_por_mola_ate_o_destino_e_nao_passa_dos_limites(app_q
     QMetaObject.invokeMethod(mola, "empurrar", Qt.ConnectionType.DirectConnection, Q_ARG("QVariant", -10))
     assert _esperar(lambda: not mola.property("correndo"), limite=5.0)
     assert abs(grade.property("contentY") - topo) <= 0.5  # o clamp: não sobe além do topo
+    app.fechar()
+
+
+def test_halo_segue_o_box_shadow_do_gtk(app_qt):
+    """O halo é o `box-shadow: 0 0 22px 5px` do GTK: gaussiana de desvio 11 depois de 5 px, e não uma rampa que vaza nos vizinhos."""
+    import math  # noqa: PLC0415
+
+    jogos = _tres()
+    jogos[1].track_updates = True
+    jogos[1].update_available_ts = 10
+    app = _App(jogos)
+    beta = next(c for c in _cartoes(app.achar("grade")) if c.property("nome") == "Beta")
+    assert _esperar(lambda: _achar(beta, "haloDaAtualizacao") is not None)
+    _esperar()
+    imagem = app.janela.grabWindow()
+    base = beta.mapToScene(QPointF(beta.width() / 2, beta.height()))
+    x, y0 = round(base.x()), round(base.y())
+    fundo = imagem.pixelColor(x, y0 + 60).blue()
+    for d in range(1, 34, 4):
+        medido = (fundo - imagem.pixelColor(x, y0 + d).blue()) / (fundo - 32)
+        css = 0.8 * (1 - 0.5 * (1 + math.erf((d - 5) / 11 / math.sqrt(2))))
+        assert medido == pytest.approx(css, abs=0.05), d
     app.fechar()
 
 
