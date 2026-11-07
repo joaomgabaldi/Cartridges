@@ -348,6 +348,29 @@ def test_dialogo_destrutivo_e_modal_para_teclado_e_controle(app_qt):
     app.fechar()
 
 
+def test_menu_sem_espaco_abaixo_abre_acima_com_a_seta_no_botao(app_qt):
+    # Sem a virada, o Qt empurrava o menu para cima e a seta, ainda no alto, apontava para outro item.
+    app = _App(_jogos((1, "Alfa", {})))
+    pagina = _abrir_pelo_cartao(app)
+    botao, menu = _achar(pagina, "botaoBuscarDaPagina"), _achar(pagina, "menuDeBuscas")
+    for altura, acima in ((900, False), (560, True)):
+        app.janela.setHeight(altura)
+        _esperar()
+        QMetaObject.invokeMethod(botao, "click", Qt.ConnectionType.DirectConnection)
+        assert _esperar(lambda: menu.property("opened") is True)
+        topo_do_botao = botao.mapToScene(QPointF(0, 0)).y()
+        fundo = menu.property("background")
+        topo = fundo.mapToScene(QPointF(0, 0)).y()
+        assert menu.property("acima") is acima, altura
+        if acima:
+            assert topo + fundo.height() <= topo_do_botao, (topo, fundo.height(), topo_do_botao)
+        else:
+            assert topo >= topo_do_botao + botao.height(), (topo, topo_do_botao)
+        menu.close()
+        _esperar()
+    app.fechar()
+
+
 def test_balao_e_menus_nao_vazam_o_foco_para_a_pagina(app_qt):
     app = _App(_jogos((1, "Alfa", {"status": "playing"})))
     pagina = _abrir_pelo_cartao(app)
@@ -367,6 +390,17 @@ def test_balao_e_menus_nao_vazam_o_foco_para_a_pagina(app_qt):
         assert dentro, popup
         aberto.close()
         _esperar()
+    app.fechar()
+
+
+def test_aviso_de_atualizacao_e_ambar(app_qt):
+    # A cor do tema era calculada de um texto e saía sem matiz: preto no claro, cinza no escuro.
+    app = _App(_jogos((1, "Alfa", {"track_updates": True, "update_available_ts": 10, "update_url": "https://r.example/x"})))
+    _abrir_pelo_cartao(app, 0)
+    aviso = app.achar("avisoDeAtualizacao")
+    assert _esperar(lambda: aviso.property("visible") is True)
+    cor = aviso.property("contentItem").childItems()[1].property("color")
+    assert cor.red() > cor.blue() + 60, cor.name()  # âmbar, nem cinza nem preto
     app.fechar()
 
 

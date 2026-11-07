@@ -544,7 +544,8 @@ Item {
                             // Apertar o botão não fecha: o clique dele fecha (abre e fecha no mesmo botão).
                             fechamento: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
                             x: (parent.width - width) / 2
-                            y: parent.height + 6
+                            podeVirar: true
+                            y: acima ? -height - 6 : parent.height + 6
                             setaEm: width / 2
                             Repeater {
                                 model: detalhes.statusOpcoes
@@ -593,7 +594,8 @@ Item {
                             width: Math.min(implicitWidth, 420)
                             height: Math.min(implicitHeight, 420)
                             x: (parent.width - width) / 2
-                            y: parent.height + 6
+                            podeVirar: true
+                            y: acima ? -height - 6 : parent.height + 6
                             setaEm: width / 2
                             Repeater {
                                 model: detalhes.dlcs
@@ -737,7 +739,8 @@ Item {
                                 objectName: "menuDeBuscas"
                                 fechamento: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
                                 x: (parent.width - width) / 2
-                                y: parent.height + 6
+                                podeVirar: true
+                                y: acima ? -height - 6 : parent.height + 6
                                 setaEm: width / 2
                                 TituloDeSecao { objectName: "tituloDoMenuDeBuscas"; texto: "Buscar em…" }
                                 ItemDoMenu { text: "IGDB"; onTriggered: detalhes.buscarEm("igdb") }
