@@ -251,7 +251,7 @@ SeletorBase {
                                     width: 20
                                     height: 20
                                     radius: 10
-                                    color: Tema.escuro ? Qt.tint("#1d1d20", Qt.rgba(1, 1, 1, 0.8)) : "white"
+                                    color: Qt.tint("#1d1d20", Qt.rgba(1, 1, 1, 0.8))
                                     Sombra { camadas: [[0, 0, 1, 0, 0, 6 / 255, 0.10], [2, 4, 0, 0, 0, 6 / 255, 0.20]]; raio: 10 }
                                     AnelDeFoco { ativo: barra.visualFocus; raio: 10; afastamento: 0 }
                                 }

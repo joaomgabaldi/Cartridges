@@ -95,7 +95,7 @@ Item {
             }
             background: Rectangle {
                 radius: 6
-                color: botao.checked ? (Tema.escuro ? Qt.rgba(1, 1, 1, 0.2) : "#ffffff")
+                color: botao.checked ? Qt.rgba(1, 1, 1, 0.2)
                     : botao.down ? Tema.planoPressionado : botao.hovered ? Tema.planoSobre : "transparent"
                 Behavior on color { ColorAnimation { duration: Tema.duracaoCurta; easing { type: Easing.Bezier; bezierCurve: Tema.curva } } }
                 Sombra { visible: botao.checked; camadas: Tema.sombraAviso; raio: 6 }

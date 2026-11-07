@@ -46,6 +46,7 @@
           <li>Com um diálogo aberto, o que está ao fundo não reage mais à passagem do mouse.</li>
           <li>A página do jogo agora mostra os DLCs incluídos nos jogos que usam emulador da Steam.</li>
           <li>O Big Picture agora se ajusta a monitores na vertical.</li>
+          <li>O Kyron agora usa sempre o tema escuro.</li>
         </ul>
       </description>
     </release>

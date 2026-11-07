@@ -46,7 +46,7 @@ Window {
     Component.onCompleted: {
         if (agente) {
             agente.setup(janela)
-            agente.setWindowAttribute("dark-mode", Tema.escuro)
+            agente.setWindowAttribute("dark-mode", true)
             if (usarMica)
                 agente.setWindowAttribute("mica", true)
             barra.ligarAgente()
@@ -61,11 +61,6 @@ Window {
         // Opcional nos testes: o lugar e o tamanho gravados ao fechar valem depois do inicial.
         const servico = typeof geometria === "undefined" ? null : geometria
         if (servico) servico.restaurar(janela)
-    }
-
-    Connections {
-        target: Tema
-        function onEscuroChanged() { if (janela.agente) janela.agente.setWindowAttribute("dark-mode", Tema.escuro) }
     }
 
     Loader {

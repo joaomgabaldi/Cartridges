@@ -172,16 +172,15 @@ def _contraste(a, b):
     return (claro + 0.05) / (escuro + 0.05)
 
 
-def test_erro_do_tema_tem_contraste_nos_dois_temas():
-    """O texto de erro da janela de login passa de 4,5:1 sobre o fundo, no escuro e no claro."""
+def test_erro_do_tema_tem_contraste():
+    """O texto de erro da janela de login passa de 4,5:1 sobre o fundo."""
     import re  # noqa: PLC0415
 
     tema = (QML / "Tema.qml").read_text(encoding="utf-8")
-    erro = re.search(r'property color erro: escuro \? "(#\w{6})" : "(#\w{6})"', tema)
-    fundo = re.search(r'property color fundo: escuro \? "(#\w{6})" : "(#\w{6})"', tema)
+    erro = re.search(r'property color erro: "(#\w{6})"', tema)
+    fundo = re.search(r'property color fundo: "(#\w{6})"', tema)
     assert erro and fundo
     assert _contraste(erro.group(1), fundo.group(1)) >= 4.5
-    assert _contraste(erro.group(2), fundo.group(2)) >= 4.5
     assert "color: Tema.erro" in (QML / "JanelaDeLogin.qml").read_text(encoding="utf-8")
 
 

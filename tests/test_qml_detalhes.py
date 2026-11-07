@@ -568,18 +568,14 @@ def test_barra_de_acao_botoes_de_34_e_jogar_de_44(app_qt):
     app.fechar()
 
 
-def test_jogar_usa_o_texto_e_o_fundo_invertidos_por_tema(app_qt):
-    """Branco sobre preto a 80% no claro; preto a 80% sobre branco no escuro."""
+def test_jogar_usa_o_texto_e_o_fundo_invertidos(app_qt):
+    """Preto a 80% sobre branco."""
     app = _App(_tres())
     pagina = _abrir_pelo_cartao(app)
     jogar = _achar(pagina, "botaoJogarDaPagina")
-    escuro = QQmlExpression(QQmlEngine.contextForObject(jogar), jogar, "Tema.escuro").evaluate()[0]
     fundo = QQmlExpression(QQmlEngine.contextForObject(jogar), jogar, "background.color").evaluate()[0]
     texto = QQmlExpression(QQmlEngine.contextForObject(jogar), jogar, "corDoTexto").evaluate()[0]
-    if escuro:
-        assert fundo.name() == "#ffffff" and texto.alpha() == 204 and texto.red() == 0
-    else:
-        assert texto.name() == "#ffffff" and fundo.alpha() == 204 and fundo.red() == 0
+    assert fundo.name() == "#ffffff" and texto.alpha() == 204 and texto.red() == 0
     app.fechar()
 
 
@@ -634,12 +630,8 @@ def test_o_titulo_do_menu_de_buscas_e_um_rotulo_de_secao_e_o_menu_e_um_popover_c
     app.fechar()
 
 
-def test_jogar_tem_hover_visivel_nos_dois_temas(app_qt):
-    """O véu do hover é `currentColor` a 10% (o texto do botão), nos dois temas, não um branco fixo.
-
-    O offscreen não aceita trocar o esquema de cores (`setColorScheme` fica em Unknown), então o escuro é provado pelo
-    que o véu usa: a `corDoTexto`, que no escuro é preto a 80% (`test_jogar_usa_o_texto_e_o_fundo_invertidos_por_tema`),
-    e nunca o branco fixo do código antigo; no tema que o ambiente der, a cor lida tem de ser a do texto."""
+def test_jogar_tem_hover_visivel(app_qt):
+    """O véu do hover é `currentColor` a 10% (o texto do botão, preto a 80%), não um branco fixo."""
     from pathlib import Path  # noqa: PLC0415
 
     fonte = (Path(__file__).resolve().parent.parent / "kyron" / "qml" / "PaginaDoJogo.qml").read_text(encoding="utf-8")

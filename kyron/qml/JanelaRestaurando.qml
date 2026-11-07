@@ -33,7 +33,7 @@ Window {
     Component.onCompleted: {
         if (agente) {
             agente.setup(raiz)
-            agente.setWindowAttribute("dark-mode", Tema.escuro)
+            agente.setWindowAttribute("dark-mode", true)
             barra.ligarAgente()
         }
         width = 420
@@ -42,10 +42,6 @@ Window {
         height = Qt.binding(() => alturaPedida)
         minimumHeight = Qt.binding(() => alturaPedida)
         maximumHeight = Qt.binding(() => alturaPedida)
-    }
-    Connections {
-        target: Tema
-        function onEscuroChanged() { if (raiz.agente) raiz.agente.setWindowAttribute("dark-mode", Tema.escuro) }
     }
 
     BarraDeTitulo {

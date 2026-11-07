@@ -18,7 +18,7 @@ import time
 from ctypes import wintypes
 from pathlib import Path
 
-from PySide6.QtCore import QTimer, QUrl
+from PySide6.QtCore import Qt, QTimer, QUrl
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtQml import QQmlApplicationEngine
 
@@ -190,6 +190,7 @@ def teste(app: QGuiApplication, janela) -> None:
 
 def main() -> int:
     app = QGuiApplication(sys.argv)
+    app.styleHints().setColorScheme(Qt.ColorScheme.Dark)  # como o app.py
     motor = QQmlApplicationEngine()
     qwk.registrar(motor)
     motor.load(QUrl.fromLocalFile(str(RAIZ / "kyron" / "qml" / "Principal.qml")))
@@ -197,7 +198,6 @@ def main() -> int:
         return 1
     janela = motor.rootObjects()[0]
     janela.show()
-    print(f"[tema] escuro={app.styleHints().colorScheme().name}")
     teste(app, janela)
     codigo = app.exec()
     del janela, motor  # o motor antes do app: a ordem do coletor não é garantida

@@ -148,31 +148,17 @@ def test_anotacao_de_zerado_so_leitura(app_qt, store):
 
 
 def test_opacidade_do_fundo(app_qt):
-    assert modulo.opacidade_do_fundo((0.2, 0.6), True, False) == 0.8
-    assert modulo.opacidade_do_fundo((0.2, 0.6), False, False) == 0.6
-    assert modulo.opacidade_do_fundo((0.2, 0.6), True, True) == 0.3
+    assert modulo.opacidade_do_fundo(0.2, False) == 0.8
+    assert modulo.opacidade_do_fundo(0.2, True) == 0.3
 
 
-def test_opacidade_do_fundo_segue_o_esquema_de_cores(app_qt, store, monkeypatch):
-    from PySide6.QtCore import Qt  # noqa: PLC0415
-    from PySide6.QtGui import QGuiApplication  # noqa: PLC0415
-
+def test_opacidade_do_fundo_segue_a_capa(app_qt, store, monkeypatch):
     monkeypatch.setattr(modulo, "_alto_contraste", lambda: False)
     Image.new("RGB", (200, 300), (200, 40, 40)).save(shared.covers_dir / "a.tiff")
     detalhes = _modelo(store, _jogo())
     detalhes.mostrar("a")
     assert _rodar_ate(lambda: detalhes.fundo)
-    luminancia = desfoque.calcular(shared.covers_dir / "a.tiff").luminancia
-    dicas = QGuiApplication.styleHints()
-    esperado = {
-        Qt.ColorScheme.Dark: 1 - luminancia[0],
-        Qt.ColorScheme.Light: luminancia[1],
-        Qt.ColorScheme.Unknown: 0.3,
-    }
-    for esquema, valor in esperado.items():
-        monkeypatch.setattr(dicas, "colorScheme", lambda e=esquema: e)
-        dicas.colorSchemeChanged.emit(esquema)  # o caminho público: o sistema trocou o tema
-        assert detalhes.opacidadeDoFundo == valor, esquema
+    assert detalhes.opacidadeDoFundo == 1 - desfoque.calcular(shared.covers_dir / "a.tiff").luminancia
 
 
 def test_mostrar_preenche_as_propriedades(app_qt, store):
@@ -354,7 +340,7 @@ def test_desfoque_sem_capa_usa_placeholder(app_qt, store, tmp_path):
     detalhes = _modelo(store, _jogo())
     detalhes.mostrar("a")
     assert detalhes.fundo.endswith("library_placeholder_small.svg")
-    assert detalhes._luminancia == (0.3, 0.5)  # noqa: SLF001
+    assert detalhes._luminancia == 0.3  # noqa: SLF001
 
 
 def test_desfoque_com_capa_serve_o_png(app_qt, store):

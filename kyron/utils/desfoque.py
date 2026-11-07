@@ -11,7 +11,7 @@ from pathlib import Path
 from PIL import Image, ImageEnhance, ImageFilter, ImageStat
 
 # Luminância de quando não há capa legível (a página usa o fundo de reserva).
-LUMINANCIA_RESERVA = (0.3, 0.5)
+LUMINANCIA_RESERVA = 0.3
 # O Big Picture ocupa a tela inteira: o desfoque da página vira uma média cinza, então o dele borra menos e satura.
 RAIO_DO_FUNDO_VIVO = 6
 SATURACAO_DO_FUNDO_VIVO = 1.8
@@ -22,8 +22,8 @@ BRILHO_MAXIMO_DO_FUNDO_VIVO = 80
 @dataclass(frozen=True)
 class Desfoque:
     png: bytes
-    # (para o tema escuro, para o claro): ver `opacidade_do_fundo`.
-    luminancia: tuple[float, float]
+    # Ver `opacidade_do_fundo`.
+    luminancia: float
     png_vivo: bytes
 
 
@@ -51,10 +51,7 @@ def calcular(caminho: Path | None) -> Desfoque | None:
             estatistica = ImageStat.Stat(imagem.convert("L"))
             return Desfoque(
                 saida.getvalue(),
-                (
-                    min((estatistica.mean[0] + estatistica.extrema[0][0]) / 510, 0.7),
-                    max((estatistica.mean[0] + estatistica.extrema[0][1]) / 510, 0.3),
-                ),
+                min((estatistica.mean[0] + estatistica.extrema[0][0]) / 510, 0.7),
                 _fundo_vivo(pequena),
             )
     except (OSError, ValueError, Image.DecompressionBombError):

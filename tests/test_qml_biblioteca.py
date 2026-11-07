@@ -143,13 +143,10 @@ def _cor(objeto, propriedade):
 def test_menu_do_popover_usa_as_cores_do_tema(app_qt):
     app = _App(_tres())
     menu = app.achar("menuPrincipal")
-    # Fundo e texto do mesmo tema (o `Tema.escuro` do Windows); o padrão do Basic seria #26282a no texto.
-    from PySide6.QtGui import QGuiApplication  # noqa: PLC0415
-
-    escuro = QGuiApplication.styleHints().colorScheme() == Qt.ColorScheme.Dark
-    assert _cor(menu.property("background"), "color") == ("#36363a" if escuro else "#ffffff")
+    # Fundo e texto do tema escuro; o padrão do Basic seria #26282a no texto.
+    assert _cor(menu.property("background"), "color") == "#36363a"
     item = app.achar("ordenar-Jogados recentemente")
-    assert _cor(item.property("contentItem"), "color") == ("#ffffff" if escuro else "#000006")
+    assert _cor(item.property("contentItem"), "color") == "#ffffff"
     assert item.property("implicitHeight") == 32
     app.fechar()
 
@@ -987,9 +984,10 @@ def test_halo_segue_o_box_shadow_do_gtk(app_qt):
     imagem = app.janela.grabWindow()
     base = beta.mapToScene(QPointF(beta.width() / 2, beta.height()))
     x, y0 = round(base.x()), round(base.y())
-    fundo = imagem.pixelColor(x, y0 + 60).blue()
+    # O canal vermelho: o âmbar (245) contra o fundo escuro (34); no azul os dois quase se igualam.
+    fundo = imagem.pixelColor(x, y0 + 60).red()
     for d in range(1, 34, 4):
-        medido = (fundo - imagem.pixelColor(x, y0 + d).blue()) / (fundo - 32)
+        medido = (imagem.pixelColor(x, y0 + d).red() - fundo) / (245 - fundo)
         css = 0.8 * (1 - 0.5 * (1 + math.erf((d - 5) / 11 / math.sqrt(2))))
         assert medido == pytest.approx(css, abs=0.05), d
     app.fechar()

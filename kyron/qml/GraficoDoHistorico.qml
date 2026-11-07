@@ -125,7 +125,6 @@ Item {
         onHeightChanged: requestPaint()
         Connections {
             target: Tema
-            function onEscuroChanged() { tela.requestPaint() }
             function onDestaqueTextoChanged() { tela.requestPaint() }
         }
     }

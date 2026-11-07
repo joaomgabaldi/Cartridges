@@ -595,6 +595,8 @@ def main(argv: list[str]) -> int:
     _medidas_da_tela(app)
     # Controls no estilo Basic, redesenhado pelo Tema.qml; antes do primeiro motor.
     QQuickStyle.setStyle("Basic")
+    # O app só tem tema escuro: a paleta do Qt (e a do Basic) não segue o tema claro do Windows.
+    QGuiApplication.styleHints().setColorScheme(Qt.ColorScheme.Dark)
     single_instance.watch_second_launch(lambda: na_thread_principal(_acordar, abertura))
 
     # Um backup agendado é aplicado antes de qualquer leitura de dados; leva minutos, por isso numa thread com a janela da restauração.

@@ -199,7 +199,7 @@ dispositivos na sua conta; depois disso, o aplicativo conversa com eles direto p
 
 ### Integração com o Windows
 
-- Tema claro e escuro e cor de destaque acompanham as configurações do Windows na hora.
+- O aplicativo usa sempre o tema escuro; a cor de destaque acompanha a do Windows na hora.
 - A janela reabre no monitor, na posição e no tamanho em que foi fechada.
 - Abrir o aplicativo com ele já aberto traz a janela existente para a frente.
 - As animações respeitam a opção de desativar animações do Windows.

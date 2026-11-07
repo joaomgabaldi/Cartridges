@@ -5,7 +5,6 @@ QtObject {
     id: tema
 
     readonly property string fonte: "Segoe UI"
-    readonly property bool escuro: Qt.styleHints.colorScheme === Qt.Dark
     // A cor de destaque do Windows (`AccentColor` cru), posta na paleta por `aplicar_cor_de_destaque`.
     readonly property color destaque: sistema.accent
     readonly property color textoDoDestaque: "#ffffff"
@@ -31,16 +30,16 @@ QtObject {
     readonly property int pesoTitulo4: 700
     readonly property int pesoForte: 700    // títulos, legendas em destaque e todo botão com texto
 
-    // A cor do texto, com o alfa dele (0,8 no claro). As misturas abaixo somam o alfa do estado a esse.
-    readonly property color corBase: escuro ? "#ffffff" : Qt.rgba(0, 0, 6 / 255, 0.8)
+    // A cor do texto. As misturas abaixo somam o alfa do estado a esse.
+    readonly property color corBase: "#ffffff"
 
-    readonly property color fundo: escuro ? "#222226" : "#fafafb"
-    readonly property color texto: escuro ? "#ffffff" : Qt.rgba(0, 0, 6 / 255, 0.8)
-    readonly property color textoSecundario: escuro ? Qt.rgba(1, 1, 1, 0.55) : Qt.rgba(0, 0, 6 / 255, 0.44)
+    readonly property color fundo: "#222226"
+    readonly property color texto: "#ffffff"
+    readonly property color textoSecundario: Qt.rgba(1, 1, 1, 0.55)
     // Só o anel do selo usa; a barra da janela é plana, da cor do `fundo`.
-    readonly property color barra: escuro ? "#2e2e32" : "#ffffff"
-    readonly property color barraInativa: escuro ? "#222226" : "#fafafb"
-    readonly property color sombraDaBarra: escuro ? Qt.rgba(0, 0, 6 / 255, 0.36) : Qt.rgba(0, 0, 6 / 255, 0.12)
+    readonly property color barra: "#2e2e32"
+    readonly property color barraInativa: "#222226"
+    readonly property color sombraDaBarra: Qt.rgba(0, 0, 6 / 255, 0.36)
     readonly property color botao: mistura(0.10)
     readonly property color botaoSobre: mistura(0.15)
     readonly property color pressionado: mistura(0.30)
@@ -51,19 +50,19 @@ QtObject {
     readonly property color linhaPressionada: mistura(0.08)
     readonly property color menuSobre: mistura(0.10)
     readonly property color menuPressionado: mistura(0.19)
-    readonly property color destrutivo: escuro ? "#c01c28" : "#e01b24"
+    readonly property color destrutivo: "#c01c28"
     readonly property color destrutivoTexto: derivada(destrutivo)
     // Propriedade `color`, e não texto: a `derivada` lê `.r .g .b`, e de um texto sairia preto.
-    readonly property color avisoBase: escuro ? "#cd9309" : "#e5a50a"
+    readonly property color avisoBase: "#cd9309"
     readonly property color avisoIcone: derivada(avisoBase)
-    readonly property color erro: escuro ? "#ff938c" : "#c30000"
-    readonly property color cartao: escuro ? Qt.rgba(1, 1, 1, 0.08) : "#ffffff"
-    readonly property color sombraDoCartao: escuro ? Qt.rgba(0, 0, 6 / 255, 0.36) : Qt.rgba(0, 0, 6 / 255, 0.07)
-    readonly property color dialogo: escuro ? "#36363a" : "#fafafb"
-    readonly property color popover: escuro ? "#36363a" : "#ffffff"
-    readonly property color vista: escuro ? "#1d1d20" : "#ffffff"
+    readonly property color erro: "#ff938c"
+    readonly property color cartao: Qt.rgba(1, 1, 1, 0.08)
+    readonly property color sombraDoCartao: Qt.rgba(0, 0, 6 / 255, 0.36)
+    readonly property color dialogo: "#36363a"
+    readonly property color popover: "#36363a"
+    readonly property color vista: "#1d1d20"
     // `shade_color` dobrado: o escurecimento atrás de um diálogo.
-    readonly property color esmaecido: escuro ? Qt.rgba(0, 0, 6 / 255, 0.5) : Qt.rgba(0, 0, 6 / 255, 0.14)
+    readonly property color esmaecido: Qt.rgba(0, 0, 6 / 255, 0.5)
     readonly property color superficie: dialogo
     readonly property color borda: mistura(0.15)
     readonly property color aviso: "#505053"
@@ -91,7 +90,7 @@ QtObject {
 
     function mistura(alfa) { return Qt.rgba(corBase.r, corBase.g, corBase.b, corBase.a * alfa) }
 
-    // `oklab(from cor min(l, 0.5) a b)` no claro e `max(l, 0.85)` no escuro: as cores de texto sobre o fundo claro ou escuro.
+    // `oklab(from cor max(l, 0.85) a b)`: a cor de texto sobre o fundo escuro.
     function derivada(cor) {
         const linear = c => c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4)
         const srgb = c => { c = Math.min(1, Math.max(0, c)); return c <= 0.0031308 ? c * 12.92 : 1.055 * Math.pow(c, 1 / 2.4) - 0.055 }
@@ -102,7 +101,7 @@ QtObject {
         const l0 = 0.2104542553 * m + 0.7936177850 * n - 0.0040720468 * s
         const a0 = 1.9779984951 * m - 2.4285922050 * n + 0.4505937099 * s
         const b0 = 0.0259040371 * m + 0.7827717662 * n - 0.8086757660 * s
-        const l1 = escuro ? Math.max(l0, 0.85) : Math.min(l0, 0.5)
+        const l1 = Math.max(l0, 0.85)
         const p = Math.pow(l1 + 0.3963377774 * a0 + 0.2158037573 * b0, 3)
         const q = Math.pow(l1 - 0.1055613458 * a0 - 0.0638541728 * b0, 3)
         const u = Math.pow(l1 - 0.0894841775 * a0 - 1.2914855480 * b0, 3)

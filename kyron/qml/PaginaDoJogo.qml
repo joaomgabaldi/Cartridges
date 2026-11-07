@@ -103,9 +103,9 @@ Item {
     property bool anotarAoEntrar: false
     function abrirAnotacao() { if (botaoAnotacao.visible) balaoDaAnotacao.open() }
 
-    // Branco (claro) ou preto (escuro) sob a capa desfocada; a imagem continua sob a barra transparente (daí o `y` negativo).
+    // Preto sob a capa desfocada; a imagem continua sob a barra transparente (daí o `y` negativo).
     readonly property int sobreABarra: Window.window && Window.window.alturaDaBarra ? Window.window.alturaDaBarra : 0
-    Rectangle { anchors.fill: parent; color: Tema.escuro ? "black" : "white"; z: -2 }
+    Rectangle { anchors.fill: parent; color: "black"; z: -2 }
 
     Item {
         anchors.fill: parent
@@ -673,7 +673,7 @@ Item {
                         Keys.onReturnPressed: click()
                         Keys.onEnterPressed: click()
                         onClicked: raiz.jogar()
-                        readonly property color corDoTexto: Tema.escuro ? Qt.rgba(0, 0, 0, 0.8) : "white"
+                        readonly property color corDoTexto: Qt.rgba(0, 0, 0, 0.8)
                         contentItem: Text {
                             text: botaoJogar.text
                             textFormat: Text.PlainText
@@ -684,7 +684,7 @@ Item {
                         }
                         background: Rectangle {
                             radius: height / 2
-                            color: Tema.escuro ? "white" : Qt.rgba(0, 0, 0, 0.8)
+                            color: "white"
                             Rectangle {
                                 anchors.fill: parent
                                 radius: parent.radius

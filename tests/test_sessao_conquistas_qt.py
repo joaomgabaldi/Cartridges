@@ -543,9 +543,7 @@ def test_modulo_gtk_do_cartao_saiu():
 
 
 def test_cores_do_cartao_da_sessao_nao_seguem_o_tema(app_qt, sem_vigia):
-    """A camada da sessão é sempre escura: a trilha da barra, a barra de rolagem e o ladrilho do ícone ficam com as
-    cores do tema escuro, qualquer que seja o tema (a plataforma offscreen não troca de tema: a conferência é contra o
-    `Tema` de agora, o claro, cujas cores seriam as erradas aqui)."""
+    """A trilha da barra, a barra de rolagem e o ladrilho do ícone usam as cores próprias da camada da sessão."""
     app = _app()
     _comecar(app)
     cartao = _cartao(app)
@@ -554,9 +552,8 @@ def test_cores_do_cartao_da_sessao_nao_seguem_o_tema(app_qt, sem_vigia):
     assert _esperar(lambda: len(_icones(app)) == 3)
     ladrilho = _achar(_icones(app)[0], "ladrilhoDaConquista")
 
-    assert _expr(barra, "Tema.escuro") is False
-    # `currentColor` a 15%: branco a 15%, e não a cor do tema de agora.
-    assert _expr(barra, "background.color.toString()") == "#26ffffff" != _expr(barra, "Tema.botaoSobre.toString()")
+    # `currentColor` a 15%: branco a 15%.
+    assert _expr(barra, "background.color.toString()") == "#26ffffff"
     tema = _expr(rolagem, "Tema.textoSecundario.toString()")
     assert _expr(rolagem, "contentItem.color.toString()") == "#33ffffff" != tema  # a cor da tela da sessão (BarraDeRolagem `cor`), com o alfa de repouso (20%)
     assert _expr(ladrilho, "Qt.rgba(color.r, color.g, color.b, 1).toString()") == "#ffffff"

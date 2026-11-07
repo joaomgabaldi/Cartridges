@@ -136,10 +136,8 @@ def dica_da_anotacao(jogo: Jogo) -> str:
     return _("Ver onde você parou neste jogo") if jogo.zerado else _("Anotar onde você parou neste jogo")
 
 
-def opacidade_do_fundo(luminancia: tuple[float, float], escuro: bool, alto_contraste: bool) -> float:
-    if alto_contraste:
-        return 0.3
-    return 1 - luminancia[0] if escuro else luminancia[1]
+def opacidade_do_fundo(luminancia: float, alto_contraste: bool) -> float:
+    return 0.3 if alto_contraste else 1 - luminancia
 
 
 class _AltoContraste(ctypes.Structure):
@@ -319,7 +317,6 @@ class DetalhesDoJogo(QObject):
         fraca = weakref.ref(self)
         copias_animadas.soltar_da_pagina = lambda game_id: (m := fraca()) and m.soltar_copia(game_id)
         copias_animadas.ao_terminar_da_pagina = lambda game_id, resultado: (m := fraca()) and m.copia_pronta(game_id, resultado)
-        QGuiApplication.styleHints().colorSchemeChanged.connect(self._tema_mudou)
         # O alto contraste não tem sinal próprio no Qt 6.12; ligá-lo troca a paleta, e é por ela que reavaliamos.
         QGuiApplication.instance().paletteChanged.connect(self._tema_mudou)
 
@@ -442,10 +439,7 @@ class DetalhesDoJogo(QObject):
 
     def _mesclar(self, campos: dict[str, Any]) -> None:
         novo = {**self._v, **campos}
-        tema = QGuiApplication.styleHints().colorScheme()
-        # Sem esquema de cores no sistema (Unknown) vale o 0.3 do alto contraste.
-        fixo = _alto_contraste() or tema == Qt.ColorScheme.Unknown
-        novo["opacidadeDoFundo"] = opacidade_do_fundo(self._luminancia, tema == Qt.ColorScheme.Dark, fixo)
+        novo["opacidadeDoFundo"] = opacidade_do_fundo(self._luminancia, _alto_contraste())
         if novo != self._v:
             self._v = novo
             self.alterado.emit()

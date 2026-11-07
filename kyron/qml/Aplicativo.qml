@@ -110,7 +110,7 @@ Principal {
     readonly property bool _barraCongelada: _empurrando && deslocamentoDoFundo > 0
     deslocamentoDaBarra: _barraCongelada ? deslocamentoDoFundo : 0
     fundoDaBarra: [
-        Rectangle { x: janela.deslocamentoDoFundo; width: parent.width; height: parent.height; visible: janela.barraTransparente; color: Tema.escuro ? "black" : "white" },
+        Rectangle { x: janela.deslocamentoDoFundo; width: parent.width; height: parent.height; visible: janela.barraTransparente; color: "black" },
         Image {
             x: janela.deslocamentoDoFundo
             width: parent.width
