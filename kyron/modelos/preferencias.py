@@ -724,13 +724,11 @@ class Preferencias(QObject):
     def _ler_monitores(self) -> None:
         """Os monitores ligados agora (o hardware é lido ao abrir) e o que as duas opções fazem com eles.
 
-        Sem nenhum além do principal, elas ficam desligadas (e não só apagadas) e, quando um segundo voltar, quem religa é a
-        pessoa; com algum, a escolha da lista é gravada (a antiga pelo nome vira o caminho; um monitor desligado cai no primeiro).
+        Sem nenhum além do principal, elas só ficam indisponíveis e voltam como estavam quando um segundo voltar;
+        com algum, a escolha da lista é gravada (a antiga pelo nome vira o caminho; um monitor desligado cai no primeiro).
         """
         self._monitores = window_geometry.monitores_da_sessao()
         if not self._monitores:
-            shared.schema["session-move-window"] = False
-            shared.schema["session-wallpaper"] = False
             return
         _rotulos, escolhido = window_geometry.escolha_de_monitor(
             self._monitores, shared.schema.get_string("session-monitor")
@@ -807,7 +805,7 @@ class Preferencias(QObject):
             "monitorAtivo": contando and not sem_segundo and shared.schema.get_boolean("session-move-window"),
             "papelDeParedeAtivo": contando,
             "papelDeParedeLigavel": contando and not sem_segundo,
-            "chaveWallhavenAtiva": contando and shared.schema.get_boolean("session-wallpaper"),
+            "chaveWallhavenAtiva": contando and not sem_segundo and shared.schema.get_boolean("session-wallpaper"),
             "sgdbAtivo": bool(shared.schema.get_string("sgdb-key")),
             "posicaoDoAviso": janela_por_cima.CANTOS.index(canto),
             # O som e a posição só valem com o aviso; o volume, com o aviso e o som.

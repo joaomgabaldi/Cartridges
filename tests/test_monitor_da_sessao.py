@@ -248,7 +248,7 @@ def modelo(monkeypatch):
     return instancia
 
 
-def test_sem_segundo_monitor_desliga_a_opcao(modelo, schema, monitores, monkeypatch):
+def test_sem_segundo_monitor_nao_move_e_mantem_a_opcao(modelo, schema, monitores, monkeypatch):
     schema["session-move-window"] = True
     schema["session-monitor"] = PRINCIPAL.device
     monitores(PRINCIPAL)
@@ -260,17 +260,6 @@ def test_sem_segundo_monitor_desliga_a_opcao(modelo, schema, monitores, monkeypa
     monkeypatch.setattr(window_geometry, "move_to_monitor", nao_move)
 
     assert modelo.move_to_session_monitor() is False
-    assert schema.get_boolean("session-move-window") is False
-
-
-def test_sem_segundo_monitor_o_big_picture_nao_move_e_mantem_a_opcao(modelo, schema, monitores, monkeypatch):
-    """Ligado a uma TV só: ao voltar aos monitores, a opção continua valendo."""
-    schema["session-move-window"] = True
-    monitores(PRINCIPAL)
-    modelo.definir_janela(QWindow())
-    monkeypatch.setattr(window_geometry, "move_to_monitor", lambda *_: pytest.fail("não há para onde levar a janela"))
-
-    assert modelo.move_to_session_monitor(manter_opcao=True) is False
     assert schema.get_boolean("session-move-window") is True
 
 

@@ -32,7 +32,7 @@ def ligados(monkeypatch):
 
 
 class TestSessao:
-    def test_sem_segundo_monitor_o_papel_de_parede_nao_comeca_e_desliga(
+    def test_sem_segundo_monitor_o_papel_de_parede_nao_comeca_e_a_opcao_fica(
         self, schema, ligados, monkeypatch
     ):
         schema["session-wallpaper"] = True
@@ -47,7 +47,7 @@ class TestSessao:
         session_wallpaper.comecar(object())
 
         assert iniciadas == []
-        assert schema.get_boolean("session-wallpaper") is False
+        assert schema.get_boolean("session-wallpaper") is True
 
     def test_com_segundo_monitor_o_papel_de_parede_comeca(
         self, schema, ligados, monkeypatch

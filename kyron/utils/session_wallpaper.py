@@ -521,9 +521,8 @@ def _limpar_cache() -> None:
 
 
 def comecar(game: "Game") -> None:
-    """Começa a vestir as telas para ``game`` (thread de UI). Sem monitor além do principal, desliga a opção; quem religa é o usuário, nas Preferências."""
+    """Começa a vestir as telas para ``game`` (thread de UI). Sem monitor além do principal, não faz nada e a opção continua como está."""
     if not window_geometry.has_secondary_monitor():
-        shared.schema.set_boolean("session-wallpaper", False)
         return
     threading.Thread(target=aplicar, args=(game, _sessao), daemon=True).start()
 

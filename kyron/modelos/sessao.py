@@ -265,17 +265,13 @@ class ModeloDaSessao(QObject):
         janela.raise_()
         janela.requestActivate()
 
-    def move_to_session_monitor(self, manter_opcao: bool = False) -> bool:  # noqa: FBT001, FBT002
+    def move_to_session_monitor(self) -> bool:
         """Leva a janela, maximizada, ao monitor da sessão; diz se foi (senão quem chamou minimiza). Sem monitor além do
-        principal a opção é desligada aqui e fica desligada: quem religa é o usuário, nas Preferências.
-
-        ``manter_opcao``: o Big Picture, que pode estar só numa TV hoje; ali a janela fica, e a opção segue valendo nos monitores.
+        principal a janela fica e a opção continua como está, para valer de novo quando ele voltar.
         """
         if self._janela is None or not shared.schema.get_boolean("session-move-window"):
             return False
         if not window_geometry.has_secondary_monitor():
-            if not manter_opcao:
-                shared.schema.set_boolean("session-move-window", False)
             return False
         return window_geometry.move_to_monitor(self._janela, shared.schema.get_string("session-monitor"))
 

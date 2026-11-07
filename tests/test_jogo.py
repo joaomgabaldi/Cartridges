@@ -281,8 +281,8 @@ class _SessaoQueAnota:
     def __init__(self, passos, moveu=False):
         self.passos, self.moveu = passos, moveu
 
-    def move_to_session_monitor(self, manter_opcao=False):
-        self.passos.append("mover na tela cheia" if manter_opcao else "mover")
+    def move_to_session_monitor(self):
+        self.passos.append("mover")
         return self.moveu
 
     def vibrar_abertura(self):
@@ -376,7 +376,7 @@ def test_launch_em_tela_cheia_muda_de_monitor_e_nao_sai_da_frente(com_sessao):
 
     assert jogo.launch(em_tela_cheia=True) is True
 
-    assert com_sessao.passos[0] == "mover na tela cheia" and "processo.start" in com_sessao.passos
+    assert com_sessao.passos[0] == "mover" and "processo.start" in com_sessao.passos
     assert saidas == []
 
 

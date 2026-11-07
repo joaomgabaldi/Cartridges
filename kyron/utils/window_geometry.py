@@ -271,7 +271,7 @@ def monitors() -> list[Monitor]:
 
 
 def has_secondary_monitor() -> bool:
-    """True se algum monitor não é o principal. As opções de sessão que usam outras telas precisam disso (o jogo roda no principal). Enumeração que falha dá False, o lado seguro: a opção é desligada."""
+    """True se algum monitor não é o principal. As opções de sessão que usam outras telas precisam disso (o jogo roda no principal). Enumeração que falha dá False, o lado seguro: nesta sessão, a opção não age."""
     return any(not monitor.primary for monitor in monitors())
 
 

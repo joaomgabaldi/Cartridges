@@ -440,7 +440,7 @@ class Jogo(QObject):
         )
         sessao = shared.sessao
         # Sair da frente antes de o jogo existir: a janela muda de monitor com o jogo ainda por lançar. Só com sessão, que devolve a janela ao lugar de origem.
-        moved = tracking and sessao is not None and sessao.move_to_session_monitor(manter_opcao=em_tela_cheia)
+        moved = tracking and sessao is not None and sessao.move_to_session_monitor()
 
         run_executable(self.executable, self.run_as_admin)
         if sessao is not None:

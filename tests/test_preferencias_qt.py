@@ -504,7 +504,7 @@ def test_escolha_fora_da_faixa_nao_grava(p):
     assert shared.schema.get_string("session-monitor") == antes
 
 
-def test_sem_segundo_monitor_desliga_as_duas_e_explica(app_qt, monitores):  # noqa: ARG001
+def test_sem_segundo_monitor_as_duas_ficam_como_estao(app_qt, monitores):  # noqa: ARG001
     shared.schema.set_boolean("session-move-window", True)
     shared.schema.set_boolean("session-wallpaper", True)
     monitores[:] = [PRINCIPAL]
@@ -512,9 +512,10 @@ def test_sem_segundo_monitor_desliga_as_duas_e_explica(app_qt, monitores):  # no
     try:
         assert modelo.estado["semSegundoMonitor"] is True
         assert modelo.estado["monitores"] == []
-        assert not shared.schema.get_boolean("session-move-window")
-        assert not shared.schema.get_boolean("session-wallpaper")
-        assert modelo.valores["session-move-window"] is False
+        assert shared.schema.get_boolean("session-move-window")
+        assert shared.schema.get_boolean("session-wallpaper")
+        assert modelo.valores["session-move-window"] is True
+        assert modelo.estado["chaveWallhavenAtiva"] is False
     finally:
         modelo.fechar()
 
