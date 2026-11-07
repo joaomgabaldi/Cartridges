@@ -23,7 +23,8 @@ Item {
     readonly property string logoDoJogo: !jogo ? ""
         : detalhes.jogoId === jogo.jogoId && detalhes.logo !== "" ? detalhes.logo : bigPicture.logoDe(jogo.jogoId)
 
-    width: Math.min(conteudo.width, parent ? parent.width * (naColuna ? 0.5 : 0.8) : conteudo.width)
+    readonly property real larguraMaxima: parent ? parent.width * (naColuna ? 0.5 : 0.8) : Infinity
+    width: Math.min(conteudo.width, larguraMaxima)
     height: altura
     // Só o caminho até a coluna anima: cada logo tem uma largura, e recentrar com animação faria todos deslizarem para o mesmo lado.
     property real fracaoDaColuna: naColuna ? 1 : 0
@@ -43,7 +44,8 @@ Item {
             visible: status === Image.Ready
             source: logo.logoDoJogo
             height: logo.altura
-            width: implicitHeight > 0 ? height * implicitWidth / implicitHeight : 0
+            // Um logo largo numa tela em pé encolhe para caber (o `PreserveAspectFit` o centra na altura) em vez de vazar.
+            width: implicitHeight > 0 ? Math.min(height * implicitWidth / implicitHeight, logo.larguraMaxima) : 0
             fillMode: Image.PreserveAspectFit
             asynchronous: true  // arquivo em disco, sem provedor Python: segurar o direcional não trava o passo
             sourceSize.height: logo.alturaDecodificada

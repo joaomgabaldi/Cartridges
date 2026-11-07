@@ -15,7 +15,6 @@ SeletorBase {
     placeholder: "Buscar jogo"
     larguraDoCampo: 10000
     margemDoCampo: 12
-    rolado: lista.contentY > 0
     onFecharPedido: seletor.fechar()
     onBuscaEditada: texto => seletor.busca = texto
     onSetaParaBaixo: nenhum.botaoDaLinha.forceActiveFocus(Qt.TabFocusReason)
@@ -41,6 +40,8 @@ SeletorBase {
     Item {
         Layout.fillWidth: true
         implicitHeight: nenhum.height + 6
+        z: 1  // a lista rola por baixo do "Nenhum", não da busca: a sombra cai daqui
+        SombraDeRolagem { objectName: seletorDoLudusavi.objectName + "Sombra"; ativa: lista.contentY > 0 }
         GrupoDeLinhas {
             x: 12
             width: parent.width - 24
