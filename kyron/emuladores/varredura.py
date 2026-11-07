@@ -51,7 +51,7 @@ def _buscar_idiomas(jogo: Jogo) -> None:
 
 def _varrer_um(jogo: Jogo, buscar_idiomas: bool = True) -> tuple[bool, Optional[str]]:
     """(o AppID do jogo mudou, o resultado de `aplicar_no_jogo` ou None se houve erro)."""
-    antes = (jogo.inis, jogo.steam_appid, jogo.idiomas_steam)
+    antes = (jogo.inis, jogo.steam_appid, jogo.idiomas_steam, jogo.aviso_dos_inis_ligado)
     try:
         mudou = aplicacao.adotar_appid(jogo, aplicacao.atualizar_inis(jogo, aplicacao.executaveis_dos_outros(jogo)))
         if buscar_idiomas and jogo.inis and jogo.steam_appid and jogo.idiomas_steam is None:
@@ -60,7 +60,7 @@ def _varrer_um(jogo: Jogo, buscar_idiomas: bool = True) -> tuple[bool, Optional[
     except Exception:  # noqa: BLE001  (um jogo com problema não pode parar a varredura única)
         logging.exception("Falha ao varrer os .ini de %s", jogo.name)
         return False, None
-    if (jogo.inis, jogo.steam_appid, jogo.idiomas_steam) != antes and _da_biblioteca(jogo):
+    if (jogo.inis, jogo.steam_appid, jogo.idiomas_steam, jogo.aviso_dos_inis_ligado) != antes and _da_biblioteca(jogo):
         jogo.save()
     return mudou, resultado
 
@@ -173,6 +173,21 @@ def _jogos_da_biblioteca() -> list[Jogo]:
     return list(shared.store) if shared.store is not None else []
 
 
+def _ligar_o_aviso_dos_ja_achados() -> None:
+    """Uma vez só: os jogos com .ini achados antes de o aviso de atualizações vir ligado neles."""
+    if shared.schema.get_boolean("avisos-dos-inis-ligados"):
+        return
+    shared.schema.set_boolean("avisos-dos-inis-ligados", True)
+    # Também os removidos: um jogo que volta à biblioteca não passa de novo por aqui.
+    ligados = [j for j in _jogos_da_biblioteca() if j.inis]
+    for jogo in ligados:
+        jogo.track_updates = jogo.aviso_dos_inis_ligado = True
+        jogo.save()
+    # A consulta da abertura já passou e, sem jogo acompanhado, não leu o feed.
+    if ligados and (verificador := getattr(shared.aplicativo, "verificador_de_atualizacoes", None)) is not None:
+        verificador.check_async()
+
+
 def ligar_ao_app() -> None:
     """Chamada na thread principal depois da carga: a varredura única e a reaplicação quando o padrão muda."""
     global _espera  # noqa: PLW0603
@@ -198,6 +213,7 @@ def ligar_ao_app() -> None:
 
     shared.schema.connect("changed::nome-do-jogador", lambda *_: mudou("nome"))
     shared.schema.connect("changed::idioma-do-jogador", lambda *_: mudou("idioma"))
+    _ligar_o_aviso_dos_ja_achados()
     if not shared.schema.get_boolean("inis-varridos"):
         varrer(_jogos_da_biblioteca())
     else:  # a varredura já busca os idiomas de cada jogo

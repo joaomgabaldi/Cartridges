@@ -52,6 +52,7 @@ def test_as_chaves_gravadas_sao_as_da_versao_gtk():
         "saves_local_desconhecido_avisado", "backup_dos_saves_desligado",
         "comando_a_conferir", "inis", "idioma_proprio", "nome_proprio", "appid_manual",
         "idiomas_steam",
+        "aviso_dos_inis_ligado",
     )  # fmt: skip
 
 
@@ -280,8 +281,8 @@ class _SessaoQueAnota:
     def __init__(self, passos, moveu=False):
         self.passos, self.moveu = passos, moveu
 
-    def move_to_session_monitor(self):
-        self.passos.append("mover")
+    def move_to_session_monitor(self, manter_opcao=False):
+        self.passos.append("mover na tela cheia" if manter_opcao else "mover")
         return self.moveu
 
     def vibrar_abertura(self):
@@ -369,13 +370,13 @@ def test_launch_sem_rastreio_so_sai_da_frente_com_a_preferencia(com_sessao, sche
     assert len(saidas) == (1 if minimizar else 0)
 
 
-def test_launch_em_tela_cheia_nao_sai_da_frente(com_sessao):
+def test_launch_em_tela_cheia_muda_de_monitor_e_nao_sai_da_frente(com_sessao):
     jogo = _jogo(track_process=True, process_executable="halo.exe")
     saidas = _contar(jogo.sair_da_frente)
 
     assert jogo.launch(em_tela_cheia=True) is True
 
-    assert "mover" not in com_sessao.passos and "processo.start" in com_sessao.passos
+    assert com_sessao.passos[0] == "mover na tela cheia" and "processo.start" in com_sessao.passos
     assert saidas == []
 
 

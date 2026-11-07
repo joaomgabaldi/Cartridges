@@ -66,6 +66,7 @@ _GAME_FIELD_TYPES: dict[str, Any] = {
             "run_as_admin",
             "track_process",
             "track_updates",
+            "aviso_dos_inis_ligado",
             "conquistas",
             "saves_local_desconhecido_avisado",
             "backup_dos_saves_desligado",

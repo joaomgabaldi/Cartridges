@@ -101,6 +101,9 @@ def atualizar_inis(jogo, executaveis_dos_outros: Iterable[str]) -> Optional[str]
         return None
     raiz = busca.raiz_do_jogo(jogo.executable, executaveis_dos_outros)
     achados = busca.procurar(raiz) if raiz else []
+    # Uma vez por jogo: numa busca seguinte (executável trocado, .ini que sumiu e voltou), um aviso desligado pelo usuário continua desligado.
+    if achados and not jogo.aviso_dos_inis_ligado:
+        jogo.track_updates = jogo.aviso_dos_inis_ligado = True
     jogo.inis = [str(c) for c in achados]
     return busca.appid_dos(achados)
 

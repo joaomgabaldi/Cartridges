@@ -116,6 +116,24 @@ def test_atualizar_inis_grava_lista_e_devolve_appid(tmp_path):
     assert aplicacao.atualizar_inis(jogo, [str(tmp_path / "Raiz" / "y.exe")]) is None and jogo.inis == []
 
 
+def test_achar_os_ini_liga_o_aviso_de_atualizacoes_so_na_primeira_vez(tmp_path):
+    exe = tmp_path / "Jogo" / "x.exe"
+    exe.parent.mkdir()
+    exe.write_bytes(b"MZ")
+    jogo = _jogo(executable=str(exe))
+    aplicacao.atualizar_inis(jogo, [])
+    assert jogo.track_updates is False, "sem .ini não é emulador"
+    _ini(exe.parent, texto="[Settings]\nAppId=620\n")
+    aplicacao.atualizar_inis(jogo, [])
+    assert jogo.track_updates is True
+    jogo.track_updates = False  # o usuário desligou: outra busca não religa
+    aplicacao.atualizar_inis(jogo, [])
+    assert jogo.track_updates is False
+    jogo.inis = None  # executável trocado: a lista esvazia, a escolha do usuário fica
+    aplicacao.atualizar_inis(jogo, [])
+    assert jogo.track_updates is False
+
+
 def test_atualizar_inis_sem_a_pasta_do_jogo_mantem_a_lista(tmp_path):
     """HD externo desligado: o exe some, mas os .ini achados antes continuam valendo."""
     jogo = _jogo(executable=str(tmp_path / "Desligado" / "x.exe"), inis=["E:/Jogo/steam_emu.ini"])

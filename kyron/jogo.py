@@ -91,6 +91,7 @@ PERSISTED_ATTRS = (
     "nome_proprio",
     "appid_manual",
     "idiomas_steam",
+    "aviso_dos_inis_ligado",
 )
 
 _KNOWN_KEYS = frozenset(PERSISTED_ATTRS)
@@ -185,6 +186,8 @@ class Jogo(QObject):
     process_executable: str = ""  # exe name to watch, e.g. "game.exe"
     # Opcional por jogo: acompanha o feed de repacks atrás de um patch mais novo. Desligado por padrão (custa uma requisição de rede).
     track_updates: bool = False
+    # Os .ini de emulador já ligaram o aviso uma vez: daí em diante, a escolha é do usuário.
+    aviso_dos_inis_ligado: bool = False
     # pubDate (epoch, em s) do post mais novo em que o jogo foi achado e que está anunciado. 0 é "sem aviso".
     update_available_ts: int = 0
     # pubDate (epoch, em s) do último patch dispensado. Um resumo futuro só reabre o aviso se for mais novo.
@@ -396,7 +399,7 @@ class Jogo(QObject):
 
         ``inis_conferidos``: relançamento de uma conferência que passou por uma animação (Big Picture) e já não vê a marca.
 
-        ``em_tela_cheia``: lançado do Big Picture; a janela não muda de monitor nem sai da frente.
+        ``em_tela_cheia``: lançado do Big Picture; sem monitor para onde ir, a janela não sai da frente.
         """
         # Dentro da função: o `backup_de_saves` importa o `Jogo`.
         from kyron.emuladores import aplicacao, busca  # noqa: PLC0415
@@ -437,7 +440,7 @@ class Jogo(QObject):
         )
         sessao = shared.sessao
         # Sair da frente antes de o jogo existir: a janela muda de monitor com o jogo ainda por lançar. Só com sessão, que devolve a janela ao lugar de origem.
-        moved = tracking and sessao is not None and not em_tela_cheia and sessao.move_to_session_monitor()
+        moved = tracking and sessao is not None and sessao.move_to_session_monitor(manter_opcao=em_tela_cheia)
 
         run_executable(self.executable, self.run_as_admin)
         if sessao is not None:

@@ -179,3 +179,26 @@ def test_ligar_ao_app_varre_uma_vez_ou_busca_os_idiomas(store, monkeypatch, sche
     monkeypatch.setattr(varredura, "buscar_idiomas_que_faltam", lambda j: feitos.append("idiomas"))
     varredura.ligar_ao_app()
     assert feitos == (["idiomas"] if varridos else ["varrer"])
+
+
+def test_ligar_ao_app_liga_o_aviso_dos_jogos_ja_achados_uma_vez(store, tmp_path, monkeypatch, schema):
+    schema.set_boolean("inis-varridos", True)
+    monkeypatch.setattr(varredura, "_espera", None)
+    monkeypatch.setattr(varredura, "buscar_idiomas_que_faltam", lambda j: None)
+    consultas = []
+    verificador = type("V", (), {"check_async": lambda _s: consultas.append(1)})()
+    monkeypatch.setattr(shared, "aplicativo", type("A", (), {"verificador_de_atualizacoes": verificador})(), raising=False)
+    achado = _jogo(_pasta(tmp_path) / "j.exe", inis=["x.ini"])
+    sem_ini = _jogo(_pasta(tmp_path, "B") / "j.exe", "shortcuts_2", inis=[])
+    store.add_game(achado, {}, run_pipeline=False)
+    store.add_game(sem_ini, {}, run_pipeline=False)
+
+    varredura.ligar_ao_app()
+    assert achado.track_updates is True and sem_ini.track_updates is False
+    assert consultas == [1]
+
+    achado.track_updates = False  # o usuário desligou: a próxima abertura não religa
+    monkeypatch.setattr(varredura, "_espera", None)
+    varredura.ligar_ao_app()
+    assert achado.track_updates is False
+    assert consultas == [1]

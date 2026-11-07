@@ -25,7 +25,7 @@ from kyron.modelos import regras_do_big_picture as regras
 from kyron.modelos.biblioteca import ModeloDaBiblioteca
 from kyron.modelos.detalhes import DetalhesDoJogo
 from kyron.modelos.ordem import Linha, _url_da_capa  # noqa: PLC2701
-from kyron.utils import game_logo
+from kyron.utils import game_logo, window_geometry
 from kyron.utils.cortina_monitor import CortinaMonitor
 
 _SO_CAPA = {ModeloDaBiblioteca.Papel.Capa, ModeloDaBiblioteca.Papel.CapaAnimada}
@@ -568,6 +568,7 @@ class BigPicture(QObject):
     def _desistir_da_abertura(self) -> None:
         """O jogo não abriu (comando a conferir, erro, sumiu): a capa volta e a tela cheia também."""
         self._pedir_etapa("detalhes")
+        window_geometry.restore_from_monitor(self._janela)  # o `launch` que levantou já tinha mudado a janela de monitor
         self._voltar_a_tela_cheia()
 
     def _reabrir(self, para: str = "detalhes") -> None:

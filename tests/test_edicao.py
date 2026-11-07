@@ -323,7 +323,7 @@ PERSISTED_METADATA = {
 # O que a ficha guarda e não é metadado do jogo: identidade, contas do app, o rastreio e o aviso dispensado.
 NOT_GAME_METADATA = {
     "added", "blacklisted", "comando_a_conferir", "executable", "game_id", "install_size", "install_size_ts",
-    "idioma_proprio", "idiomas_steam", "inis", "appid_manual", "nome_proprio",
+    "idioma_proprio", "idiomas_steam", "inis", "appid_manual", "nome_proprio", "aviso_dos_inis_ligado",
     "last_played", "name", "playtime", "removed", "shortcut_mtime", "shortcut_path", "source", "track_process",
     "update_dismissed_ts", "version",
 }  # fmt: skip
@@ -780,3 +780,15 @@ def test_jogo_com_inis_por_procurar_procura_ao_aplicar(edicao, store, sgdb, inis
     game = jogo(store, 64, executable="a.exe")
     _aplicar(edicao, game, nome="Outro")
     assert inis_na_hora == [("procurar", None)]
+
+
+def test_a_busca_dos_ini_liga_o_aviso_com_a_edicao_aberta_e_o_aplicar_nao_desliga(store, edicao):
+    game = jogo(store, 61)
+    form = edicao.Formulario.do_jogo(game)
+    game.track_updates = True  # a busca terminou depois de o diálogo abrir
+    edicao.aplicar(form, game, "")
+    assert game.track_updates is True
+    form = edicao.Formulario.do_jogo(game)
+    form.notificar_atualizacoes = False  # o usuário mexeu: vale a escolha dele
+    edicao.aplicar(form, game, "")
+    assert game.track_updates is False

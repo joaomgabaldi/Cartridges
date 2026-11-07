@@ -1553,3 +1553,11 @@ def test_logo_baixado_fica_guardado_ao_trocar_de_jogo(app_qt):
     bp._logos["x"] = ""  # noqa: SLF001
     bp._mostrar_central()  # noqa: SLF001
     assert bp.logoDe("x") == "file:///baixado.png"
+
+
+def test_jogo_que_nao_abriu_devolve_a_janela_ao_monitor_de_origem(app_qt, tiques, monkeypatch):
+    _, bp, janela, _ = _com_janela(_jogo("a", 30))
+    devolvidas = []
+    monkeypatch.setattr("kyron.utils.window_geometry.restore_from_monitor", devolvidas.append)
+    bp._desistir_da_abertura()  # noqa: SLF001
+    assert devolvidas == [janela]

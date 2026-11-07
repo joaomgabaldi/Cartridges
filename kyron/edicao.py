@@ -68,6 +68,8 @@ class Formulario:
     rastrear_processo: bool = False
     executavel_do_processo: str = ""
     notificar_atualizacoes: bool = False
+    # O valor mostrado ao abrir: a busca dos .ini pode ligar o aviso com o diálogo aberto, e só uma mudança do usuário vale sobre ela.
+    notificar_ao_abrir: bool = False
     # O "Adicionar" já vem com as conquistas ligadas.
     conquistas: bool = True
     appid: str = ""
@@ -108,6 +110,7 @@ class Formulario:
             rastrear_processo=jogo.track_process,
             executavel_do_processo=jogo.process_executable or exe_name_from_command(jogo.executable),
             notificar_atualizacoes=jogo.track_updates,
+            notificar_ao_abrir=jogo.track_updates,
             conquistas=jogo.conquistas,
             appid=str(jogo.steam_appid or ""),
             idioma_proprio=jogo.idioma_proprio,
@@ -426,11 +429,12 @@ def aplicar(form: Formulario, jogo: Optional[Jogo], appid_inicial: str) -> Resul
     jogo.process_executable = form.executavel_do_processo.strip()
 
     # Desligar o aviso apaga o pendente (religado, começa limpo); acabar de ligar decide se o feed é lido agora.
-    acabou_de_ligar = form.notificar_atualizacoes and not jogo.track_updates
-    if not form.notificar_atualizacoes:
+    notificar = form.notificar_atualizacoes if form.notificar_atualizacoes != form.notificar_ao_abrir else jogo.track_updates
+    acabou_de_ligar = notificar and not jogo.track_updates
+    if not notificar:
         jogo.update_available_ts = 0
         jogo.update_url = ""
-    jogo.track_updates = form.notificar_atualizacoes
+    jogo.track_updates = notificar
     conquistas_antes = jogo.conquistas
     jogo.conquistas = form.conquistas
     proprios_antes = (jogo.idioma_proprio, jogo.nome_proprio)

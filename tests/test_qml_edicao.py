@@ -1929,3 +1929,14 @@ def test_campos_proprios_mostram_o_que_o_ini_traz(app, monkeypatch, tmp_path):
     assert app.achar("campoDoNomeProprio").property("_dicaVisivel") is True  # ou com erro
     app.edicao.cancelar()
     shared.schema.set_string("idioma-do-jogador", "")
+
+
+def test_o_mouse_sobre_o_dialogo_nao_acende_o_que_esta_atras(app):
+    """O escurecimento e o cartão tomam o hover, senão as capas ao fundo reagem à passagem do mouse."""
+    app.edicao.abrir("shortcuts_z1")
+    assert _esperar(lambda: app.achar("dialogoDeEdicao").property("visible") is True)
+    dialogo = app.achar("dialogoDeEdicao")
+    for nome in ("esmaecimentoDaMoldura", "cartaoDoDialogo"):
+        camada = next(i for i in dialogo.childItems() if i.objectName() == nome)
+        areas = [i for i in camada.childItems() if i.metaObject().className().startswith("QQuickMouseArea")]
+        assert areas and all(a.property("hoverEnabled") is True for a in areas), nome

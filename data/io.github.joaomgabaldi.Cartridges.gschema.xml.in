@@ -203,6 +203,10 @@
     <key name="inis-varridos" type="b">
       <default>false</default>
     </key>
+    <!-- O aviso de atualizações foi ligado, uma vez, nos jogos que já tinham .ini de emulador. -->
+    <key name="avisos-dos-inis-ligados" type="b">
+      <default>false</default>
+    </key>
   </schema>
 
   <schema id="@APP_ID@.State" path="@PREFIX@/State/">

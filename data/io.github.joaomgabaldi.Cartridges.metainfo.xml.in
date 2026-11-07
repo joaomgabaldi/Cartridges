@@ -40,6 +40,9 @@
           <li>As Preferências foram reorganizadas em seções, com a lista à esquerda, para facilitar encontrar cada opção.</li>
           <li>Agora o Big Picture mostra o logo e os detalhes de cada jogo e acompanha a sessão sem sair da tela cheia.</li>
           <li>O botão Jogar passou a se chamar Iniciar.</li>
+          <li>Os jogos que usam emulador da Steam agora vêm com a notificação de atualizações ligada.</li>
+          <li>Ao iniciar um jogo pelo Big Picture, o Kyron agora também muda para o monitor escolhido nas Preferências.</li>
+          <li>Com um diálogo aberto, o que está ao fundo não reage mais à passagem do mouse.</li>
         </ul>
       </description>
     </release>
