@@ -166,6 +166,14 @@ def test_codigo_de_fora_nao_aparece(app, caplog):
     assert _linhas(caplog) == []
 
 
+def test_parser_de_keyvalues_fica_fora_do_rastreio(app, caplog):
+    from kyron.conquistas import keyvalues  # noqa: PLC0415
+
+    _com_log(caplog)
+    assert keyvalues._texto(b"abc\0", 0) == ("abc", 4)  # noqa: SLF001
+    assert _linhas(caplog) == []
+
+
 def test_remover_libera_a_ferramenta(app, caplog):
     detalhado.remover_rastreio()
     assert sys.monitoring.get_tool(sys.monitoring.PROFILER_ID) is None

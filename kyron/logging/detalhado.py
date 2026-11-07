@@ -41,6 +41,8 @@ ATIVO = False
 
 _VARIAVEL = "KYRON_LOG_DETALHADO"
 _LIMITE = 500
+# keyvalues: o parser chama `_texto` dezenas de milhares de vezes com o arquivo inteiro de argumento; rastreado, um schema de 0,8 MB leva 2 min, e não 17 ms.
+_FORA_DO_RASTREIO = ("kyron.logging", "kyron.conquistas.keyvalues")
 
 _log = logging.getLogger("kyron.rastreio")
 _mon = sys.monitoring
@@ -64,7 +66,7 @@ def _e_do_app(code, frame) -> bool:  # type: ignore
     """Se o código pertence ao app. Usa o ``__name__`` dos globais: o ``co_filename`` muda no app instalado (``.pyc``)."""
     # Sem cache por `code`: ele compara por valor, e funções idênticas de terceiros e do app colidiriam.
     nome = frame.f_globals.get("__name__", "")
-    return nome.startswith("kyron.") and not nome.startswith("kyron.logging")
+    return nome.startswith("kyron.") and not nome.startswith(_FORA_DO_RASTREIO)
 
 
 def _valor(obj) -> str:  # type: ignore
