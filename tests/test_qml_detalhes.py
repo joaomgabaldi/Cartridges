@@ -6,7 +6,7 @@
 
 import pytest
 from PIL import Image
-from PySide6.QtCore import Q_ARG, QMetaObject, QPoint, QPointF, Qt, QUrl
+from PySide6.QtCore import Q_ARG, SIGNAL, QMetaObject, QPoint, QPointF, Qt, QUrl
 from PySide6.QtQml import QQmlEngine, QQmlExpression
 from PySide6.QtQuick import QQuickItem
 from PySide6.QtTest import QTest
@@ -721,3 +721,22 @@ def test_abrir_o_app_e_os_alertas_nao_gera_binding_loop(app_qt):
     finally:
         qInstallMessageHandler(anterior)
     assert [m for m in mensagens if "Binding loop" in m] == []
+
+
+def test_clique_na_pagina_nao_vaza_para_a_biblioteca(app_qt):
+    """A pilha cobre a biblioteca: nenhum botão do mouse sobre a página chega ao cartão de baixo."""
+    app = _App(_tres())
+    cartao = _cartoes(app)[0]
+    ponto = cartao.mapToScene(cartao.boundingRect().center()).toPoint()
+    _abrir_pelo_cartao(app)
+    assert _esperar(lambda: app.achar("pilha").property("avanco") == 1)
+    biblioteca = app.achar("pagina")
+    pedidos = []
+    biblioteca.connect(SIGNAL("editar(QString)"), pedidos.append)
+    biblioteca.connect(SIGNAL("abrirDetalhes(QString)"), pedidos.append)
+    for botao in (Qt.MouseButton.LeftButton, Qt.MouseButton.RightButton, Qt.MouseButton.MiddleButton):
+        QTest.mouseClick(app.janela, botao, Qt.KeyboardModifier.NoModifier, ponto)
+    _esperar()
+    assert pedidos == [], "o clique atravessou a página até a biblioteca"
+    assert app.janela.property("paginaAtual") == "jogo"
+    app.fechar()

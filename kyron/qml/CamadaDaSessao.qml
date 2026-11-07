@@ -10,12 +10,7 @@ Rectangle {
     objectName: "camadaDaSessao"
     color: "#EB000000"
 
-    MouseArea {
-        anchors.fill: parent
-        hoverEnabled: true
-        acceptedButtons: Qt.AllButtons
-        onWheel: wheel => wheel.accepted = true
-    }
+    BloqueioDoFundo {}
 
     // O anel de foco só vem se o teclado já estava em uso ao abrir o jogo; lembrado enquanto escondida, porque a página
     // de trás já perdeu o foco.

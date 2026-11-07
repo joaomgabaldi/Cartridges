@@ -695,19 +695,19 @@ def test_cartao_acompanha_as_linhas(janela, feed):
 
 
 def test_clique_fora_do_cartao_nao_vaza_para_a_biblioteca(janela, feed):
-    """A margem ao lado do cartão é da página: o clique não atravessa a pilha até a capa de baixo."""
+    """O clique na margem ao lado do cartão fica na pilha: não atravessa até a capa de baixo."""
     feed.posts = [post(200, titulo="Alfa")]
     _abrir_a_pagina(janela)
     assert esperar(lambda: len(_posts_na_lista(janela)) == 1)
-    pagina = janela.achar("paginaDasNovidades")
+    pilha = janela.achar("pilha")
     lista = janela.achar("listaDasNovidades")
     ponto = lista.mapToScene(QPointF(-6, 40)).toPoint()
     assert ponto.x() > 0
     QTest.mousePress(janela.janela, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, ponto)
     try:
         dono = janela.janela.mouseGrabberItem()
-        while dono is not None and dono != pagina:
+        while dono is not None and dono != pilha:
             dono = dono.parentItem()
-        assert dono == pagina
+        assert dono == pilha
     finally:
         QTest.mouseRelease(janela.janela, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, ponto)

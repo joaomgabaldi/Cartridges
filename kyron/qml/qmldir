@@ -87,6 +87,7 @@ JanelaDosPendentes 1.0 JanelaDosPendentes.qml
 EscolhaDoAtalho 1.0 EscolhaDoAtalho.qml
 DadosDoJogo 1.0 DadosDoJogo.qml
 Sombra 1.0 Sombra.qml
+BloqueioDoFundo 1.0 BloqueioDoFundo.qml
 AnelDeFoco 1.0 AnelDeFoco.qml
 Dica 1.0 Dica.qml
 Botao 1.0 Botao.qml

@@ -65,8 +65,6 @@ Item {
     StackView.onActivated: Qt.callLater(() => focarInicial())
 
     Rectangle { anchors.fill: parent; color: Tema.fundo; z: -1 }
-    // A lista não ocupa a largura toda: sem isto, o clique, a roda e o hover nas margens atravessam até a biblioteca de baixo.
-    MouseArea { anchors.fill: parent; acceptedButtons: Qt.AllButtons; hoverEnabled: true; onWheel: wheel => wheel.accepted = true }
 
     Connections {
         target: novidades

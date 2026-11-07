@@ -1938,5 +1938,5 @@ def test_o_mouse_sobre_o_dialogo_nao_acende_o_que_esta_atras(app):
     dialogo = app.achar("dialogoDeEdicao")
     for nome in ("esmaecimentoDaMoldura", "cartaoDoDialogo"):
         camada = next(i for i in dialogo.childItems() if i.objectName() == nome)
-        areas = [i for i in camada.childItems() if i.metaObject().className().startswith("QQuickMouseArea")]
+        areas = [i for i in camada.childItems() if i.inherits("QQuickMouseArea")]
         assert areas and all(a.property("hoverEnabled") is True for a in areas), nome

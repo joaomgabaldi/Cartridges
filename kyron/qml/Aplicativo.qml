@@ -269,6 +269,9 @@ Principal {
         anchors { fill: parent; topMargin: janela.alturaDoTopo }
         visible: depth > 0
         property real avanco: 0
+        // A biblioteca fica fora da pilha, embaixo dela: a pilha não a esconde como esconde as próprias páginas.
+        // O botão Voltar do mouse passa, para o `TapHandler` da janela.
+        background: BloqueioDoFundo { acceptedButtons: Qt.AllButtons & ~Qt.BackButton }
         pushEnter: Transition { ParallelAnimation {
             XAnimator { from: pilha.width; to: 0; duration: Tema.animacoes ? 210 : 0; easing.type: Easing.OutCubic }
             NumberAnimation { target: pilha; property: "avanco"; from: 0; to: 1; duration: Tema.animacoes ? 210 : 0; easing.type: Easing.OutCubic }

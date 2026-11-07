@@ -196,13 +196,9 @@ FocusScope {
         anchors.fill: parent
         color: Tema.esmaecido
         opacity: Math.max(0, Math.min(1, moldura.progresso))
-        MouseArea {
-            anchors.fill: parent
+        BloqueioDoFundo {
             enabled: moldura.aberto
-            acceptedButtons: Qt.AllButtons
-            hoverEnabled: true  // as capas ao fundo não reagem à passagem do mouse
             onClicked: if (moldura.emFolha && moldura.fechavel) moldura.fecharPedido()
-            onWheel: wheel => wheel.accepted = true
         }
     }
 
@@ -222,7 +218,7 @@ FocusScope {
         scale: moldura.emFolha ? 1 : 0.8 + 0.2 * moldura.progresso
 
         Sombra { camadas: Tema.sombraDialogo; raio: moldura.raio }
-        MouseArea { anchors.fill: parent; acceptedButtons: Qt.AllButtons; hoverEnabled: true; onWheel: wheel => wheel.accepted = true }
+        BloqueioDoFundo {}
 
         ColumnLayout {
             id: coluna
