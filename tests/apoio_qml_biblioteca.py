@@ -64,6 +64,12 @@ def _assentar(fatias=3):
 
 def _achar(raiz, nome):
     """O objeto de `objectName` igual a `nome`, descendo pelos itens visuais e pelos filhos QObject."""
+    # O `findChildren`, em C++, resolve quase toda busca sem criar um objeto Python para cada um dos milhares da árvore.
+    # Só com um achado único: com vários (um item velho à espera do `deleteLater`), o percurso abaixo é que escolhe o mais novo.
+    if len(achados := raiz.findChildren(QObject, nome)) == 1:
+        # O `findChildren` faz do achado filho Python de `raiz`: se o objeto Python de `raiz` morre, o do achado é invalidado (o item C++ segue vivo).
+        achados[0]._raiz_da_busca = raiz
+        return achados[0]
     pilha = [raiz]
     vistos = {}  # um item é filho QObject e filho visual: sem isto a árvore é percorrida 2^profundidade vezes
     while pilha:

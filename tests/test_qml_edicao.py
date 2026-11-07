@@ -327,8 +327,12 @@ def test_textos_de_terceiros_em_texto_puro(app, store):
     dialogo = app.achar("dialogoDeEdicao")
     assert _esperar(lambda: dialogo.property("visible") is True)
     textos, pilha = [], [dialogo]
+    vistos = {}  # um item é filho QObject e filho visual: sem isto a árvore é percorrida 2^profundidade vezes
     while pilha:
         atual = pilha.pop()
+        if id(atual) in vistos:
+            continue
+        vistos[id(atual)] = atual  # guardar o objeto impede o reuso do id
         # O número da `LinhaDeNumero` é um TextInput (só dígitos): não tem `textFormat`.
         if isinstance(atual, QQuickItem) and atual.metaObject().className().startswith("QQuickText") and "Input" not in atual.metaObject().className():
             textos.append(atual)
@@ -716,6 +720,11 @@ def _visivel(app, nome):
     return app.achar(nome).property("visible") is True
 
 
+def _nasceu_visivel(app, nome):
+    """Para esperar uma linha de lista: o resultado da busca chega depois do seletor, e a linha pode ainda não existir."""
+    return (objeto := _achar(app.janela, nome)) is not None and objeto.property("visible") is True
+
+
 def _abrir_seletor(app, botao, seletor):
     app.achar(botao).forceActiveFocus()
     _clique(app, botao)
@@ -838,8 +847,12 @@ def test_textos_do_seletor_em_texto_puro(app, sgdb):
     app.edicao.abrir("shortcuts_z1")
     _abrir_seletor(app, "botaoEscolherCapaSgdb", "seletorDeCapa")
     textos, pilha = [], [app.achar("seletorDeCapa")]
+    vistos = {}  # um item é filho QObject e filho visual: sem isto a árvore é percorrida 2^profundidade vezes
     while pilha:
         atual = pilha.pop()
+        if id(atual) in vistos:
+            continue
+        vistos[id(atual)] = atual  # guardar o objeto impede o reuso do id
         if atual.metaObject().className().startswith("QQuickText"):
             textos.append(atual)
         if isinstance(atual, QQuickItem):
@@ -906,7 +919,7 @@ def test_seletor_da_steam_pelo_appid_e_modal_e_preenche_o_campo(app, steam):
     _abrir_avancadas(app)
     app.achar("botaoBuscarAppid").forceActiveFocus()
     _clique(app, "botaoBuscarAppid")
-    assert _esperar(lambda: _visivel(app, "seletorDaSteam") and _visivel(app, "seletorDaSteamLinha1"))
+    assert _esperar(lambda: _visivel(app, "seletorDaSteam") and _nasceu_visivel(app, "seletorDaSteamLinha1"))
     assert app.achar("seletorDaSteamTitulo").property("text") == "Escolher jogo na Steam"
     assert app.achar("seletorDaSteamCampo").property("text") == "Alfa"
     assert app.achar("seletorDaSteamCampo").property("placeholderText") == "Buscar jogo…"
@@ -919,7 +932,7 @@ def test_seletor_da_steam_pelo_appid_e_modal_e_preenche_o_campo(app, steam):
     assert _esperar(lambda: not _visivel(app, "seletorDaSteam"))
     assert app.edicao.aberto is True and _esperar(lambda: _foco_dentro_de(app, "botaoBuscarAppid"))
     _clique(app, "botaoBuscarAppid")
-    assert _esperar(lambda: _visivel(app, "seletorDaSteamLinha0"))
+    assert _esperar(lambda: _nasceu_visivel(app, "seletorDaSteamLinha0"))
     app.achar("seletorDaSteamLinha0Botao").forceActiveFocus()
     QTest.keyClick(app.janela, Qt.Key.Key_Return)
     assert _esperar(lambda: app.achar("campoAppid").property("text") == "400")
@@ -952,7 +965,7 @@ def test_buscar_metadados_com_varios_candidatos_abre_o_seletor(app, steam):
     app.edicao.nome = "Portal"
     app.achar("botaoBuscarMetadados").forceActiveFocus()
     _clique(app, "botaoBuscarMetadados")
-    assert _esperar(lambda: _visivel(app, "seletorDaSteam") and _visivel(app, "seletorDaSteamLinha1"))
+    assert _esperar(lambda: _visivel(app, "seletorDaSteam") and _nasceu_visivel(app, "seletorDaSteamLinha1"))
     app.achar("seletorDaSteamLinha1Botao").forceActiveFocus()
     QTest.keyClick(app.janela, Qt.Key.Key_Return)
     assert _esperar(lambda: not app.edicao.ocupado and app.achar("campoDesenvolvedora").property("text") == "Valve")
@@ -1004,7 +1017,7 @@ def test_seletor_do_ludusavi_escolhe_e_o_subtitulo_muda(app):
     assert app.achar("linhaDoLudusaviSubtitulo").property("text") == "Nenhum"
     app.achar("linhaDoLudusaviBotao").forceActiveFocus()
     _clique(app, "linhaDoLudusaviBotao")
-    assert _esperar(lambda: _visivel(app, "seletorDoLudusavi") and _visivel(app, "seletorDoLudusaviLinha2"))
+    assert _esperar(lambda: _visivel(app, "seletorDoLudusavi") and _nasceu_visivel(app, "seletorDoLudusaviLinha2"))
     assert app.achar("seletorDoLudusaviTitulo").property("text") == "Jogo no Ludusavi"
     assert app.achar("seletorDoLudusaviNenhumTitulo").property("text") == "Nenhum (desliga o backup)"
     assert app.achar("seletorDoLudusaviCampo").property("placeholderText") == "Buscar jogo"
@@ -1015,7 +1028,7 @@ def test_seletor_do_ludusavi_escolhe_e_o_subtitulo_muda(app):
     assert _esperar(lambda: not _visivel(app, "seletorDoLudusavi"))
     assert _esperar(lambda: _foco_dentro_de(app, "linhaDoLudusaviBotao"))
     _clique(app, "linhaDoLudusaviBotao")
-    assert _esperar(lambda: _visivel(app, "seletorDoLudusaviLinha1"))
+    assert _esperar(lambda: _nasceu_visivel(app, "seletorDoLudusaviLinha1"))
     app.achar("seletorDoLudusaviLinha1").forceActiveFocus()
     QTest.keyClick(app.janela, Qt.Key.Key_Return)
     assert _esperar(lambda: app.achar("linhaDoLudusaviSubtitulo").property("text") == "Portal")
@@ -1029,11 +1042,11 @@ def test_textos_dos_seletores_novos_em_texto_puro(app, steam):
     _manifesto()
     app.edicao.abrir("shortcuts_z1")
     app.edicao.seletorDaSteam.abrir("Portal")
-    assert _esperar(lambda: _visivel(app, "seletorDaSteamLinha0"))
+    assert _esperar(lambda: _nasceu_visivel(app, "seletorDaSteamLinha0"))
     da_steam = _formatos(app.achar("seletorDaSteam"))
     app.edicao.seletorDaSteam.fechar()
     app.edicao.seletorDoLudusavi.abrir("")
-    assert _esperar(lambda: _visivel(app, "seletorDoLudusaviLinha0"))
+    assert _esperar(lambda: _nasceu_visivel(app, "seletorDoLudusaviLinha0"))
     do_ludusavi = _formatos(app.achar("seletorDoLudusavi"))
     app.edicao.seletorDoLudusavi.fechar()
     for formatos in (da_steam, do_ludusavi):
@@ -1044,8 +1057,12 @@ def test_textos_dos_seletores_novos_em_texto_puro(app, steam):
 def _formatos(raiz):
     """O `(texto, textFormat)` de todo `Text` sob `raiz`, lido com a tela aberta (as linhas somem ao fechar)."""
     textos, pilha = [], [raiz]
+    vistos = {}  # um item é filho QObject e filho visual: sem isto a árvore é percorrida 2^profundidade vezes
     while pilha:
         atual = pilha.pop()
+        if id(atual) in vistos:
+            continue
+        vistos[id(atual)] = atual  # guardar o objeto impede o reuso do id
         if atual.metaObject().className().startswith("QQuickText"):
             textos.append((atual.property("text"), _avaliar(atual, "textFormat")))
         if isinstance(atual, QQuickItem):
@@ -1125,7 +1142,7 @@ def test_seletor_de_papel_escolhe_ajusta_e_o_aplicar_grava(app, wallhaven):
     assert _esperar(lambda: app.achar("seletorDePapelBarra0").property("value") == 100)
     # "Voltar" volta à grade, e a escolha de novo leva ao ajuste.
     _clique(app, "seletorDePapelVoltar")
-    assert _esperar(lambda: _visivel(app, "seletorDePapelMiniatura2") and not _visivel(app, "seletorDePapelUsar"))
+    assert _esperar(lambda: _nasceu_visivel(app, "seletorDePapelMiniatura2") and not _visivel(app, "seletorDePapelUsar"))
     app.achar("seletorDePapelMiniatura0").forceActiveFocus()
     QTest.keyClick(app.janela, Qt.Key.Key_Return)
     assert _esperar(lambda: _visivel(app, "seletorDePapelUsar"))
@@ -1544,7 +1561,7 @@ def test_as_linhas_do_ludusavi_e_o_selecionado_tem_fundo(app):
     app.edicao.ludusavi_escolhido("Portal")
     _abrir_avancadas(app)
     _clique(app, "linhaDoLudusaviBotao")
-    assert _esperar(lambda: _visivel(app, "seletorDoLudusaviLinha0") and _visivel(app, "seletorDoLudusaviLinha1"))
+    assert _esperar(lambda: _nasceu_visivel(app, "seletorDoLudusaviLinha0") and _nasceu_visivel(app, "seletorDoLudusaviLinha1"))
     linha = app.achar("seletorDoLudusaviLinha1")  # Portal, em ordem alfabética: Alien, Portal, Zelda
     assert linha.property("height") == 33
     fundo = _avaliar(linha, "background.color")
@@ -1841,7 +1858,8 @@ def test_anel_de_foco_do_titulo_tem_os_cantos_de_cima_arredondados(app):
     linha = app.achar("campoNome")
     anel = [c for c in linha.childItems() if c.objectName() == "anelDeFoco"][0]
     assert _esperar(lambda: anel.property("visible") is True)
-    assert _avaliar(anel, "topLeftRadius") == 12 and _avaliar(anel, "topRightRadius") == 12
+    assert _esperar(lambda: _avaliar(anel, "topLeftRadius") == 12)  # `_fora` anima ao receber o foco
+    assert _avaliar(anel, "topRightRadius") == 12
     assert _avaliar(anel, "bottomLeftRadius") == 0 and _avaliar(anel, "bottomRightRadius") == 0
 
 

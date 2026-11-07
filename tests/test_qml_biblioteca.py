@@ -152,7 +152,7 @@ def test_submenus_deslizam_no_mesmo_popover_e_voltam(app_qt):
     assert app.achar("ordenar-Tamanho").property("visible") is True
     assert app.achar("entrada-ordenar").property("visible") is False
     # Só um popover: o menu continua o mesmo e a altura é a da página (10 itens + cabeçalho + separador).
-    assert menu.property("height") > 10 * 32
+    assert _esperar(lambda: menu.property("height") > 10 * 32)  # a altura anima na troca de página
     # O cabeçalho volta; depois, Filtrar por > Status.
     QMetaObject.invokeMethod(app.achar("cabecalho-ordenar"), "click", Qt.ConnectionType.DirectConnection)
     assert _esperar(lambda: menu.property("pagina") == "raiz" and menu.property("opened") is True)

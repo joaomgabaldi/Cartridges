@@ -170,8 +170,12 @@ def test_textos_de_terceiros_em_texto_puro(app_qt):
     assert barra.property("text") == "A & <b>B</b>"
     assert QQmlExpression(QQmlEngine.contextForObject(barra), barra, "textFormat").evaluate()[0] == 0
     textos, pilha = [], [pagina]
+    vistos = {}  # um item é filho QObject e filho visual: sem isto a árvore é percorrida 2^profundidade vezes
     while pilha:
         atual = pilha.pop()
+        if id(atual) in vistos:
+            continue
+        vistos[id(atual)] = atual  # guardar o objeto impede o reuso do id
         if isinstance(atual, QQuickItem):
             if atual.metaObject().className().startswith("QQuickText"):
                 textos.append(atual)

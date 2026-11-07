@@ -53,8 +53,12 @@ def _eh_texto_puro(texto):
 
 def _achar(raiz, nome):
     pilha = [raiz]
+    vistos = {}  # um item é filho QObject e filho visual: sem isto a árvore é percorrida 2^profundidade vezes
     while pilha:
         atual = pilha.pop()
+        if id(atual) in vistos:
+            continue
+        vistos[id(atual)] = atual  # guardar o objeto impede o reuso do id
         if atual.objectName() == nome:
             return atual
         pilha.extend(atual.children())

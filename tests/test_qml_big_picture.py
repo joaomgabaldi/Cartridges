@@ -1382,7 +1382,7 @@ def test_logo_no_alto_cabe_acima_da_capa(app_qt, altura):
     logo = tela.achar("logoDoBigPicture")
     topo_da_capa = altura * 0.52 - tela.tela.property("alturaCapa") / 2
     assert logo.property("y") > 0
-    assert logo.property("y") + logo.property("height") < topo_da_capa
+    assert _esperar(lambda: logo.property("y") + logo.property("height") < topo_da_capa)  # a entrada ainda pode estar assentando
     tela.fechar()
 
 
