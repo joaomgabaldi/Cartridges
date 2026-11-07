@@ -1496,6 +1496,27 @@ def test_detalhes_cujo_jogo_saiu_da_lista_voltam_ao_carrossel(etapas):
     assert e.pedidas[-1] == ("detalhes", "carrossel")
 
 
+def test_volta_ao_carrossel_com_outro_central_atualiza_o_fundo(etapas):
+    # O jogo saiu da lista nos detalhes: ao chegar ao carrossel, o fundo não pode ficar com o antigo até o próximo passo.
+    e = etapas
+    _nos_detalhes(e)
+    e.modelo.retirar("a")
+    _esperar()
+    assert e.pedidas[-1] == ("detalhes", "carrossel")
+    e.bp.etapaTerminou()
+    assert e.bp._espera_do_central.isActive()  # noqa: SLF001
+    e.bp._espera_do_central.timeout.emit()  # noqa: SLF001
+    assert e.detalhes.mostrados[-1] == e.bp.jogos[e.bp.indice]["jogoId"] != "a"
+
+
+def test_volta_ao_carrossel_com_o_mesmo_central_nao_recarrega(etapas):
+    e = etapas
+    _nos_detalhes(e)
+    e.bp.voltar()
+    e.bp.etapaTerminou()
+    assert not e.bp._espera_do_central.isActive()  # noqa: SLF001
+
+
 def test_jogo_removido_na_conferencia_dos_inis_devolve_a_capa(etapas):
     e = etapas
     jogo, launch = e.jogos["a"], e.jogos["a"].launch

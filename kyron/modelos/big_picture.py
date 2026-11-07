@@ -489,6 +489,8 @@ class BigPicture(QObject):
             self._lancar()
         elif transicao is not None:
             self._destravar()
+            if transicao[1] == "carrossel":
+                self._seguir_lista_refeita()  # a lista pode ter mudado durante os detalhes ou a sessão
             if transicao == ("sessao", "detalhes") and (pendente := self._reabertura) is not None:
                 self._reabertura = None
                 if self._visivel and self._etapa_bp == "detalhes":
