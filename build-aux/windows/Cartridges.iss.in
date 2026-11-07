@@ -53,6 +53,8 @@ SetupIconFile={#Repo}\build-aux\windows\icon.ico
 Compression=lzma
 SolidCompression=yes
 WizardStyle=modern
+; O Qt 6 exige o Windows 10 1809 (build 17763) ou mais novo; o README promete o mesmo.
+MinVersion=10.0.17763
 
 [Languages]
 Name: "brazilianportuguese"; MessagesFile: "compiler:Languages\BrazilianPortuguese.isl"

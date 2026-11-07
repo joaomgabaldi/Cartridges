@@ -87,7 +87,7 @@ Baixe o `Kyron.Windows.exe` da [versão mais recente](https://github.com/joaomga
 e execute. O instalador pede permissão de administrador e instala para todos os usuários. Ao desinstalar, ele
 pergunta se deve remover também a biblioteca e as configurações.
 
-Requer Windows 10 ou 11.
+Requer o Windows 10 (versão 1809 ou mais recente) ou o Windows 11, de 64 bits.
 
 ## Compilação
 
