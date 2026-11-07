@@ -42,7 +42,7 @@ QML = Path(__file__).resolve().parent.parent / "kyron" / "qml"
 QQuickStyle.setStyle("Basic")  # o estilo do app
 
 
-def _esperar(ate=None, limite=3.0):
+def _esperar(ate=None, limite=10.0):  # folga para a suíte em paralelo; só pesa no teste que vai falhar
     limite = 0.3 if ate is None else limite
     fim = time.monotonic() + limite
     while time.monotonic() < fim:
