@@ -14,6 +14,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
+from PySide6.QtCore import QCoreApplication
 
 from kyron import shared
 from kyron.jogo import Jogo
@@ -92,3 +93,25 @@ def test_tarefa_que_levanta_nao_mata_a_thread():
     pool.submit(feito.set)
     assert feito.wait(5)
     pool.encerrar()
+
+
+def test_tarefa_e_solta_na_thread_principal_sem_esperar_a_proxima(app_qt):
+    """A thread do pool não guarda a tarefa até a próxima chegar nem é a última dona dela: é o que evita o deadlock com o mutex de sinais do Qt."""
+    pool = async_manager._PoolDaemon(1, "um")  # noqa: SLF001
+    soltou_em = []
+
+    class Marca:
+        def __del__(self):
+            soltou_em.append(threading.current_thread().name)
+
+    def enviar():
+        marca = Marca()
+        pool.submit(lambda _marca: None, marca)
+
+    enviar()
+    fim = time.monotonic() + 5
+    while not soltou_em and time.monotonic() < fim:
+        QCoreApplication.processEvents()
+        time.sleep(0.01)
+    pool.encerrar()
+    assert soltou_em == [threading.main_thread().name]

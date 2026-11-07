@@ -211,6 +211,14 @@ class Jogo(QObject):
     # Idiomas que a Steam lista para o AppID; None é "ainda não consultado".
     idiomas_steam: Optional[list[str]] = None
 
+    def __del__(self) -> None:
+        # Última referência solta numa thread: a principal destrói o jogo. Aqui, o `disconnect` da destruição seguraria o mutex de sinais do Qt esperando o GIL, e a principal, com o GIL, esperaria esse mutex (deadlock).
+        if threading.current_thread() is not threading.main_thread():
+            try:
+                na_thread_principal(lambda _jogo: None, self)
+            except RuntimeError:  # sem a ponte não há app: nada espera o mutex
+                pass
+
     def __init__(self, data: dict[str, Any], parent: Optional[QObject] = None) -> None:
         super().__init__(parent)
 

@@ -43,11 +43,18 @@ class _PoolDaemon:
 
     def _laco(self) -> None:
         while True:
-            funcao, args = self._fila.get()
+            tarefa = list(self._fila.get())
             try:
-                funcao(*args)
+                tarefa[0](*tarefa[1])
             except Exception:  # pylint: disable=broad-exception-caught
                 logging.exception("Erro inesperado na thread de rede")  # a thread não morre
+            # A principal solta a tarefa: se o último dono de um objeto Qt fosse esta thread, o `disconnect` da destruição
+            # seguraria o mutex de sinais do Qt esperando o GIL, e a principal, com o GIL, esperaria esse mutex (deadlock).
+            try:
+                na_thread_principal(tarefa.clear)
+            except RuntimeError:  # a ponte não existe: este módulo foi importado fora da principal, sem app
+                pass
+            del tarefa
 
     def submit(self, funcao: Callable[..., Any], *args: Any) -> None:
         if self._fechado:

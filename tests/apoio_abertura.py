@@ -49,6 +49,7 @@ def preparar_main(monkeypatch, abrir, eventos: list) -> None:
     monkeypatch.setattr(single_instance, "release", lambda: eventos.append("release"))
     monkeypatch.setattr(single_instance, "watch_second_launch", lambda _avisar: None)
     monkeypatch.setattr(modulo_app, "AplicacaoQt", AppFalso)
+    monkeypatch.setattr(modulo_app, "coletar_so_na_principal", lambda _app: None)  # o `AppFalso` não é pai de um `QTimer`
     # O estilo dos Controls é global no processo: os testes QML seguintes não podem herdá-lo.
     monkeypatch.setattr(modulo_app, "QQuickStyle", SimpleNamespace(setStyle=lambda _estilo: None))
     monkeypatch.setattr(modulo_app, "_configurar_log", lambda: eventos.append("log"))

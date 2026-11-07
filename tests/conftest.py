@@ -714,4 +714,7 @@ def app_qt():
 
     # A opção desliga a animação dos diálogos: os testes leem o `visible` na hora.
     app = QGuiApplication.instance() or QGuiApplication(["pytest", "--sem-animacao-de-dialogo"])
+    from kyron.utils.coleta_de_lixo import coletar_so_na_principal  # noqa: PLC0415
+
+    coletar_so_na_principal(app)
     yield app

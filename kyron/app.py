@@ -81,6 +81,7 @@ from kyron.utils import (
 from kyron.utils.ajustes_do_windows import FiltroDeAjustes, aplicar_cor_de_destaque
 from kyron.utils.app_updater import AppUpdater
 from kyron.utils.caixa_redimensionavel import CaixaDaAnotacao
+from kyron.utils.coleta_de_lixo import coletar_so_na_principal
 from kyron.utils.hltb_backfill import HLTBBackfill
 from kyron.utils.install_size import InstallSizeSweep
 from kyron.utils.news_checker import NewsChecker
@@ -575,6 +576,7 @@ def main(argv: list[str]) -> int:
         single_instance.present_running_instance()
         return 0
     app = AplicacaoQt(argv)
+    coletar_so_na_principal(app)
     app.setApplicationName("Kyron")
     app.setApplicationDisplayName("Kyron")
     app.setWindowIcon(QIcon(str(_ICONE)))
