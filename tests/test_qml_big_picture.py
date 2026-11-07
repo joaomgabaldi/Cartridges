@@ -1544,6 +1544,16 @@ def test_em_pe_a_capa_dos_detalhes_sobe_centrada_e_encolhe(app_qt):
     tela.fechar()
 
 
+def test_em_pe_ja_terminei_tem_o_tamanho_do_iniciar(app_qt):
+    # Em pé, a letra segue o menor lado: pela altura, o botão da sessão ficaria 1,78x maior que o Iniciar.
+    tela = _Tela()
+    tela.tela.setProperty("width", 1080)
+    tela.tela.setProperty("height", 1920)
+    _esperar()
+    assert tela.achar("botaoJaTerminei").height() == pytest.approx(tela.achar("botaoIniciar").height())
+    tela.fechar()
+
+
 def test_deitado_os_detalhes_nao_mudam(app_qt):
     tela = _Tela()
     tela.tela.setProperty("width", 1920)

@@ -69,7 +69,7 @@ Item {
         // Acima do aviso "iniciado" (de h-70 a h-24), que é centrado e a cobriria.
         anchors { horizontalCenter: parent.horizontalCenter; bottom: parent.bottom; bottomMargin: 96 }
         texto: "Já terminei de jogar"
-        unidade: Math.max(0.85, tela.height / 1080)
+        unidade: Math.max(0.85, Math.min(tela.width, tela.height) / 1080)  // em pé, segue a largura, como o Iniciar
         ativo: tela.mostrar && sessao.emAndamento
         onAcionado: sessao.terminar()
     }
