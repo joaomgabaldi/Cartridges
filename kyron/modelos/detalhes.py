@@ -21,6 +21,7 @@ from PySide6.QtCore import Property, QCoreApplication, QEvent, QObject, Qt, Sign
 from PySide6.QtGui import QGuiApplication, QImage
 from PySide6.QtQuick import QQuickImageProvider
 
+from kyron.emuladores import ini
 from kyron.jogo import STATUS_LABELS, Jogo, status_label
 from kyron.modelos.ordem import Linha, _url_da_capa, url_da_copia  # noqa: PLC2701
 from kyron.utils import copias_animadas, desfoque, game_logo, session_log
@@ -195,6 +196,7 @@ _PADRAO: dict[str, Any] = {
     ),
     "larguraDoLogo": 0,
     "hltb": {},
+    "dlcs": [],
     "opacidadeDoFundo": 0.3,
 }  # fmt: skip
 
@@ -220,6 +222,22 @@ def _buscar_logo(fraco: Any, jogo: Jogo) -> None:
         logging.warning("Erro inesperado ao buscar o logo de %s", jogo.name, exc_info=True)
     finally:
         na_thread_principal(_entregar, fraco, "_logo_chegou", jogo.game_id, caminho)
+
+
+def _ler_dlcs(fraco: Any, game_id: str, inis: tuple[str, ...]) -> None:
+    """Os nomes da seção [DLC] dos .ini do jogo, sem repetir o appID; lê a pasta do jogo (talvez um HD externo lento)."""
+    nomes: list[str] = []
+    try:
+        vistos: set[str] = set()
+        for caminho in inis:
+            for appid, nome in ini.dlcs(Path(caminho)):
+                if appid not in vistos:
+                    vistos.add(appid)
+                    nomes.append(nome)
+    except Exception:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+        logging.warning("Erro inesperado ao ler os DLCs de %s", game_id, exc_info=True)
+    finally:
+        na_thread_principal(_entregar, fraco, "_dlcs_chegaram", game_id, inis, nomes)
 
 
 def _calcular_fundo(fraco: Any, game_id: str, chave: str, caminho: Path) -> None:
@@ -258,6 +276,7 @@ class DetalhesDoJogo(QObject):
     controleRecomendado = _p(bool, "controleRecomendado")  # noqa: N815
     descricao = _p(str, "descricao")
     hltb = _p("QVariantMap", "hltb")
+    dlcs = _p("QVariantList", "dlcs")
     adicionado = _p(str, "adicionado")
     jogadoPorUltimo = _p(str, "jogadoPorUltimo")  # noqa: N815
     tempoDeJogo = _p(str, "tempoDeJogo")  # noqa: N815
@@ -292,6 +311,7 @@ class DetalhesDoJogo(QObject):
         self._luminancia = _RESERVA
         self._versao_do_fundo = 0
         self._chave_do_fundo = ""
+        self._inis_dos_dlcs: tuple[str, ...] | None = None  # os .ini da última leitura dos DLCs
         self._buscas_de_logo: set[str] = set()
         # O `jogo_excluido` sai de threads do importador: a conexão enfileirada leva à principal.
         store.jogo_excluido.connect(self._excluido, Qt.ConnectionType.QueuedConnection)
@@ -334,6 +354,7 @@ class DetalhesDoJogo(QObject):
         self._atual = ""
         # Um desfoque a caminho não pode travar o fundo se o mesmo jogo voltar a ser mostrado.
         self._chave_do_fundo = ""
+        self._inis_dos_dlcs = None
 
     def soltar_copia(self, game_id: str) -> None:
         """Esvazia a cópia animada da página, e o ``AnimatedImage`` larga o arquivo. Só na principal."""
@@ -396,12 +417,28 @@ class DetalhesDoJogo(QObject):
             "temSessoes": bool(tempo_de_jogo(jogo)) and bool(session_log.load(jogo.game_id)),
         }  # fmt: skip
         if trocou:
-            campos.update(logo="", larguraDoLogo=0, fundo="", fundoVivo="")
+            campos.update(logo="", larguraDoLogo=0, fundo="", fundoVivo="", dlcs=[])
             self._luminancia = _RESERVA
             self._chave_do_fundo = ""
         campos.update(self._logo(jogo))
         campos.update(self._fundo(jogo, linha.capa))
+        campos.update(self._dlcs(jogo))
         self._mesclar(campos)
+
+    def _dlcs(self, jogo: Jogo) -> dict[str, Any]:
+        """Relê os DLCs fora da principal quando a lista de .ini do jogo muda (a busca dos .ini pode achar outros)."""
+        inis = tuple(jogo.inis or ())
+        if inis == self._inis_dos_dlcs:
+            return {}
+        self._inis_dos_dlcs = inis
+        if not inis:
+            return {"dlcs": []}
+        threading.Thread(target=_ler_dlcs, args=(weakref.ref(self), jogo.game_id, inis), daemon=True).start()
+        return {}
+
+    def _dlcs_chegaram(self, game_id: str, inis: tuple[str, ...], nomes: list[str]) -> None:
+        if game_id == self._atual and inis == self._inis_dos_dlcs:
+            self._mesclar({"dlcs": nomes})
 
     def _mesclar(self, campos: dict[str, Any]) -> None:
         novo = {**self._v, **campos}

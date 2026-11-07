@@ -328,6 +328,26 @@ def test_busca_que_falha_libera_o_jogo(app_qt, store, schema, monkeypatch):
     assert detalhes.logo == ""
 
 
+def test_dlcs_dos_inis_sem_repetir_e_relidos_quando_os_inis_mudam(app_qt, store, tmp_path):
+    um, outro = tmp_path / "um" / "steam_emu.ini", tmp_path / "outro" / "codex.ini"
+    for caminho, corpo in ((um, b"[DLC]\n10=Primeiro\n20=Segundo\n"), (outro, b"[DLC]\n20=Repetido\n30=Terceiro\n")):
+        caminho.parent.mkdir()
+        caminho.write_bytes(corpo)
+    jogo = _jogo(inis=[str(um)])
+    detalhes = _modelo(store, jogo, _jogo("b"))
+    detalhes.mostrar("a")
+    assert _rodar_ate(lambda: detalhes.dlcs == ["Primeiro", "Segundo"])
+    jogo.inis = [str(um), str(outro)]
+    jogo.update()
+    assert _rodar_ate(lambda: detalhes.dlcs == ["Primeiro", "Segundo", "Terceiro"])
+    detalhes.mostrar("b")  # sem .ini: a lista do jogo anterior não fica
+    assert detalhes.dlcs == []
+    detalhes._dlcs_chegaram("a", (str(um),), ["Atrasado"])  # noqa: SLF001  # resultado de outro jogo
+    detalhes.esquecer()
+    detalhes._dlcs_chegaram("b", (), ["Depois de fechar"])  # noqa: SLF001
+    assert detalhes.dlcs == []
+
+
 def test_desfoque_sem_capa_usa_placeholder(app_qt, store, tmp_path):
     assert desfoque.calcular(None) is None
     assert desfoque.calcular(tmp_path / "nao-existe.tiff") is None

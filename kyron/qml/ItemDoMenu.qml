@@ -16,6 +16,7 @@ MenuItem {
         leftPadding: item.checkable ? 22 : 0
         text: item.text
         textFormat: Text.PlainText
+        elide: Text.ElideRight  // só num menu de largura limitada (o dos DLCs); nos outros cabe sempre
         color: Tema.texto
         opacity: item.enabled ? 1 : Tema.opacidadeDesabilitado
         verticalAlignment: Text.AlignVCenter

@@ -577,6 +577,33 @@ Item {
                             onGravar: texto => detalhes.gravarAnotacao(texto)
                         }
                     }
+                    // Os DLCs que os .ini do emulador listam: só consulta, cada item só fecha o menu.
+                    BotaoDeMenu {
+                        id: botaoDlcs
+                        objectName: "botaoDlcs"
+                        visible: detalhes.dlcs.length > 0
+                        text: detalhes.dlcs.length === 1 ? "1 DLC" : detalhes.dlcs.length + " DLCs"
+                        dica: "DLCs incluídos neste jogo"
+                        onClicked: menuDeDlcs.opened ? menuDeDlcs.close() : menuDeDlcs.open()
+                        MenuDoTema {
+                            id: menuDeDlcs
+                            objectName: "menuDeDlcs"
+                            fechamento: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
+                            // Limitado: nomes longos terminam em reticências e centenas de DLCs rolam, com a seta ainda no botão.
+                            width: Math.min(implicitWidth, 420)
+                            height: Math.min(implicitHeight, 420)
+                            x: (parent.width - width) / 2
+                            y: parent.height + 6
+                            setaEm: width / 2
+                            Repeater {
+                                model: detalhes.dlcs
+                                delegate: ItemDoMenu {
+                                    required property string modelData
+                                    text: modelData
+                                }
+                            }
+                        }
+                    }
                 }
 
                 Button {

@@ -127,6 +127,39 @@ def ler(caminho: Path, formato: Optional[str] = None) -> Valores:
     return Valores(pegar(k_appid), pegar(k_nome), pegar(k_idioma))
 
 
+_MAX_DLCS = 300  # cada um vira um item do menu da página do jogo
+_MAX_NOME_DO_DLC = 200
+
+
+def _decodificar(valor: bytes) -> str:
+    """UTF-8, ou o ANSI do Windows (o ™ e o – da CODEX); o que não se imprime (controle, bidi, NBSP) vira espaço."""
+    # shortcut: um .ini em GBK (ALI213 chinês) sai ilegível; detectar a codificação só se aparecer de verdade.
+    try:
+        texto = valor.decode("utf-8")
+    except UnicodeDecodeError:
+        texto = valor.decode("cp1252", errors="replace")
+    return " ".join("".join(c if c.isprintable() else " " for c in texto).split())
+
+
+def dlcs(caminho: Path, formato: Optional[str] = None) -> list[tuple[str, str]]:
+    """(appID, nome) de cada linha `appID=nome` da seção [DLC], na ordem do arquivo, sem repetir o appID. [] se não há."""
+    fmt = _formato(caminho, formato)
+    if fmt is None or fmt[0].casefold() != "settings" or (dados := _ler_bytes(caminho)) is None:
+        return []
+    achados: dict[str, str] = {}
+    atual = None
+    for i, bruta in enumerate(dados.split(b"\n")):
+        linha = bruta[len(_BOM):] if i == 0 and bruta.startswith(_BOM) else bruta
+        if (nome := _cabecalho(linha)) is not None:
+            atual = nome
+        elif atual == "dlc" and (kv := _chave_valor(linha)) and kv[0].isdigit() and kv[0] not in achados:
+            if texto := _decodificar(linha[kv[1]:])[:_MAX_NOME_DO_DLC]:
+                achados[kv[0]] = texto
+                if len(achados) >= _MAX_DLCS:
+                    break
+    return list(achados.items())
+
+
 def _gravar(caminho: Path, dados: bytes) -> None:
     # temporário na mesma pasta + os.replace: o jogo nunca vê o arquivo pela metade
     fd, tmp = tempfile.mkstemp(dir=caminho.parent, prefix=caminho.name + ".")

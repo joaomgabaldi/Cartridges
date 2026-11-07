@@ -36,6 +36,19 @@ def test_ausente_ou_desconhecido(tmp_path):
     assert ini.ler(tmp_path / "outro.ini", "steam_emu.ini").nome == "Player"
 
 
+def test_dlcs_da_secao_dlc(tmp_path):
+    f = tmp_path / "steam_emu.ini"
+    f.write_bytes(
+        b"[Settings]\r\nAppId=1\r\n[DLC]\r\n; comentario\r\nUnlockAllDLC=1\r\n2991160=Portrait Pack\r\n"
+        b"2991170 = Immortal Pillars \r\n2991160=Repetido\r\n3000000=\r\n3000001=Caf\xc3\xa9\r\n3000002=Caf\xe9\r\n[Outra]\r\n5=fora\r\n"
+    )
+    assert ini.dlcs(f) == [("2991160", "Portrait Pack"), ("2991170", "Immortal Pillars"), ("3000001", "Café"), ("3000002", "Café")]
+    f.write_bytes(b"[DLC]\n1=Pack\x99 One\n2=Trilha \x96 Deluxe\n3=Nome\xa0X\n4=Bidi\xe2\x80\xaeoculto\n5=\x01\n")
+    assert [nome for _, nome in ini.dlcs(f)] == ["Pack™ One", "Trilha – Deluxe", "Nome X", "Bidi oculto"]
+    assert ini.dlcs(tmp_path / "configs.user.ini") == []  # sem seção [DLC] no formato, e ausente
+    assert ini.dlcs(tmp_path / "nada.ini") == []
+
+
 def test_comentario_nao_conta(tmp_path):
     f = tmp_path / "steam_emu.ini"
     f.write_bytes(b"[Settings]\r\n#UserName=x\r\n;Language=y\r\n//AppId=3\r\nUserName=Real\r\n")
