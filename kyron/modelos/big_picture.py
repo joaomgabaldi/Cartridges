@@ -35,6 +35,8 @@ ESCURECER_ENTRADA_MS = 300
 ESCURECER_SAIDA_MS = 250
 PAUSA_NO_ESCURO_MS = 120
 CLAREAR_MS = 350
+# Quando a tela da entrada começa a aparecer: a pausa e o trecho do clarear (InOutCubic) até a cortina ficar 20% mais clara.
+SOM_DA_ENTRADA_VISIVEL_MS = PAUSA_NO_ESCURO_MS + round(CLAREAR_MS * 0.05 ** (1 / 3))
 # No escuro, a troca espera as capas da fila decodificadas, mas não mais que isto.
 ESPERA_MAXIMA_DAS_CAPAS_MS = 700
 # O painel de detalhes só segue o jogo central depois de o carrossel parar este tempo. Fica acima do atraso da primeira
@@ -363,7 +365,11 @@ class BigPicture(QObject):
         """O som da fila: um flip por capa que passa (as mesmas `n` do QML); sem animações, a fila não corre."""
         if self._animacoes_do_sistema:
             n = min(regras.JOGOS_NA_FILA, max(0, len(self._jogos) - 1))
-            regras.tocar_embaralhar(n, entrar=entrar, passam=None if entrar else len(self._jogos) - 1 - self._carrossel.indice)
+            passam = None if entrar else len(self._jogos) - 1 - self._carrossel.indice
+            # Na entrada com cortina a fila começa no preto: as capas que passam antes de a tela aparecer não soam.
+            no_escuro = entrar and self._cortina is not None
+            desde = SOM_DA_ENTRADA_VISIVEL_MS / regras.DURACAO_FILA_ENTRADA_MS if no_escuro else 0.0
+            regras.tocar_embaralhar(n, entrar=entrar, passam=passam, desde=desde)
 
     def _fim_da_entrada(self) -> None:
         self._em_fade = False

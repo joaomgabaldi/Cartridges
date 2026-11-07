@@ -158,6 +158,14 @@ def state_schema(monkeypatch, chave_do_registro):
     return real
 
 
+@pytest.fixture(scope="session", autouse=True)
+def nunca_som_de_verdade():
+    """A sessão inteira sem som: uma thread de som que termina depois do teste (o embaralhar do Big Picture) não toca nas caixas."""
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(winsound, "PlaySound", lambda *_args: None)
+        yield
+
+
 @pytest.fixture(autouse=True)
 def sem_som(monkeypatch):
     """Cada `PlaySound` vira um `(dados, flags)` nesta lista, sem tocar som."""

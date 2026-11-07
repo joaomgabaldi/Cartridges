@@ -291,6 +291,20 @@ def test_saida_so_toca_as_capas_que_existem_depois_da_central():
     assert regras.instantes_da_fila(30, entrar=False, passam=0) == []
 
 
+def test_flips_antes_de_desde_ficam_de_fora():
+    todas = regras.instantes_da_fila(30, entrar=True)
+    depois = regras.instantes_da_fila(30, entrar=True, desde=0.15)
+    assert depois == [t for t in todas if t >= 0.15]
+    assert 0 < len(depois) < len(todas)
+
+
+def test_wav_sem_os_flips_do_escuro_comeca_em_silencio_e_mantem_o_tempo():
+    with wave.open(io.BytesIO(regras.wav_do_embaralhar(30, entrar=True, desde=0.15))) as w:
+        amostras = array.array("h", w.readframes(w.getnframes()))
+        assert w.getnframes() / 44100 == pytest.approx(regras.DURACAO_FILA_ENTRADA_MS / 1000, abs=0.01)
+    assert max(abs(a) for a in amostras[: int(0.15 * len(amostras)) - 10]) == 0
+
+
 def test_embaralhar_sem_capas_depois_da_central_nao_toca(tiques):
     regras.tocar_embaralhar(30, entrar=False, passam=0)
     assert tiques.tocados == []

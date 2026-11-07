@@ -44,7 +44,7 @@ def tiques(monkeypatch):
 def embaralhados(monkeypatch):
     """Autouse: a síntese corre numa thread, que poderia tocar som de verdade depois do fim do teste."""
     tocados = []
-    monkeypatch.setattr(regras, "tocar_embaralhar", lambda n, *, entrar, passam=None: tocados.append((n, entrar, passam)))
+    monkeypatch.setattr(regras, "tocar_embaralhar", lambda n, *, entrar, passam=None, desde=0.0: tocados.append((n, entrar, passam, desde)))
     return tocados
 
 
@@ -309,7 +309,7 @@ def test_entrada_e_saida_embaralham_as_capas_que_passam(aberta, embaralhados):
     bp.entrar()
     bp.filaTerminou()
     bp.sair()
-    assert embaralhados == [(2, True, None), (2, False, 2)]  # três jogos: duas capas cruzam o centro
+    assert embaralhados == [(2, True, None, 0.0), (2, False, 2, 0.0)]  # três jogos: duas capas cruzam o centro
 
 
 def test_saida_do_ultimo_jogo_nao_tem_capas_para_passar(aberta, embaralhados):
@@ -318,7 +318,7 @@ def test_saida_do_ultimo_jogo_nao_tem_capas_para_passar(aberta, embaralhados):
     bp.filaTerminou()
     bp.irPara(2)  # o último dos três
     bp.sair()
-    assert embaralhados[-1] == (2, False, 0)
+    assert embaralhados[-1] == (2, False, 0, 0.0)
 
 
 def test_sem_animacoes_do_sistema_nao_embaralha(app_qt, tiques, embaralhados):
@@ -856,6 +856,15 @@ def test_sem_animacoes_do_sistema_o_fade_vai_direto_ao_fim(app_qt, tiques):
     assert bp.visivel and _CortinaFalsa.registro == ["abriu 42", "alfa 1"]
     concluir_pausa(bp)
     assert _CortinaFalsa.registro[-1] == "fechou" and not bp.ocupada
+
+
+def test_na_entrada_com_cortina_as_capas_que_passam_no_escuro_nao_soam(fade, embaralhados):
+    bp = fade.bp
+    bp.entrar()
+    bp.capasProntas()
+    concluir_cortina(bp)  # escureceu: a fila começa no preto
+    assert embaralhados == [(2, True, None, modulo.SOM_DA_ENTRADA_VISIVEL_MS / regras.DURACAO_FILA_ENTRADA_MS)]
+    assert modulo.PAUSA_NO_ESCURO_MS < modulo.SOM_DA_ENTRADA_VISIVEL_MS < modulo.PAUSA_NO_ESCURO_MS + modulo.CLAREAR_MS
 
 
 def test_mudanca_da_biblioteca_no_escuro_fica_pendente(fade):

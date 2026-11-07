@@ -156,6 +156,7 @@ _dados_tique: bytes | None = None
 
 
 def _tocar_dados(dados: bytes) -> None:
+
     # SND_MEMORY não aceita SND_ASYNC: por isso a thread. SND_NODEFAULT: sem som padrão do Windows por cima do jogo.
     try:
         winsound.PlaySound(dados, winsound.SND_MEMORY | winsound.SND_NODEFAULT)
@@ -192,29 +193,32 @@ TAXA_DO_SOM = 44100
 _AMOSTRAS_DO_FLIP = 352  # 8 ms
 
 
-def instantes_da_fila(n: int, *, entrar: bool, passam: int | None = None) -> list[float]:
+def instantes_da_fila(n: int, *, entrar: bool, passam: int | None = None, desde: float = 0.0) -> list[float]:
     """Quando (0 a 1 da duração da fila) cada capa cruza o centro, pela conta de `quadro_da_fila`.
 
     Na entrada a posição desce de `n` a 0 e cada capa chega em `k = n-1 … 0`; na saída a fila anima de 1 a 0, e a
     posição sobe da central até `n` à frente, cruzando `k = 1 … n`. Invertendo `n·(1-u)³ = k`: `t = 0,7·(1 - ∛(k/n))`.
     `passam`: na saída, quantas capas existem depois da central (o QML não desenha além do fim da lista).
+    `desde`: os flips antes deste instante ficam de fora (as capas que passam com a tela ainda escura).
     """
     if n <= 0:
         return []
     if entrar:
-        return [0.7 * (1 - (k / n) ** (1 / 3)) for k in range(n - 1, -1, -1)]
-    ultima = n if passam is None else min(n, passam)
-    return [1 - 0.7 * (1 - (k / n) ** (1 / 3)) for k in range(1, ultima + 1)]
+        instantes = [0.7 * (1 - (k / n) ** (1 / 3)) for k in range(n - 1, -1, -1)]
+    else:
+        ultima = n if passam is None else min(n, passam)
+        instantes = [1 - 0.7 * (1 - (k / n) ** (1 / 3)) for k in range(1, ultima + 1)]
+    return [t for t in instantes if t >= desde]
 
 
 @functools.lru_cache(maxsize=64)
-def wav_do_embaralhar(n: int, *, entrar: bool, passam: int | None = None) -> bytes:
+def wav_do_embaralhar(n: int, *, entrar: bool, passam: int | None = None, desde: float = 0.0) -> bytes:
     """O embaralhar da fila em WAV (PCM 16-bit mono): um estalo curto de ruído por capa, no instante em que ela passa."""
     duracao_ms = DURACAO_FILA_ENTRADA_MS if entrar else DURACAO_FILA_SAIDA_MS
     total = TAXA_DO_SOM * duracao_ms // 1000
     mistura = [0.0] * (total + _AMOSTRAS_DO_FLIP)  # folga: na saída o último flip cai no fim
     sorteio = random.Random(n * 2 + entrar)  # o mesmo som a cada vez, para a mesma fila
-    for t in instantes_da_fila(n, entrar=entrar, passam=passam):
+    for t in instantes_da_fila(n, entrar=entrar, passam=passam, desde=desde):
         inicio = int(t * total)
         ganho = sorteio.uniform(0.55, 1.0)
         queda = sorteio.uniform(40, 80)
@@ -233,12 +237,14 @@ def wav_do_embaralhar(n: int, *, entrar: bool, passam: int | None = None) -> byt
     return saida.getvalue()
 
 
-def tocar_embaralhar(n: int, *, entrar: bool, passam: int | None = None, tocar=_tocar_dados) -> None:  # noqa: ANN001
+def tocar_embaralhar(  # noqa: PLR0913
+    n: int, *, entrar: bool, passam: int | None = None, desde: float = 0.0, tocar=_tocar_dados,  # noqa: ANN001
+) -> None:
     """Toca o embaralhar da fila de `n` capas, se o som do Big Picture estiver ligado. Nunca levanta."""
 
     def sintetizar_e_tocar() -> None:
         try:
-            dados = wav_do_embaralhar(n, entrar=entrar, passam=passam)
+            dados = wav_do_embaralhar(n, entrar=entrar, passam=passam, desde=desde)
         except Exception:
             logging.warning("Não foi possível montar o embaralhar do Big Picture", exc_info=True)
             return
@@ -247,7 +253,7 @@ def tocar_embaralhar(n: int, *, entrar: bool, passam: int | None = None, tocar=_
     try:
         from kyron import shared  # noqa: PLC0415
 
-        if not instantes_da_fila(n, entrar=entrar, passam=passam) or not shared.schema.get_boolean("big-picture-som"):
+        if not instantes_da_fila(n, entrar=entrar, passam=passam, desde=desde) or not shared.schema.get_boolean("big-picture-som"):
             return
         threading.Thread(target=sintetizar_e_tocar, daemon=True).start()
     except Exception:

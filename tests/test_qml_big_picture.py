@@ -716,9 +716,10 @@ def _preparos(tela):
 
 
 _PREPARO_EM_125 = r"""
-import builtins, json, sys, tempfile
+import builtins, json, sys, tempfile, winsound
 from pathlib import Path
 builtins._ = lambda m: m
+winsound.PlaySound = lambda *_a: None  # fora do pytest o conftest não vale: a fila da entrada tocaria o embaralhar
 sys.path.insert(0, sys.argv[1])
 from PySide6.QtGui import QGuiApplication
 app = QGuiApplication([])
