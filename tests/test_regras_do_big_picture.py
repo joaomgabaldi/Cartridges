@@ -4,10 +4,13 @@
 
 """Big Picture, regras puras: lista, entrada automática, carrossel, fundo, fila da entrada e tique."""
 
+import array
 import hashlib
+import io
 import subprocess
 import sys
 import time
+import wave
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -248,6 +251,94 @@ def test_falha_ao_ler_o_som_avisa_uma_vez_so(tiques, monkeypatch, caplog):
         regras.tocar_tique()
     assert tiques.tocados == []
     assert len([r for r in caplog.records if r.levelname == "WARNING"]) == 1
+
+
+# --- embaralhar da fila --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("entrar", [True, False])
+@pytest.mark.parametrize("n", [1, 2, 19, 30])
+def test_um_flip_por_capa_que_passa(n, entrar):
+    instantes = regras.instantes_da_fila(n, entrar=entrar)
+    assert len(instantes) == n
+    assert all(a < b for a, b in zip(instantes, instantes[1:]))
+    assert all(0 <= t <= 1 for t in instantes)
+
+
+@pytest.mark.parametrize("entrar", [True, False])
+def test_cada_flip_cai_quando_a_capa_cruza_o_centro(entrar):
+    n = 12
+    for t in regras.instantes_da_fila(n, entrar=entrar):
+        tempo_da_animacao = t if entrar else 1 - t  # a saída anima de 1 a 0
+        posicao = regras.quadro_da_fila(tempo_da_animacao, n, 0)[0]
+        assert posicao == pytest.approx(round(posicao), abs=1e-9)
+
+
+def test_entrada_desacelera_e_saida_acelera():
+    entrada = regras.instantes_da_fila(10, entrar=True)
+    saida = regras.instantes_da_fila(10, entrar=False)
+    assert entrada[1] - entrada[0] < entrada[-1] - entrada[-2]
+    assert saida[1] - saida[0] > saida[-1] - saida[-2]
+
+
+def test_sem_capas_sem_flips():
+    assert regras.instantes_da_fila(0, entrar=True) == []
+
+
+def test_saida_so_toca_as_capas_que_existem_depois_da_central():
+    todas = regras.instantes_da_fila(30, entrar=False)
+    assert regras.instantes_da_fila(30, entrar=False, passam=4) == todas[:4]
+    assert regras.instantes_da_fila(30, entrar=False, passam=0) == []
+
+
+def test_embaralhar_sem_capas_depois_da_central_nao_toca(tiques):
+    regras.tocar_embaralhar(30, entrar=False, passam=0)
+    assert tiques.tocados == []
+
+
+def test_falha_ao_montar_o_embaralhar_nao_levanta(tiques, monkeypatch, caplog):
+    def falha(*_a, **_k):
+        raise RuntimeError("sem memória")
+
+    monkeypatch.setattr(regras, "wav_do_embaralhar", falha)
+    regras.tocar_embaralhar(5, entrar=True)
+    assert tiques.tocados == []
+    assert any("montar o embaralhar" in r.message for r in caplog.records)
+
+
+@pytest.mark.parametrize(("entrar", "duracao_ms"), [(True, regras.DURACAO_FILA_ENTRADA_MS), (False, regras.DURACAO_FILA_SAIDA_MS)])
+def test_wav_do_embaralhar_tem_a_duracao_da_fila(entrar, duracao_ms):
+    with wave.open(io.BytesIO(regras.wav_do_embaralhar(20, entrar=entrar))) as w:
+        assert (w.getnchannels(), w.getsampwidth(), w.getframerate()) == (1, 2, 44100)
+        assert w.getnframes() / 44100 == pytest.approx(duracao_ms / 1000, abs=0.01)
+
+
+def test_wav_do_embaralhar_tem_som_onde_cai_cada_flip():
+    with wave.open(io.BytesIO(regras.wav_do_embaralhar(3, entrar=True))) as w:
+        amostras = array.array("h", w.readframes(w.getnframes()))
+    for t in regras.instantes_da_fila(3, entrar=True):
+        inicio = int(t * regras.DURACAO_FILA_ENTRADA_MS / 1000 * 44100)
+        assert max(abs(a) for a in amostras[inicio : inicio + 200]) > 1000
+    assert max(abs(a) for a in amostras[-2000:]) == 0  # depois do último flip, silêncio
+
+
+def test_embaralhar_toca(tiques):
+    regras.tocar_embaralhar(5, entrar=True)
+    assert len(tiques.tocados) == 1
+    dados, flags = tiques.tocados[0]
+    assert dados[:4] == b"RIFF"
+    assert flags == regras.winsound.SND_MEMORY | regras.winsound.SND_NODEFAULT
+
+
+def test_embaralhar_com_preferencia_desligada_nao_toca(tiques, schema):
+    schema.set_boolean("big-picture-som", False)
+    regras.tocar_embaralhar(5, entrar=True)
+    assert tiques.tocados == []
+
+
+def test_embaralhar_sem_capas_nao_toca(tiques):
+    regras.tocar_embaralhar(0, entrar=False)
+    assert tiques.tocados == []
 
 
 def test_som_e_o_aprovado():

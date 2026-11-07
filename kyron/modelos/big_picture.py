@@ -357,6 +357,13 @@ class BigPicture(QObject):
         self.alterado.emit()
         if self._na_fila:
             self.filaPedida.emit(True)  # noqa: FBT003  # corre no escuro e enquanto clareia
+            self._embaralhar(entrar=True)
+
+    def _embaralhar(self, *, entrar: bool) -> None:
+        """O som da fila: um flip por capa que passa (as mesmas `n` do QML); sem animações, a fila não corre."""
+        if self._animacoes_do_sistema:
+            n = min(regras.JOGOS_NA_FILA, max(0, len(self._jogos) - 1))
+            regras.tocar_embaralhar(n, entrar=entrar, passam=None if entrar else len(self._jogos) - 1 - self._carrossel.indice)
 
     def _fim_da_entrada(self) -> None:
         self._em_fade = False
@@ -384,6 +391,7 @@ class BigPicture(QObject):
         self.alterado.emit()
         if self._na_fila:
             self.filaPedida.emit(False)  # noqa: FBT003
+            self._embaralhar(entrar=False)
         else:
             self._trocar_no_escuro(self._sair_de_fato, ESCURECER_SAIDA_MS, self._fim_da_saida)
 

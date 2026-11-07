@@ -40,6 +40,14 @@ def tiques(monkeypatch):
     return tocados
 
 
+@pytest.fixture(autouse=True)
+def embaralhados(monkeypatch):
+    """Autouse: a síntese corre numa thread, que poderia tocar som de verdade depois do fim do teste."""
+    tocados = []
+    monkeypatch.setattr(regras, "tocar_embaralhar", lambda n, *, entrar, passam=None: tocados.append((n, entrar, passam)))
+    return tocados
+
+
 def _montar(*jogos):
     """O modelo e o Big Picture já aberto (a lista só acompanha a biblioteca visível), com a fila concluída."""
     modelo = ModeloDaBiblioteca()
@@ -294,6 +302,30 @@ def test_entrar_mostra_e_pede_tela_cheia(aberta):
     assert (bp.visivel, bp.ocupada) == (True, True)
     assert janela.chamadas == ["tela cheia"]
     assert pedidos == [True]
+
+
+def test_entrada_e_saida_embaralham_as_capas_que_passam(aberta, embaralhados):
+    _, bp, _, _ = aberta
+    bp.entrar()
+    bp.filaTerminou()
+    bp.sair()
+    assert embaralhados == [(2, True, None), (2, False, 2)]  # três jogos: duas capas cruzam o centro
+
+
+def test_saida_do_ultimo_jogo_nao_tem_capas_para_passar(aberta, embaralhados):
+    _, bp, _, _ = aberta
+    bp.entrar()
+    bp.filaTerminou()
+    bp.irPara(2)  # o último dos três
+    bp.sair()
+    assert embaralhados[-1] == (2, False, 0)
+
+
+def test_sem_animacoes_do_sistema_nao_embaralha(app_qt, tiques, embaralhados):
+    _, bp, _, _ = _com_janela(_jogo("a", 30), _jogo("b", 20))
+    bp.definir_animacoes_do_sistema(False)  # noqa: FBT003
+    bp.entrar()
+    assert embaralhados == []
 
 
 def test_entrar_poe_o_ultimo_jogado_no_centro(aberta):
