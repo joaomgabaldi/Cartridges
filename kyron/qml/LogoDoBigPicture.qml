@@ -55,7 +55,7 @@ Item {
             id: texto
             objectName: logo.emCentro ? "nomeDoLogoDoBigPicture" : "nomeDoLogoVizinhoDoBigPicture"
             visible: text !== "" && (logo.logoDoJogo === "" || imagem.status === Image.Error)
-            width: Math.min(implicitWidth, logo.parent ? logo.parent.width * 0.8 : implicitWidth)
+            width: Math.min(implicitWidth, logo.larguraMaxima)
             anchors.verticalCenter: parent.verticalCenter
             text: logo.jogo ? logo.jogo.nome : ""
             textFormat: Text.PlainText

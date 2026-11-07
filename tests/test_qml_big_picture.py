@@ -1544,6 +1544,35 @@ def test_em_pe_a_capa_dos_detalhes_sobe_centrada_e_encolhe(app_qt):
     tela.fechar()
 
 
+def test_deitado_os_detalhes_nao_mudam(app_qt):
+    tela = _Tela()
+    tela.tela.setProperty("width", 1920)
+    tela.tela.setProperty("height", 1080)
+    _esperar()
+    tela.js("progressoDetalhe = 1")
+    quadro = tela.js("arranjo(indice)")
+    assert len(quadro) == 5 and quadro[0] == pytest.approx(-0.28 * 1920) and quadro[4] == pytest.approx(19 / 15)
+    assert _avaliar(tela.achar("veuDosDetalhes"), "gradient.orientation") == 1  # Gradient.Horizontal
+    tela.fechar()
+
+
+def test_em_pe_o_logo_dos_detalhes_fica_centrado_sob_a_capa(app_qt):
+    tela = _Tela()
+    tela.tela.setProperty("width", 1080)
+    tela.tela.setProperty("height", 1920)
+    _esperar()
+    logo = tela.achar("logoDoBigPicture")
+    logo.setProperty("animar", False)
+    logo.setProperty("posicao", "coluna")
+    _esperar()
+    assert logo.property("fracaoDaColuna") == 0
+    assert logo.property("y") == pytest.approx(0.50 * 1920)
+    assert logo.property("larguraMaxima") == pytest.approx(0.8 * 1080)
+    assert logo.property("x") == pytest.approx((1080 - logo.property("width")) / 2)
+    assert _avaliar(tela.achar("veuDosDetalhes"), "gradient.orientation") == 2  # Gradient.Vertical
+    tela.fechar()
+
+
 def test_laterais_escurecem_com_a_distancia(app_qt):
     tela = _Tela()
     assert tela.js("escurecimento(0)") == 0

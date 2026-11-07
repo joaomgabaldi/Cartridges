@@ -446,7 +446,8 @@ Item {
                     largura: tela.larguraCapa
                     altura: tela.alturaCapa
                     escala: tela.escala
-                    opacidadeDoReflexo: tela.reflexoOpacidade
+                    // Em pé, o reflexo da capa que sobe nos detalhes cairia atrás do logo: some com a viagem.
+                    opacidadeDoReflexo: tela.reflexoOpacidade * (tela.emPe ? 1 - tela.progressoDetalhe : 1)
                     escurecer: tela.escurecimento(vaga.i)
                     // Só no fim do passo: segurando a tecla, nenhuma capa de passagem carrega a cópia em alta.
                     central: vaga.i === tela.centralExibida
@@ -509,7 +510,8 @@ Item {
             emCentro: i === tela.indice
             jogo: perto && i >= 0 && i < tela.jogos.length ? tela.jogos[i] : null
             deslocamento: d * tela.larguraCapa * tela.espacoCentral
-            opacity: tela.opacidadeDosTextos * Math.max(0, 1 - Math.abs(d) / 0.7)
+            // Em pé, o logo desce do alto para baixo da capa, que sobe: esmaece no cruzamento e reaparece já no lugar.
+            opacity: tela.opacidadeDosTextos * Math.max(0, 1 - Math.abs(d) / 0.7) * (tela.emPe ? Math.abs(1 - 2 * tela.progressoDetalhe) : 1)
             posicao: bigPicture.etapa === "detalhes" ? "coluna" : bigPicture.etapa === "sessao" ? "relogio" : "alto"
             animar: bigPicture.animacoes
             espacoNoAlto: tela.espacoNoAlto
