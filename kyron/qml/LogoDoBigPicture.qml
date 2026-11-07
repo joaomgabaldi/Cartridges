@@ -15,6 +15,7 @@ Item {
     property real alturaNaColuna: 72
     property real alturaDecodificada: 110  // a mesma do preparo dos vizinhos: o cache do Qt Quick só acerta com o mesmo `sourceSize`
 
+    property bool emPe: false  // monitor em pé: na "coluna" o logo fica centrado sob a capa, e não à direita dela
     readonly property bool naColuna: posicao === "coluna"
     // A altura anda junto com x e y; a imagem é decodificada uma vez, na maior (`sourceSize` fixo).
     property real altura: naColuna ? alturaNaColuna : posicao === "alto" ? espacoNoAlto * 0.6 : 110
@@ -23,14 +24,14 @@ Item {
     readonly property string logoDoJogo: !jogo ? ""
         : detalhes.jogoId === jogo.jogoId && detalhes.logo !== "" ? detalhes.logo : bigPicture.logoDe(jogo.jogoId)
 
-    readonly property real larguraMaxima: parent ? parent.width * (naColuna ? 0.5 : 0.8) : Infinity
+    readonly property real larguraMaxima: parent ? parent.width * (naColuna && !emPe ? 0.5 : 0.8) : Infinity
     width: Math.min(conteudo.width, larguraMaxima)
     height: altura
     // Só o caminho até a coluna anima: cada logo tem uma largura, e recentrar com animação faria todos deslizarem para o mesmo lado.
-    property real fracaoDaColuna: naColuna ? 1 : 0
+    property real fracaoDaColuna: naColuna && !emPe ? 1 : 0
     Behavior on fracaoDaColuna { enabled: logo.animar; NumberAnimation { duration: 800; easing.type: Easing.OutCubic } }
     x: !parent ? 0 : (parent.width - width) / 2 + (parent.width * 0.42 - (parent.width - width) / 2) * fracaoDaColuna
-    y: !parent ? 0 : posicao === "alto" ? espacoNoAlto * 0.25 : posicao === "relogio" ? parent.height * 0.18 : parent.height * 0.14
+    y: !parent ? 0 : posicao === "alto" ? espacoNoAlto * 0.25 : posicao === "relogio" ? parent.height * 0.18 : parent.height * (emPe ? 0.50 : 0.14)
     Behavior on y { enabled: logo.animar; NumberAnimation { duration: 800; easing.type: Easing.OutCubic } }
     transform: Translate { x: logo.deslocamento }
 

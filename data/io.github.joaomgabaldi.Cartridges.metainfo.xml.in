@@ -45,6 +45,7 @@
           <li>Sem um segundo monitor, as opções de mover o Kyron e de trocar o papel de parede ficam indisponíveis e voltam como estavam quando ele for reconectado.</li>
           <li>Com um diálogo aberto, o que está ao fundo não reage mais à passagem do mouse.</li>
           <li>A página do jogo agora mostra os DLCs incluídos nos jogos que usam emulador da Steam.</li>
+          <li>O Big Picture agora se ajusta a monitores na vertical.</li>
         </ul>
       </description>
     </release>

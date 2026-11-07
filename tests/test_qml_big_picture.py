@@ -1530,6 +1530,20 @@ def test_veu_dos_detalhes_so_na_tela_do_jogo(app_qt):
     tela.fechar()
 
 
+def test_em_pe_a_capa_dos_detalhes_sobe_centrada_e_encolhe(app_qt):
+    tela = _Tela()
+    tela.tela.setProperty("width", 1080)
+    tela.tela.setProperty("height", 1920)
+    _esperar()
+    tela.js("progressoDetalhe = 1")
+    x, angulo, _prof, _a, tamanho, dy = tela.js("arranjo(indice)")
+    assert (x, angulo, tamanho) == (0, 0, pytest.approx(0.6))
+    assert dy == pytest.approx(-0.25 * 1920)
+    tela.js("progressoSessao = 1")  # a ida à sessão a partir dos detalhes não perde a altura
+    assert tela.js("arranjo(indice)")[5] == pytest.approx(-0.25 * 1920)
+    tela.fechar()
+
+
 def test_laterais_escurecem_com_a_distancia(app_qt):
     tela = _Tela()
     assert tela.js("escurecimento(0)") == 0
@@ -1550,13 +1564,21 @@ def test_partes_de_um_dado_separam_rotulo_e_valor(app_qt):
 def test_texto_dos_detalhes_cresce_com_a_tela(app_qt):
     tela = _Tela()
     descricao = tela.achar("descricaoDoJogo")
+    tela.tela.setProperty("width", 1920)
     tela.tela.setProperty("height", 1080)
     _esperar()
     em_1080 = descricao.property("font").pixelSize()
+    tela.tela.setProperty("width", 3840)
     tela.tela.setProperty("height", 2160)
     _esperar()
     assert em_1080 == 20
     assert descricao.property("font").pixelSize() == 40
+    # Em pé, a letra segue a largura: 1080 de largura lê como uma tela de 1080 de altura.
+    tela.tela.setProperty("width", 1080)
+    tela.tela.setProperty("height", 1920)
+    _esperar()
+    assert tela.tela.property("emPe") is True
+    assert descricao.property("font").pixelSize() == 20
     tela.fechar()
 
 

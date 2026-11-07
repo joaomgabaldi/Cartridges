@@ -30,7 +30,9 @@ Item {
     property real larguraCapa: alturaCapa * 2 / 3
     readonly property real centroDasCapas: height * 0.52
     readonly property real espacoNoAlto: centroDasCapas - alturaCapa / 2
-    readonly property real alturaDoLogoNaColuna: height * 0.10
+    // Monitor em pé: os detalhes empilham (capa menor no alto, logo e texto abaixo, na largura toda) em vez de capa à esquerda e texto à direita.
+    readonly property bool emPe: height > width
+    readonly property real alturaDoLogoNaColuna: height * (emPe ? 0.06 : 0.10)
     readonly property real alturaDoLogoDecodificado: Math.max(110, espacoNoAlto * 0.6, alturaDoLogoNaColuna) * escala
     // Só a capa selecionada fica inteira: as outras recuam com a distância.
     function escurecimento(i) {
@@ -293,6 +295,8 @@ Item {
         }
         if (voltandoDosDetalhes) v = 1 - v
         const [x, angulo, prof, a] = quadro
+        if (distancia === 0 && emPe)  // centrada no alto: de 52% a 27% da altura, com 60% do tamanho
+            return [x * (1 - v), angulo * (1 - v), prof * (1 - v), a, 1 + (0.6 - 1) * v, -0.25 * height * v]
         if (distancia === 0)
             return [x + (-0.28 * width - x) * v, angulo * (1 - v), prof * (1 - v), a, 1 + (19 / 15 - 1) * v]
         const lado = i < indice ? -1 : 1
@@ -302,9 +306,9 @@ Item {
 
     // A central sai toda pela esquerda, girando até 25°; a margem cobre o giro e a perspectiva.
     function centralRumoAEsquerda(quadro) {
-        const [x, angulo, prof, a, tamanho] = quadro
+        const [x, angulo, prof, a, tamanho, dy = 0] = quadro
         const alvoX = -(width / 2 + larguraCapa * tamanho * 0.75 + 0.05 * width)
-        return [x + (alvoX - x) * progressoSessao, angulo + 25 * progressoSessao, prof, a, tamanho]
+        return [x + (alvoX - x) * progressoSessao, angulo + 25 * progressoSessao, prof, a, tamanho, dy]
     }
 
     function translacao(x, y, z) {
@@ -312,13 +316,13 @@ Item {
     }
 
     function transformacao(i) {
-        const [x, angulo, prof, a, tamanho] = arranjo(i)
+        const [x, angulo, prof, a, tamanho, dy = 0] = arranjo(i)
         const r = angulo * Math.PI / 180
         const c = Math.cos(r), s = Math.sin(r)
         // A projeção zera o z para nada ser recortado em profundidade.
         const projecao = Qt.matrix4x4(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, -1 / perspectiva, 1)
         const giro = Qt.matrix4x4(c, 0, s, 0, 0, 1, 0, 0, -s, 0, c, 0, 0, 0, 0, 1)
-        return translacao(width / 2, centroDasCapas, 0)
+        return translacao(width / 2, centroDasCapas + dy, 0)
             .times(projecao)
             .times(translacao(x, 0, prof))
             .times(giro)
@@ -399,9 +403,9 @@ Item {
         opacity: tela.progressoDetalhe * (1 - tela.progressoSessao)
         visible: opacity > 0
         gradient: Gradient {
-            orientation: Gradient.Horizontal
-            GradientStop { position: 0.30; color: "transparent" }
-            GradientStop { position: 0.55; color: Qt.rgba(0, 0, 0, 0.6) }
+            orientation: tela.emPe ? Gradient.Vertical : Gradient.Horizontal
+            GradientStop { position: tela.emPe ? 0.45 : 0.30; color: "transparent" }
+            GradientStop { position: tela.emPe ? 0.62 : 0.55; color: Qt.rgba(0, 0, 0, 0.6) }
         }
     }
 
@@ -511,6 +515,7 @@ Item {
             espacoNoAlto: tela.espacoNoAlto
             alturaDecodificada: tela.alturaDoLogoDecodificado
             alturaNaColuna: tela.alturaDoLogoNaColuna
+            emPe: tela.emPe
         }
     }
 
@@ -533,12 +538,12 @@ Item {
     }
 
     DetalhesDoBigPicture {
-        x: tela.width * 0.42
-        // Da altura do logo até o pé da capa selecionada, para o texto e a capa formarem um bloco só.
-        y: tela.height * 0.14 + tela.alturaDoLogoNaColuna + tela.height * 0.03
-        alturaDaTela: tela.height
-        width: tela.width * 0.33  // termina em 3/4 da tela: linhas longas demais cansam a leitura
-        height: tela.height * 0.90 - y
+        x: tela.width * (tela.emPe ? 0.1 : 0.42)
+        // Da altura do logo até o pé da capa selecionada, para o texto e a capa formarem um bloco só; em pé, abaixo do logo, sob a capa.
+        y: tela.height * (tela.emPe ? 0.50 : 0.14) + tela.alturaDoLogoNaColuna + tela.height * 0.03
+        alturaDaTela: tela.emPe ? tela.width : tela.height  // em pé, a letra segue a largura: a altura a deixaria enorme
+        width: tela.width * (tela.emPe ? 0.8 : 0.33)  // termina em 3/4 da tela: linhas longas demais cansam a leitura
+        height: tela.height * (tela.emPe ? 0.94 : 0.90) - y
         mostrar: bigPicture.etapa === "detalhes"
         animar: bigPicture.animacoes
     }
