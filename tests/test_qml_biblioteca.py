@@ -1209,6 +1209,16 @@ def test_voltar_com_o_menu_principal_aberto_nao_volta_de_pagina(app_qt):
     app.fechar()
 
 
+def test_fechar_destroi_a_janela_antes_de_o_app_sair(app_qt):
+    """Adiada, a janela morreria no laço do próximo teste, depois do motor e dos modelos (a queda da seção 15)."""
+    import shiboken6  # noqa: PLC0415
+
+    app = _App(_tres())
+    janela = app.janela
+    app.fechar()
+    assert not shiboken6.isValid(janela)
+
+
 def test_poucos_jogos_ficam_a_esquerda_da_grade(app_qt):
     """A grade fica centrada pelas colunas que cabem, e não pelos jogos que há."""
     app = _App(_tres())

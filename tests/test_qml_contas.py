@@ -7,7 +7,7 @@
 from pathlib import Path
 
 import pytest
-from PySide6.QtCore import QMetaObject, Qt, QUrl
+from PySide6.QtCore import QCoreApplication, QEvent, QMetaObject, Qt, QUrl
 from PySide6.QtQml import QQmlComponent, QQmlEngine, QQmlExpression
 from PySide6.QtQuick import QQuickWindow
 from PySide6.QtTest import QTest
@@ -72,6 +72,7 @@ class _Tela:
         self.contas.fechar()
         self.janela.close()
         self.janela.deleteLater()
+        QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)  # já: o motor e os modelos morrem com o arnês
 
 
 @pytest.fixture

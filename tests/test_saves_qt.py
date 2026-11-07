@@ -12,7 +12,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from PySide6.QtCore import QEventLoop, QMetaObject, QObject, Qt, QTimer, QUrl, Signal
+from PySide6.QtCore import QCoreApplication, QEvent, QEventLoop, QMetaObject, QObject, Qt, QTimer, QUrl, Signal
 from PySide6.QtQml import QQmlComponent, QQmlEngine, QQmlExpression
 from PySide6.QtQuick import QQuickItem, QQuickWindow
 from PySide6.QtQuickControls2 import QQuickStyle
@@ -350,6 +350,7 @@ class _Janela:
     def fechar(self):
         self.janela.close()
         self.janela.deleteLater()
+        QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)  # já: o motor e os modelos morrem com o arnês
 
 
 @pytest.fixture

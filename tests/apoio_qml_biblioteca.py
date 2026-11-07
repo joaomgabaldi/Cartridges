@@ -10,7 +10,7 @@ Um teste nunca importa outro `test_*.py`: importar um arquivo de teste de outro 
 import time
 from pathlib import Path
 
-from PySide6.QtCore import QEventLoop, QObject, Qt, QTimer, QUrl, Signal
+from PySide6.QtCore import QCoreApplication, QEvent, QEventLoop, QObject, Qt, QTimer, QUrl, Signal
 from PySide6.QtQml import QQmlComponent, QQmlEngine
 from PySide6.QtQuick import QQuickItem, QQuickWindow
 from PySide6.QtQuickControls2 import QQuickStyle
@@ -202,6 +202,9 @@ class _App:
     def fechar(self):
         self.janela.close()
         self.janela.deleteLater()
+        # Já: o motor e os modelos do contexto são do Python e morrem com o `_App`; adiada, a janela só seria destruída no
+        # laço de eventos do próximo teste (o `_assentar` do `_App` seguinte), tocando objetos já mortos.
+        QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
         if shared.store is self.loja:
             shared.store = self._store_de_antes
 

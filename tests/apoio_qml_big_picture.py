@@ -7,7 +7,7 @@
 Um teste nunca importa outro `test_*.py`: importar um arquivo de teste de outro roda a coleta de novo.
 """
 
-from PySide6.QtCore import Qt, QUrl
+from PySide6.QtCore import QCoreApplication, QEvent, Qt, QUrl
 from PySide6.QtQml import QQmlComponent, QQmlEngine, QQmlExpression
 from PySide6.QtQuick import QQuickItem, QQuickWindow
 
@@ -85,6 +85,7 @@ class _Tela:
     def fechar(self):
         self.janela.close()
         self.janela.deleteLater()
+        QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)  # já: o motor e os modelos morrem com o arnês
 
     def itens(self, classe):
         return _itens(self.tela, lambda i: i.metaObject().className().startswith(classe))

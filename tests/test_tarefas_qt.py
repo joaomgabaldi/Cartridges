@@ -19,6 +19,7 @@ from types import SimpleNamespace
 import pytest
 from PySide6.QtCore import (
     Q_ARG,
+    QEvent,
     QEventLoop,
     QMetaObject,
     QCoreApplication,
@@ -172,6 +173,7 @@ class _Cena:
             item.close()
         self.janela.close()
         self.janela.deleteLater()
+        QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)  # já: o motor e os modelos morrem com o arnês
 
 
 @pytest.fixture
