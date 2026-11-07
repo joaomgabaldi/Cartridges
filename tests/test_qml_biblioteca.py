@@ -1021,16 +1021,16 @@ def test_botao_das_tarefas_da_main(app_qt):
 
 
 def test_a_linha_da_rolagem_e_uma_so_abaixo_da_busca_aberta(app_qt):
-    """Com a busca aberta a linha do topo fica sob ela e a da barra de título apaga; nunca duas."""
+    """Com a busca aberta a sombra do topo fica sob ela e a da barra de título apaga; nunca duas."""
     app = _App(_jogos(*[(n, f"Jogo {n:03}", {}) for n in range(1, 61)]))
     grade = app.achar("grade")
     _esperar()
     grade.setProperty("contentY", 300.0)
     assert _esperar(lambda: app.janela.property("sombraDaBarra") is True)
-    assert app.achar("linhaDaBusca").property("visible") is False
+    assert app.achar("linhaDaBusca").property("ativa") is False
     app.achar("pagina").setProperty("buscaAberta", True)
     assert _esperar(lambda: app.janela.property("sombraDaBarra") is False)
-    assert app.achar("linhaDaBusca").property("visible") is True
+    assert app.achar("linhaDaBusca").property("ativa") is True
     app.fechar()
 
 

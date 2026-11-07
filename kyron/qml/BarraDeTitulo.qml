@@ -83,12 +83,7 @@ Rectangle {
         }
     }
 
-    Rectangle {
-        anchors { left: parent.left; right: parent.right; bottom: parent.bottom }
-        height: 1
-        visible: barra.sombra
-        color: Tema.sombraDaBarra
-    }
+    SombraDeRolagem { objectName: "sombraDaBarra"; ativa: barra.sombra }
 
     component Botao: Item {
         id: botao

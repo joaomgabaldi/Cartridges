@@ -38,6 +38,7 @@ MolduraDoDialogo {
         Layout.fillWidth: true
         implicitHeight: base.comBusca ? 46 : 0
         visible: base.comBusca
+        z: 1
 
         CampoDeBusca {
             id: campoDeBusca
@@ -51,11 +52,6 @@ MolduraDoDialogo {
             onAccepted: base.buscaConfirmada()
             Keys.onDownPressed: base.setaParaBaixo()
         }
-        Rectangle {
-            anchors { left: parent.left; right: parent.right; bottom: parent.bottom }
-            height: 1
-            visible: base.rolado
-            color: Tema.sombraDaBarra
-        }
+        SombraDeRolagem { ativa: base.rolado }
     }
 }

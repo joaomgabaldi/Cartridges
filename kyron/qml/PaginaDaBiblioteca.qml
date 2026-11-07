@@ -185,24 +185,12 @@ Item {
         onEditar: id => raiz.editar(id)
     }
 
-    // Sob a busca aberta: a linha de 1 px mais o degradê de 4 px em `shade_color` a 75%, com a grade rolada.
-    Item {
-        id: linhaBusca
+    // Sob a busca aberta, com a grade rolada: a mesma sombra da barra de título.
+    SombraDeRolagem {
         objectName: "linhaDaBusca"
-        anchors { top: barraDeBusca.bottom; left: parent.left; right: parent.right }
-        height: 4
-        visible: raiz.buscaVisivel && grade.rolado
-        enabled: false
+        anchors.top: barraDeBusca.bottom
+        ativa: raiz.buscaVisivel && grade.rolado
         z: 1
-        readonly property color sombra: Qt.rgba(0, 0, 6 / 255, (Tema.escuro ? 0.25 : 0.07) * 0.75)
-        Rectangle {
-            anchors.fill: parent
-            gradient: Gradient {
-                GradientStop { position: 0; color: linhaBusca.sombra }
-                GradientStop { position: 1; color: "transparent" }
-            }
-        }
-        Rectangle { anchors { left: parent.left; right: parent.right; top: parent.top } height: 1; color: linhaBusca.sombra }
     }
 
     // Efeito de fim de rolagem: dois degradês radiais em `currentColor`, 12% numa faixa de 3% da altura e 5% numa de 50%; somem ao soltar.

@@ -3,9 +3,11 @@ import QtQuick.Controls
 import QtQuick.Layouts
 
 // O cabeçalho dos diálogos: 47 de altura, título centrado e o X circular; botões da página entram em `inicio` e `fim`.
-// `sombra`: a linha quando há rolagem.
+// `sombra`: a sombra sobre o conteúdo quando há rolagem.
 Item {
     id: cabecalho
+    // Acima do conteúdo que vem depois, para a sombra cobri-lo.
+    z: 1
 
     property string titulo
     property bool comFechar: true
@@ -83,10 +85,5 @@ Item {
         }
     }
 
-    Rectangle {
-        anchors { left: parent.left; right: parent.right; bottom: parent.bottom }
-        height: 1
-        visible: cabecalho.sombra
-        color: Tema.sombraDaBarra
-    }
+    SombraDeRolagem { ativa: cabecalho.sombra }
 }
