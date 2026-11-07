@@ -20,6 +20,9 @@ FocusScope {
     // Página rolável: ↑/↓ rolam quando o vizinho do Tab fica fora dela, e PgUp/PgDn rolam sempre.
     property Flickable rolagemDasSetas: null
     property bool altSegurado: false
+    // Para o diálogo cujo modelo se esvazia ao fechar: a saída mostra a cópia do cartão de antes (como a barra da D37).
+    // Custo: a cópia fica `live` enquanto o diálogo está aberto.
+    property bool congelarAoFechar: false
     property Item focoInicial: null
     property string nomeAcessivel: ""
     default property alias conteudo: coluna.data
@@ -224,6 +227,22 @@ FocusScope {
             id: coluna
             anchors.fill: parent
             spacing: 0
+        }
+        // Largura 0 enquanto aberto: a cópia segue o cartão sem aparecer.
+        Item {
+            visible: moldura.congelarAoFechar
+            width: moldura.aberto ? 0 : coluna.width
+            height: coluna.height
+            clip: true
+            enabled: false
+            ShaderEffectSource {
+                objectName: "copiaDoDialogo"
+                width: coluna.width
+                height: coluna.height
+                sourceItem: moldura.congelarAoFechar ? coluna : null
+                live: moldura.aberto
+                hideSource: moldura.congelarAoFechar && !moldura.aberto
+            }
         }
         Rectangle {
             anchors.fill: parent

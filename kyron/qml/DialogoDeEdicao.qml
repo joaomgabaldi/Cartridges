@@ -26,6 +26,8 @@ MolduraDoDialogo {
 
     aberto: edicao.aberto
     largura: 480
+    // O `_fechar` esvazia o formulário e solta a capa antes da saída animada.
+    congelarAoFechar: true
     focoInicial: campoNome
     nomeAcessivel: edicao.titulo
     onFecharPedido: edicao.cancelar()

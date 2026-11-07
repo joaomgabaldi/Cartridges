@@ -131,6 +131,28 @@ def test_aplicar_grava_e_volta_aos_detalhes(app):
     assert app.janela.property("tituloDaBarra") == "Alfa Novo"
 
 
+def test_aplicar_fecha_mostrando_o_dialogo_como_estava(app):
+    """O `aplicar` esvazia o formulário na hora (a prévia larga o arquivo da capa); a saída animada mostra a cópia
+    congelada do cartão, não o formulário vazio com o placeholder.
+
+    Os testes rodam sem animações (a saída acaba na hora): confere o estado da cópia, aberto e fechado."""
+    app.edicao.abrir("shortcuts_z1")
+    dialogo = app.achar("dialogoDeEdicao")
+    assert _esperar(lambda: dialogo.property("visible") is True)
+    copia = dialogo.findChild(QQuickItem, "copiaDoDialogo")
+
+    def estado():
+        return (copia.property("live"), copia.property("hideSource"), copia.parentItem().property("width"))
+
+    assert estado() == (True, False, 0)
+    app.edicao.aplicar()
+    assert app.edicao.titulo == "Adicionar novo jogo"  # o formulário já foi esvaziado
+    largura = dialogo.findChild(QQuickItem, "cartaoDoDialogo").property("width")
+    assert estado() == (False, True, largura)
+    app.edicao.abrir("shortcuts_z2")
+    assert estado() == (True, False, 0)
+
+
 def test_adicionar_cria_o_jogo_na_store(app):
     app.edicao.adicionar()
     app.edicao.nome = "Jogo novo"
