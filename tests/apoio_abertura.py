@@ -28,7 +28,7 @@ class AppFalso:
     def setApplicationName(self, *_argumentos) -> None:  # noqa: N802
         pass
 
-    setApplicationDisplayName = setWindowIcon = setApplicationName  # noqa: N815
+    setApplicationDisplayName = setWindowIcon = installNativeEventFilter = setApplicationName  # noqa: N815
 
     def screens(self) -> list:
         return []

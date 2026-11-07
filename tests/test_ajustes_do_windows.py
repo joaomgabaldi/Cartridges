@@ -113,6 +113,23 @@ def test_reler_animacoes_avisa_so_quando_muda(app_qt, monkeypatch):  # noqa: ARG
     assert avisos == [False, True]
 
 
+def test_filtro_do_main_existe_antes_do_aplicativo(app_qt, monkeypatch):
+    """Instalado no `main`, antes do assistente: sem o `Aplicativo` ainda, só o realce; depois, as animações também."""
+    from kyron import app as modulo_app  # noqa: PLC0415
+
+    monkeypatch.setattr(modulo_app, "aplicar_cor_de_destaque", lambda: None)
+    abertura = modulo_app._Abertura()  # noqa: SLF001
+    filtro = modulo_app._instalar_filtro_de_ajustes(app_qt, abertura)  # noqa: SLF001
+    try:
+        filtro._ao_mudar()  # noqa: SLF001
+        relidas = []
+        abertura.aplicativo = type("A", (), {"reler_animacoes": lambda _s: relidas.append(1)})()
+        filtro._ao_mudar()  # noqa: SLF001
+        assert relidas == [1]
+    finally:
+        filtro.desligar()
+
+
 def test_big_picture_segue_as_animacoes_relidas(app_qt, monkeypatch, schema):  # noqa: ARG001
     from kyron import app as modulo_app  # noqa: PLC0415
 

@@ -284,13 +284,14 @@ def _seguir_animacoes(aplicativo: Aplicativo, big_picture: BigPicture) -> None:
     aplicativo.animacoesDoSistemaChanged.connect(seguir)
 
 
-def _instalar_filtro_de_ajustes(app: AplicacaoQt, aplicativo: Aplicativo) -> FiltroDeAjustes:
-    aplicativo_fraco = weakref.ref(aplicativo)
+def _instalar_filtro_de_ajustes(app: AplicacaoQt, abertura: _Abertura) -> FiltroDeAjustes:
+    """No `main`, antes de qualquer janela: o clique na barra fecha os menus também no assistente e na restauração."""
+    abertura_fraca = weakref.ref(abertura)
 
     def ao_mudar() -> None:
         aplicar_cor_de_destaque()
-        if (a := aplicativo_fraco()) is not None:
-            a.reler_animacoes()
+        if (ab := abertura_fraca()) is not None and ab.aplicativo is not None:
+            ab.aplicativo.reler_animacoes()
 
     filtro = FiltroDeAjustes(ao_mudar)
     app.installNativeEventFilter(filtro)
@@ -401,7 +402,6 @@ def _abrir(app: AplicacaoQt, argv: list[str], abertura: _Abertura) -> int | None
     # Antes de o Qt mandar o `closing` às janelas: um `quit()` não é recusado pelo trabalho em andamento.
     app.saindo.connect(painel_das_tarefas.encerrando)
     shared.aplicativo = aplicativo
-    abertura.ajustes = _instalar_filtro_de_ajustes(app, aplicativo)
     aplicativo.verificador_de_atualizacoes = verificador
     _comecar_varreduras(aplicativo, verificador, novidades, varredura_hltb, varredura_tamanho)
     # Depois da janela e antes dos avisos da abertura. A pergunta da versão nova fica fora da fila de pedidos: com um diálogo aberto, espera escondida (`DialogoDaAtualizacao.outroAberto`).
@@ -583,6 +583,7 @@ def main(argv: list[str]) -> int:
     aplicar_cor_de_destaque()
     abertura = _Abertura()
     app.aboutToQuit.connect(lambda: _fechar(abertura))
+    abertura.ajustes = _instalar_filtro_de_ajustes(app, abertura)
     # "Redefinir Kyron", agendado nas Preferências: antes do log, que mora na pasta do app e a travaria.
     redefinido = redefinir.aplicar_pendente()
     _configurar_log()
