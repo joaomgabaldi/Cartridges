@@ -1236,6 +1236,7 @@ def test_ao_alargar_a_janela_a_grade_lembra_as_colunas_de_antes(app_qt):
     assert grade.property("colunasAnteriores") == 2
     app.fechar()
 
+
 def test_a_volta_pelo_teclado_acende_o_anel_e_espera_o_proximo_hover(app_qt):
     """O hover em si o offscreen não produz: o reenvio com o mouse parado foi conferido em janela real."""
     from PySide6.QtCore import QMetaObject  # noqa: PLC0415

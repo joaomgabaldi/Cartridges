@@ -42,7 +42,7 @@
           <li>O botão Jogar passou a se chamar Iniciar.</li>
           <li>Os jogos que usam emulador da Steam agora vêm com a notificação de atualizações ligada.</li>
           <li>Ao iniciar um jogo pelo Big Picture, o Kyron agora também muda para o monitor escolhido nas Preferências.</li>
-          <li>Sem um segundo monitor, as opções de mover o Kyron e de trocar o papel de parede ficam indisponíveis, sem serem desligadas, e voltam como estavam quando ele for reconectado.</li>
+          <li>Sem um segundo monitor, as opções de mover o Kyron e de trocar o papel de parede ficam indisponíveis e voltam como estavam quando ele for reconectado.</li>
           <li>Com um diálogo aberto, o que está ao fundo não reage mais à passagem do mouse.</li>
         </ul>
       </description>

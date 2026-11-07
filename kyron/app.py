@@ -583,10 +583,10 @@ def main(argv: list[str]) -> int:
     aplicar_cor_de_destaque()
     abertura = _Abertura()
     app.aboutToQuit.connect(lambda: _fechar(abertura))
-    abertura.ajustes = _instalar_filtro_de_ajustes(app, abertura)
     # "Redefinir Kyron", agendado nas Preferências: antes do log, que mora na pasta do app e a travaria.
     redefinido = redefinir.aplicar_pendente()
     _configurar_log()
+    abertura.ajustes = _instalar_filtro_de_ajustes(app, abertura)
     filtro = instalar_filtro(app)  # noqa: F841  # a referência vive até o fim do main
     if redefinido:
         logging.info("Cartridges redefinido")
@@ -606,6 +606,7 @@ def main(argv: list[str]) -> int:
         if not _mostrar_assistente(app, argv, abertura, restauracao_falhou):
             codigo = _abrir(app, argv, abertura)
             if codigo is not None:
+                abertura.ajustes.desligar()  # sem `exec()` não vem o `aboutToQuit`, e o Qt ficaria com o ponteiro do filtro morto
                 return codigo
             _avisos_da_abertura(abertura.aplicativo, restauracao_falhou)
     codigo = app.exec()
