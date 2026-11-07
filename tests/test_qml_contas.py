@@ -382,6 +382,9 @@ def test_login_tem_cabecalho_com_titulo_centrado_e_x(tela):
     assert cartao.width() == 460
     assert _valor(cartao, "radius") == 15
     x = tela.achar("fecharDoCabecalho", janela)  # o X de verdade, com o mouse
+    # Com a fonte de reserva o cabeçalho passa do cartão e o X cairia fora da janela de 720: o Qt não entrega esse clique.
+    tela.janela.setWidth(1000)
+    _esperar(lambda: x.mapToScene(x.boundingRect().center()).x() < 1000)
     QTest.mouseClick(tela.janela, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, x.mapToScene(x.boundingRect().center()).toPoint())
     assert _esperar(lambda: janela.property("visible") is False)
     assert tela.contas.loginEpic is None
