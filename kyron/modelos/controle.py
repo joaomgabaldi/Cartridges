@@ -66,6 +66,7 @@ class ControleDaGrade(QObject):
     pular = Signal(int)  # LB (-10) e RB (+10): só o Big Picture usa
     conectado = Signal()  # um controle lido depois de uma leitura sem controle, ou o primeiro; não o foco de volta
     modoBigPictureMudou = Signal()  # noqa: N815
+    temControleMudou = Signal()  # noqa: N815
 
     def __init__(
         self,
@@ -85,6 +86,7 @@ class ControleDaGrade(QObject):
         self._botoes = 0
         self._modo_big_picture = False
         self._sem_controle = True  # a última leitura (ou o início) não tinha controle: o próximo é uma conexão
+        self._tem_controle = False  # o que a última leitura achou; suspenso (sessão, sem foco), fica o de antes
         self._janela: QWindow | None = None  # a principal: só ela dá o controle
         self._ultimo_toque_capa_us: int | None = None
         self._ajustar_base()
@@ -112,6 +114,16 @@ class ControleDaGrade(QObject):
         if valor != self._modo_big_picture:
             self._modo_big_picture = valor
             self.modoBigPictureMudou.emit()
+
+    @Property(bool, notify=temControleMudou)
+    def temControle(self) -> bool:  # noqa: N802
+        """Há controle conectado: sem ele, o Big Picture não mostra os botões do controle."""
+        return self._tem_controle
+
+    def _definir_tem_controle(self, valor: bool) -> None:
+        if valor != self._tem_controle:
+            self._tem_controle = valor
+            self.temControleMudou.emit()
 
     @property
     def lendo(self) -> bool:
@@ -141,7 +153,10 @@ class ControleDaGrade(QObject):
             ativa = self._estado_do_app() == Qt.ApplicationState.ApplicationActive
         if self._suspenso and self._com_foco and not ativa:
             self._armado = True  # o jogo tomou o foco: daqui, o foco de volta é do Kyron
-        desejado = (not self._suspenso or (self._com_foco and self._armado)) and ativa and shared.schema.get_boolean("gamepad")
+        ligado = shared.schema.get_boolean("gamepad")
+        if not ligado:
+            self._definir_tem_controle(False)  # o Kyron ignora o controle: nada de botões dele na tela
+        desejado = (not self._suspenso or (self._com_foco and self._armado)) and ativa and ligado
         if desejado and not self._timer.isActive():
             if self._leitor is None:
                 leitor = self._fabrica()
@@ -209,6 +224,7 @@ class ControleDaGrade(QObject):
 
     def _ler(self) -> None:
         pad = self._leitor.ler()
+        self._definir_tem_controle(pad is not None)
         if pad is None:
             # Sem controle: o próximo é uma conexão nova, com base refeita e analógico dormindo.
             self._sem_controle = True

@@ -1058,6 +1058,25 @@ def test_dicas_do_carrossel(app_qt):
     tela.fechar()
 
 
+def test_sem_controle_nao_mostra_os_botoes_do_controle(app_qt):
+    """Navegando com mouse e teclado, as dicas A/B somem e o Iniciar fica só com o texto; com o controle, voltam."""
+    tela = _Tela()
+    tela.bp.ativar()  # nos detalhes: o Iniciar e a dica "B Voltar"
+    _aguardar_etapa(tela)
+    iniciar = tela.achar("botaoIniciar")
+    glifo = _achar(iniciar, "glifoDoBotao")
+    largura_com = iniciar.width()
+    tela.controle.temControle = False
+    _esperar()
+    assert tela.achar("dicasDoBigPicture").property("visible") is False
+    assert glifo.property("visible") is False and iniciar.width() < largura_com
+    tela.controle.temControle = True
+    _esperar()
+    assert tela.achar("dicasDoBigPicture").property("visible") is True
+    assert glifo.property("visible") is True and iniciar.width() == largura_com
+    tela.fechar()
+
+
 def test_glifos_com_as_cores_dos_botoes(app_qt):
     tela = _Tela()
     glifos = _itens(tela.tela, lambda i: i.objectName() == "glifoDoBotao")

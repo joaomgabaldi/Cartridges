@@ -7,7 +7,7 @@
 Um teste nunca importa outro `test_*.py`: importar um arquivo de teste de outro roda a coleta de novo.
 """
 
-from PySide6.QtCore import QCoreApplication, QEvent, Qt, QUrl
+from PySide6.QtCore import Property, QCoreApplication, QEvent, QObject, Qt, QUrl, Signal
 from PySide6.QtQml import QQmlComponent, QQmlEngine, QQmlExpression
 from PySide6.QtQuick import QQuickItem, QQuickWindow
 
@@ -28,6 +28,25 @@ LARGURA, ALTURA = 800, 600
 def _avaliar(objeto, expressao):
     valor = QQmlExpression(QQmlEngine.contextForObject(objeto), objeto, expressao).evaluate()[0]
     return valor.toVariant() if hasattr(valor, "toVariant") else valor
+
+
+class _ControleFalso(QObject):
+    """Só o `temControle` que o Big Picture lê; começa conectado."""
+
+    temControleMudou = Signal()
+
+    def __init__(self):
+        super().__init__()
+        self._tem = True
+
+    def _ler(self):
+        return self._tem
+
+    def _gravar(self, valor):
+        self._tem = valor
+        self.temControleMudou.emit()
+
+    temControle = Property(bool, _ler, _gravar, notify=temControleMudou)
 
 
 class _Tela:
@@ -51,6 +70,7 @@ class _Tela:
         self.sessao = ModeloDaSessao(FilaDeAvisos())
         self.conquistas = ConquistasDoJogo(self.detalhes, self.sessao)
         self.bp = BigPicture(self.modelo, detalhes=self.detalhes)
+        self.controle = _ControleFalso()
         self.bp.entrar()  # antes do QML existir: a lista só acompanha a biblioteca visível, e sem fila
         self.bp.filaTerminou()
         self.motor = QQmlEngine()
@@ -60,7 +80,8 @@ class _Tela:
         self.motor.addImageProvider("desfoque", self.detalhes.provedor)
         contexto = self.motor.rootContext()
         for nome_no_qml, objeto in (
-            ("bigPicture", self.bp), ("detalhes", self.detalhes), ("sessao", self.sessao), ("conquistasDoJogo", self.conquistas)
+            ("bigPicture", self.bp), ("detalhes", self.detalhes), ("sessao", self.sessao), ("conquistasDoJogo", self.conquistas),
+            ("controle", self.controle),
         ):
             contexto.setContextProperty(nome_no_qml, objeto)
         componente = QQmlComponent(self.motor, QUrl.fromLocalFile(str(QML / "BigPicture.qml")))

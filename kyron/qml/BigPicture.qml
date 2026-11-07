@@ -563,7 +563,7 @@ Item {
         readonly property bool soVoltar: bigPicture.etapa === "detalhes"
         readonly property var textos: bigPicture.etapa === "sessao" ? [] : soVoltar ? ["Voltar"] : ["Selecionar", "Voltar"]
         readonly property var letras: soVoltar ? ["B"] : ["A", "B"]
-        visible: (bigPicture.etapa === "carrossel" || soVoltar) && !bigPicture.vazia
+        visible: (bigPicture.etapa === "carrossel" || soVoltar) && !bigPicture.vazia && controle.temControle  // as dicas são dos botões do controle
         opacity: tela.opacidadeDosTextos
         anchors { right: parent.right; bottom: parent.bottom; rightMargin: 40; bottomMargin: 32 }
         spacing: 28

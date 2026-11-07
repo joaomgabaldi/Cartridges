@@ -169,6 +169,26 @@ def test_desconectar_e_conectar_avisa_de_novo():
     assert len(avisos) == 2
 
 
+def test_tem_controle_segue_a_leitura():
+    """Sem controle, o Big Picture esconde os botões A e B: a propriedade acompanha a última leitura."""
+    montagem = Montagem()
+    mudancas = _lidos(montagem, "temControleMudou")
+    assert montagem.controle.temControle is False  # antes da primeira leitura
+    montagem.tique()
+    assert montagem.controle.temControle is True
+    original = montagem.leitor.ler
+    montagem.leitor.ler = lambda: None
+    montagem.tique(33_000)
+    assert montagem.controle.temControle is False
+    montagem.leitor.ler = original
+    montagem.tique(33_000)
+    montagem.tique(33_000)
+    assert montagem.controle.temControle is True and len(mudancas) == 3
+    shared.schema.set_boolean("gamepad", False)  # o Kyron passa a ignorar o controle
+    assert montagem.controle.temControle is False
+    shared.schema.set_boolean("gamepad", True)
+
+
 def test_foco_de_volta_nao_e_conexao():
     montagem = Montagem()
     avisos, presentes = _lidos(montagem, "conectado"), _lidos(montagem, "presente")

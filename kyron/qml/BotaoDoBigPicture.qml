@@ -23,6 +23,7 @@ Rectangle {
         anchors.centerIn: parent
         spacing: 10 * botao.unidade
         GlifoDoBotao {
+            visible: controle.temControle  // sem controle, a tecla dele não diz nada: fica só o texto
             letra: botao.letra
             tamanho: 26 * botao.unidade
             anchors.verticalCenter: parent.verticalCenter
