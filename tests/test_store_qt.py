@@ -21,6 +21,7 @@ from kyron.store.managers.manager import Manager
 # ou uma chave mudar, o arquivo do jogo deixa de ser o mesmo para a versão anterior.
 _FICHA_GTK = {
     "appid_manual": False,
+    "aviso_dos_inis_ligado": False,
     "idioma_proprio": "",
     "idiomas_steam": None,
     "inis": None,

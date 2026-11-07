@@ -4,6 +4,7 @@
 
 """A conferência dos .ini a cada play: aplica o idioma e o nome antes de o jogo abrir."""
 
+import threading
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -39,12 +40,17 @@ class _ThreadNaHora:
         self._alvo()
 
 
+def _threading(thread) -> SimpleNamespace:
+    """O módulo `threading` do `jogo` com a `Thread` trocada; o `Jogo.__del__` ainda pergunta em que thread está."""
+    return SimpleNamespace(Thread=thread, current_thread=threading.current_thread, main_thread=threading.main_thread)
+
+
 @pytest.fixture
 def play(monkeypatch, schema):
     schema.set_string("nome-do-jogador", "Fulano")
     executados, fila = [], []
     monkeypatch.setattr(modulo, "run_executable", lambda *a: executados.append(a))
-    monkeypatch.setattr(modulo, "threading", SimpleNamespace(Thread=_ThreadNaHora))
+    monkeypatch.setattr(modulo, "threading", _threading(_ThreadNaHora))
     monkeypatch.setattr(modulo, "na_thread_principal", lambda f, *a: fila.append((f, a)))
     monkeypatch.setattr(Jogo, "save", lambda self: None)
     monkeypatch.setattr(varredura, "_despachar", lambda jogos: None)  # sem refresh de metadados nem ligação
@@ -135,7 +141,7 @@ def test_duplo_clique_durante_a_conferencia_lanca_uma_vez(play, tmp_path, monkey
     executados, fila, soltar = play
     jogo = _jogo(_pasta(tmp_path))
     threads = []
-    monkeypatch.setattr(modulo, "threading", SimpleNamespace(Thread=lambda target, **_k: threads.append(target) or _ThreadNaHora(target)))
+    monkeypatch.setattr(modulo, "threading", _threading(lambda target, **_k: threads.append(target) or _ThreadNaHora(target)))
 
     assert jogo.launch() is False
     assert jogo.launch() is False
