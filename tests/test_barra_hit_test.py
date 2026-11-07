@@ -27,11 +27,12 @@ _SCRIPT = r"""
 import builtins, ctypes, json, sys
 from pathlib import Path
 builtins._ = lambda m: m
-from PySide6.QtCore import QEventLoop, QObject, QPoint, QPointF, QTimer, QUrl
+from PySide6.QtCore import QEventLoop, QMetaObject, QObject, QPoint, QPointF, QTimer, QUrl
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtQml import QQmlApplicationEngine
 from kyron.janela import qwk
 from kyron.modelos.provedor_de_icones import ProvedorDeIcones
+from kyron.utils.ajustes_do_windows import FiltroDeAjustes
 
 app = QGuiApplication(sys.argv)
 motor = QQmlApplicationEngine()
@@ -81,15 +82,34 @@ saida["trancada"] = medir()
 janela.setProperty("barraTrancada", False)
 girar()
 saida["de_novo"] = medir()
+
+filtro = FiltroDeAjustes(lambda: None)
+app.installNativeEventFilter(filtro)
+menu, fixo = janela.findChild(QObject, "menuTeste"), janela.findChild(QObject, "fixoTeste")
+QMetaObject.invokeMethod(menu, "open")
+QMetaObject.invokeMethod(fixo, "open")
+girar()
+abertos = [menu.property("opened"), fixo.property("opened")]
+user32.PostMessageW.argtypes = [ctypes.c_void_p, ctypes.c_uint, ctypes.c_size_t, ctypes.c_ssize_t]
+p = janela.mapToGlobal(QPoint(janela.width() // 2, 23))
+coordenadas = (p.y() & 0xFFFF) << 16 | (p.x() & 0xFFFF)
+user32.PostMessageW(hwnd, 0x00A1, 2, coordenadas)  # WM_NCLBUTTONDOWN em HTCAPTION
+user32.PostMessageW(hwnd, 0x00A2, 2, coordenadas)
+girar(500)
+saida["menus"] = {"abertos": abertos, "menu": menu.property("visible"), "fixo": fixo.property("visible")}
+app.removeNativeEventFilter(filtro)
 print("RESULTADO" + json.dumps(saida))
 janela.close()
 """
 
 _QML = """
 import QtQuick
+import QtQuick.Controls
 import "file:///{qml}"
 Principal {{
     inicio: [ BotaoDaBarra {{ icone: "list-add" }} ]
+    Popup {{ objectName: "menuTeste"; width: 50; height: 50; closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside; enter: null; exit: null }}
+    Popup {{ objectName: "fixoTeste"; width: 50; height: 50; closePolicy: Popup.NoAutoClose; enter: null; exit: null }}
 }}
 """
 
@@ -132,3 +152,11 @@ def test_com_modal_a_barra_inteira_e_area_de_cliente(medidas):
 
 def test_ao_fechar_o_modal_a_barra_volta(medidas):
     assert medidas["de_novo"] == medidas["livre"]
+
+
+def test_clique_na_barra_fecha_o_menu_aberto(medidas):
+    """O clique em HTCAPTION não vira evento de mouse do Qt: sem o filtro, o menu ficaria aberto. Um popup sem fechamento automático fica."""
+    menus = medidas["menus"]
+    assert menus["abertos"] == [True, True]
+    assert menus["menu"] is False
+    assert menus["fixo"] is True

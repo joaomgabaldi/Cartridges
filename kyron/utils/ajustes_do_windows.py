@@ -14,12 +14,16 @@ import winreg
 from collections.abc import Callable
 from ctypes import wintypes
 
-from PySide6.QtCore import QAbstractNativeEventFilter, QCoreApplication
+from PySide6.QtCore import QAbstractNativeEventFilter, QCoreApplication, QMetaObject
 from PySide6.QtGui import QColor, QGuiApplication, QPalette
+from PySide6.QtQml import QQmlEngine, QQmlExpression
+from PySide6.QtQuick import QQuickWindow
 
 from kyron.utils.thread_principal import na_thread_principal
 
 _WM_SETTINGCHANGE = 0x001A
+_CLIQUES_NA_MOLDURA = {0x00A1, 0x00A4}  # WM_NCLBUTTONDOWN, WM_NCRBUTTONDOWN
+_FECHA_COM_CLIQUE_FORA = 0x1 | 0x2  # Popup.CloseOnPressOutside | Popup.CloseOnPressOutsideParent
 _GENERICA = b"windows_generic_MSG"
 
 
@@ -55,21 +59,51 @@ def e_mudanca_de_ajuste(tipo, mensagem) -> bool:  # noqa: ANN001
     return wintypes.MSG.from_address(endereco).message == _WM_SETTINGCHANGE
 
 
+def janela_clicada_na_moldura(tipo, mensagem) -> int | None:  # noqa: ANN001
+    """O `HWND` de um clique na moldura (a barra responde `HTCAPTION`: esse clique nunca vira evento de mouse do Qt)."""
+    if bytes(tipo) != _GENERICA or not (endereco := int(mensagem)):
+        return None
+    msg = wintypes.MSG.from_address(endereco)
+    return msg.hWnd if msg.message in _CLIQUES_NA_MOLDURA else None
+
+
+def fechar_menus_da_janela(hwnd: int) -> None:
+    """Fecha o que fecharia com um clique fora: os popups abertos ficam no `Overlay` da janela, cada um como pai do seu item."""
+    try:
+        for janela in QGuiApplication.topLevelWindows():
+            if isinstance(janela, QQuickWindow) and janela.isVisible() and int(janela.winId()) == hwnd:
+                for overlay in janela.contentItem().childItems():
+                    if overlay.inherits("QQuickOverlay"):
+                        for item in overlay.childItems():
+                            popup = item.parent()
+                            # Sem contexto, o construtor do `QQmlExpression` derruba o processo em vez de levantar.
+                            if popup is not None and popup.inherits("QQuickPopup") and (contexto := QQmlEngine.contextForObject(popup)) is not None:
+                                # Pela expressão: o PySide não converte o `QFlags` de `property("closePolicy")`.
+                                politica, _indefinida = QQmlExpression(contexto, popup, "closePolicy").evaluate()
+                                if politica & _FECHA_COM_CLIQUE_FORA:
+                                    QMetaObject.invokeMethod(popup, "close")
+    except Exception:  # noqa: BLE001  # fora do filtro: subiria ao diálogo de erro inesperado, e fechar um menu não justifica isso
+        logging.warning("Falha ao fechar os menus da janela", exc_info=True)
+
+
 class FiltroDeAjustes(QAbstractNativeEventFilter):
-    """A cada `WM_SETTINGCHANGE`, chama ``ao_mudar`` pela thread principal.
+    """A cada `WM_SETTINGCHANGE`, chama ``ao_mudar`` pela thread principal; a cada clique na moldura, fecha os menus da janela.
 
     Roda no procedimento da janela, em toda mensagem nativa: nunca consome nenhuma nem levanta.
     Várias janelas recebem a mesma mudança: quem relê só avisa se o valor mudou.
     """
 
-    def __init__(self, ao_mudar: Callable[[], None]) -> None:
+    def __init__(self, ao_mudar: Callable[[], None], ao_clicar_na_moldura: Callable[[int], None] = fechar_menus_da_janela) -> None:
         super().__init__()
         self._ao_mudar = ao_mudar
+        self._ao_clicar_na_moldura = ao_clicar_na_moldura
 
     def nativeEventFilter(self, tipo, mensagem) -> tuple[bool, int]:  # noqa: N802, ANN001
         try:
             if e_mudanca_de_ajuste(tipo, mensagem):
                 na_thread_principal(self._ao_mudar)
+            elif (hwnd := janela_clicada_na_moldura(tipo, mensagem)) is not None:
+                na_thread_principal(self._ao_clicar_na_moldura, hwnd)  # fora do filtro: o Windows ainda vai começar o arrasto
         except Exception:  # noqa: BLE001
             logging.warning("Falha ao ler uma mensagem do Windows", exc_info=True)
         return False, 0
