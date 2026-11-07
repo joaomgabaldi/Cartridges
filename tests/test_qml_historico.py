@@ -694,10 +694,11 @@ def sair(como):
         p = x.mapToScene(x.boundingRect().center()).toPoint()
         QTest.mouseClick(j, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, QPoint(p.x(), p.y()))
     amostras, inicio = [], time.monotonic()
+    # Amostra antes de esperar: com a CPU disputada (suíte em paralelo), um só qWait pode durar a saída inteira.
     while d.property("visible") and time.monotonic() - inicio < 3:
-        QTest.qWait(1)
-        if d.property("visible") and cartao.property("opacity") > 0:  # à vista: é o que a pessoa vê durante a saída
+        if cartao.property("opacity") > 0:  # à vista: é o que a pessoa vê durante a saída
             amostras.append(barato())
+        QTest.qWait(1)
     assert not app_.historico.aberto
     if como == "x":  # a primeira rodada aquece o renderizador (o primeiro quadro leva quase 1 s)
         assert amostras, "a saída tem de durar alguns quadros"
