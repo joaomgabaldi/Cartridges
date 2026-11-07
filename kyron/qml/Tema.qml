@@ -53,7 +53,9 @@ QtObject {
     readonly property color menuPressionado: mistura(0.19)
     readonly property color destrutivo: escuro ? "#c01c28" : "#e01b24"
     readonly property color destrutivoTexto: derivada(destrutivo)
-    readonly property color avisoIcone: derivada(escuro ? "#cd9309" : "#e5a50a")
+    // Propriedade `color`, e não texto: a `derivada` lê `.r .g .b`, e de um texto sairia preto.
+    readonly property color avisoBase: escuro ? "#cd9309" : "#e5a50a"
+    readonly property color avisoIcone: derivada(avisoBase)
     readonly property color erro: escuro ? "#ff938c" : "#c30000"
     readonly property color cartao: escuro ? Qt.rgba(1, 1, 1, 0.08) : "#ffffff"
     readonly property color sombraDoCartao: escuro ? Qt.rgba(0, 0, 6 / 255, 0.36) : Qt.rgba(0, 0, 6 / 255, 0.07)
