@@ -1204,6 +1204,22 @@ def test_poucos_jogos_ficam_a_esquerda_da_grade(app_qt):
     app.fechar()
 
 
+def test_ao_alargar_a_janela_a_grade_lembra_as_colunas_de_antes(app_qt):
+    """Ao maximizar, as capas criadas pela troca de colunas partem de onde estariam com as colunas de antes.
+
+    A suíte roda sem animações (o `--sem-animacao-de-dialogo`): o deslize em si foi conferido com elas ligadas."""
+    app = _App(_jogos(*((n, f"Jogo {n:02}", {}) for n in range(1, 41))))
+    app.janela.resize(500, 800)
+    app.janela.show()
+    grade = app.achar("grade")
+    assert _esperar(lambda: grade.property("colunas") == 2)
+    assert _esperar(lambda: grade.property("refazendo") is False)  # a marca da troca dura só o deslize
+    app.janela.resize(1400, 800)
+    assert _esperar(lambda: grade.property("colunas") > 2)
+    assert grade.property("refazendo") is True
+    assert grade.property("colunasAnteriores") == 2
+    app.fechar()
+
 def test_a_volta_pelo_teclado_acende_o_anel_e_espera_o_proximo_hover(app_qt):
     """O hover em si o offscreen não produz: o reenvio com o mouse parado foi conferido em janela real."""
     from PySide6.QtCore import QMetaObject  # noqa: PLC0415

@@ -13,7 +13,7 @@ GridView {
     // a cópia.
     property real contentYParado: 0
     onContentYChanged: assentarRolagem.restart()
-    Component.onCompleted: contentYParado = contentY
+    Component.onCompleted: { contentYParado = contentY; _colunasVistas = width > 0 ? colunas : 0 }
     Timer {
         id: assentarRolagem
         interval: 200
@@ -91,6 +91,17 @@ GridView {
             grade._ultimoPonteiro = p
         }
     }
+
+    // As capas que só passam a existir quando a grade refaz as colunas (as de baixo, ao maximizar) partem de onde
+    // estariam com as colunas de antes, para todas deslizarem juntas.
+    property int colunasAnteriores: 0
+    property int _colunasVistas: 0
+    property bool refazendo: false
+    onColunasChanged: {
+        if (_colunasVistas > 0 && count > 0) { colunasAnteriores = _colunasVistas; refazendo = true; fimDoRefazer.restart() }
+        _colunasVistas = width > 0 ? colunas : 0
+    }
+    Timer { id: fimDoRefazer; interval: 150; onTriggered: grade.refazendo = false }
 
     property bool contagemMudou: false
     onCountChanged: { contagemMudou = true; fimDaContagem.restart() }
@@ -185,6 +196,10 @@ GridView {
         readonly property real desvioY: baseY * restante
         function reposicionar() {
             if (!grade) return
+            if (isNaN(xAnterior) && grade.refazendo) {
+                xAnterior = x + (index % grade.colunasAnteriores - index % grade.colunas) * grade.cellWidth
+                yAnterior = y + (Math.floor(index / grade.colunasAnteriores) - Math.floor(index / grade.colunas)) * grade.cellHeight
+            }
             if (!isNaN(xAnterior) && Tema.animacoes && !grade.contagemMudou && (x !== xAnterior || y !== yAnterior)) {
                 baseX = xAnterior - x + desvioX
                 baseY = yAnterior - y + desvioY

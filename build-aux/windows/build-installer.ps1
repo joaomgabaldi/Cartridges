@@ -2,7 +2,7 @@
 #
 # Monta o app no canal final e empacota com o Inno Setup, fora da CI (teste rápido).
 # Chamado pelo build-installer.bat na raiz do projeto (dois cliques).
-# Não abre nada no fim: a pasta montada e o instalador usam os dados reais.
+# No fim, abre o instalador gerado (ele usa os dados reais).
 
 $ErrorActionPreference = 'Stop'
 
@@ -34,3 +34,4 @@ $info = Get-Item $exe
 Etapa 'Pronto'
 Write-Host ("  {0}" -f $info.FullName)
 Write-Host ("  {0} MB - versão {1}" -f [math]::Round($info.Length/1MB,1), $info.VersionInfo.ProductVersion.Trim())
+Start-Process $exe
