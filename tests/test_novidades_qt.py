@@ -51,6 +51,23 @@ def _sem_navegador(monkeypatch):
     return abertos
 
 
+@pytest.fixture(autouse=True)
+def elamigos(monkeypatch):
+    """A página do ElAmigos falsa: `elamigos.posts` (ou `elamigos.erro`). Sem rede em nenhum teste."""
+
+    class Pagina:
+        posts = []
+        erro = None
+
+    def falso():
+        if Pagina.erro is not None:
+            raise Pagina.erro
+        return list(Pagina.posts)
+
+    monkeypatch.setattr(news_checker, "fetch_elamigos", falso)
+    return Pagina
+
+
 @pytest.fixture
 def feed(monkeypatch):
     """O `fetch_news` falso: `feed.posts` é o que a próxima busca devolve (ou `feed.erro`, que ela levanta)."""
@@ -129,6 +146,39 @@ def test_post_novo_acende_o_selo_e_abrir_apaga(app_qt, feed):
     novidades.abrir()
     assert novidades.naoVistas is False
     assert shared.state_schema.get_int64(_ULTIMA) == 200
+
+
+def test_as_duas_fontes_entram_juntas_do_mais_novo(app_qt, feed, elamigos):
+    feed.posts = [post(300), post(100)]
+    elamigos.posts = [post(200)]
+    novidades, _ = _tela()
+
+    _buscar(novidades, feed)
+
+    assert [p.timestamp for p in novidades._checker.posts] == [300, 200, 100]  # noqa: SLF001
+
+
+def test_uma_fonte_caida_nao_esconde_a_outra(app_qt, feed, elamigos):
+    feed.erro = requests.ConnectionError("fora do ar")
+    elamigos.posts = [post(200)]
+    novidades, _ = _tela()
+    resultados = []
+    novidades._checker.buscaTerminou.connect(resultados.append)  # noqa: SLF001
+
+    _buscar(novidades, feed)
+
+    assert [p.timestamp for p in novidades._checker.posts] == [200]  # noqa: SLF001
+    assert resultados == [True]
+
+
+def test_defeito_de_leitura_numa_fonte_nao_derruba_a_outra(app_qt, feed, elamigos):
+    feed.posts = [post(300)]
+    elamigos.erro = TypeError("página quebrada")
+    novidades, _ = _tela()
+
+    _buscar(novidades, feed)
+
+    assert [p.timestamp for p in novidades._checker.posts] == [300]  # noqa: SLF001
 
 
 def test_posts_iguais_nao_refazem_a_lista(app_qt, feed):

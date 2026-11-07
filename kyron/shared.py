@@ -26,7 +26,7 @@ from kyron.configuracoes import Configuracoes
 
 
 APP_ID = "io.github.joaomgabaldi.Cartridges"
-VERSION = "2.0.0"
+VERSION = "2.1.0"
 PREFIX = "/io/github/joaomgabaldi/Cartridges"
 # Versão do spec do game_id.json. NÃO incrementada para os campos do HowLongToBeat: são adições anuláveis que uma versão
 # antiga ignora, e um incremento faria `Store.add_game` rejeitar todo arquivo e esconder a biblioteca num downgrade.

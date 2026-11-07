@@ -17,7 +17,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Vigia o feed do repack atrás de posts legíveis e acende o selo do botão Novidades.
+"""Vigia o feed da FitGirl e a página do ElAmigos atrás de posts legíveis e acende o selo do botão Novidades.
 
 A thread de trabalho só faz a rede; o que toca a tela volta à principal. O checker guarda os posts buscados.
 `news-last-seen-ts` guarda a data do post mais novo já visto; o selo acende quando o feed traz algo mais novo,
@@ -32,6 +32,7 @@ import requests
 from PySide6.QtCore import QObject, QTimer, Signal
 
 from kyron import shared
+from kyron.utils.elamigos_feed import fetch_elamigos
 from kyron.utils.news_feed import NewsPost, fetch_news
 from kyron.utils.thread_principal import na_thread_principal
 
@@ -100,12 +101,24 @@ class NewsChecker(QObject):
     def _poll_thread(self) -> None:
         posts: Optional[list[NewsPost]] = None
         try:
-            posts = fetch_news()
-        except requests.RequestException as error:
-            # Busca que falha não é evento: o cache fica e o selo não muda.
-            logging.info("Repack news feed poll failed: %s", error)
+            # Cada fonte falha sozinha: a outra ainda aparece. Só as duas caídas contam como falha.
+            for fetch in (fetch_news, fetch_elamigos):
+                try:
+                    fetched = fetch()
+                except requests.RequestException as error:
+                    # Busca que falha não é evento: o cache fica e o selo não muda.
+                    logging.info("News source poll failed: %s", error)
+                    continue
+                except Exception:  # pylint: disable=broad-exception-caught
+                    # Defeito de leitura numa fonte não derruba a outra.
+                    logging.warning("Unexpected error polling a news source", exc_info=True)
+                    continue
+                posts = (posts or []) + fetched
+            if posts:
+                posts.sort(key=lambda post: post.timestamp, reverse=True)
         except Exception:  # pylint: disable=broad-exception-caught
-            logging.warning("Unexpected error polling repack news feed", exc_info=True)
+            logging.warning("Unexpected error polling news sources", exc_info=True)
+            posts = None
         finally:
             na_thread_principal(self._apply, posts)
 
