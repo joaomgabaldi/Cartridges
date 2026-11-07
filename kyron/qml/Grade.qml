@@ -107,6 +107,27 @@ GridView {
     onCountChanged: { contagemMudou = true; fimDaContagem.restart() }
     Timer { id: fimDaContagem; interval: 150; onTriggered: grade.contagemMudou = false }
 
+    // A busca e os filtros: as capas que saem esmaecem, as que entram surgem e as que ficam deslizam até o novo lugar.
+    property bool filtrando: false
+    Connections {
+        target: grade.biblioteca
+        ignoreUnknownSignals: true
+        function onFiltrou() { grade.filtrando = true; fimDoFiltro.restart() }
+    }
+    Timer { id: fimDoFiltro; interval: 150; onTriggered: grade.filtrando = false }
+    add: Transition {
+        objectName: "entradaDaCapa"
+        enabled: Tema.animacoes && grade.filtrando
+        NumberAnimation { property: "opacity"; from: 0; to: 1; duration: 200; easing.type: Easing.OutCubic }
+        NumberAnimation { property: "scale"; from: 0.92; to: 1; duration: 200; easing.type: Easing.OutCubic }
+    }
+    remove: Transition {
+        objectName: "saidaDaCapa"
+        enabled: Tema.animacoes && grade.filtrando
+        NumberAnimation { property: "opacity"; to: 0; duration: 150; easing.type: Easing.InCubic }
+        NumberAnimation { property: "scale"; to: 0.92; duration: 150; easing.type: Easing.InCubic }
+    }
+
     function abrirDoAtual() {
         if (currentItem) grade.abrirDetalhes(currentItem.jogoId)
     }
@@ -200,7 +221,7 @@ GridView {
                 xAnterior = x + (index % grade.colunasAnteriores - index % grade.colunas) * grade.cellWidth
                 yAnterior = y + (Math.floor(index / grade.colunasAnteriores) - Math.floor(index / grade.colunas)) * grade.cellHeight
             }
-            if (!isNaN(xAnterior) && Tema.animacoes && !grade.contagemMudou && (x !== xAnterior || y !== yAnterior)) {
+            if (!isNaN(xAnterior) && Tema.animacoes && (!grade.contagemMudou || grade.filtrando) && (x !== xAnterior || y !== yAnterior)) {
                 baseX = xAnterior - x + desvioX
                 baseY = yAnterior - y + desvioY
                 tau = 0

@@ -309,6 +309,7 @@ class FiltroDaPagina(QSortFilterProxyModel):
     buscaChanged = Signal()  # noqa: N815
     vaziaChanged = Signal()  # noqa: N815
     semResultadosChanged = Signal()  # noqa: N815
+    filtrou = Signal()
 
     def __init__(
         self,
@@ -339,6 +340,7 @@ class FiltroDaPagina(QSortFilterProxyModel):
         self._reavaliar()
 
     def _refiltrar(self) -> None:
+        self.filtrou.emit()  # antes das linhas mudarem: a grade anima o que entra e sai
         self.beginFilterChange()  # invalidateFilter() está obsoleto desde o Qt 6.10
         self.endFilterChange()
 

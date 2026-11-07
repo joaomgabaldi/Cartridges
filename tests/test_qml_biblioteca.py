@@ -81,6 +81,22 @@ def test_a_grade_cria_os_cartoes(app_qt):
     app.fechar()
 
 
+def test_buscar_marca_o_filtro_e_as_transicoes_seguem_o_tema(app_qt):
+    """A busca deixa as capas que ficam deslizarem; entrar e sair esmaecendo só com animações (a suíte roda sem).
+
+    O efeito em si foi conferido em janela real, com as animações ligadas."""
+    app = _App(_tres())
+    grade = app.achar("grade")
+    for nome in ("entradaDaCapa", "saidaDaCapa"):
+        assert app.achar(nome).property("enabled") is False
+    assert grade.property("filtrando") is False
+    app.todos.busca = "alfa"
+    assert grade.property("filtrando") is True
+    assert grade.property("count") == 1
+    assert _esperar(lambda: grade.property("filtrando") is False)
+    app.fechar()
+
+
 def test_menu_ordenar_tem_os_dez_itens(app_qt):
     app = _App(_tres())
     menu = app.achar("menuPrincipal")
