@@ -1459,6 +1459,23 @@ def test_nome_do_jogador_grava_e_o_invalido_nao(app):
     assert campo.property("erro") is False
 
 
+def test_nome_do_jogador_salvo_aparece_ao_abrir(app):
+    """O campo é criado com o app, antes de `valores` existir: tem de ler o nome a cada abertura."""
+    shared.schema["nome-do-jogador"] = "Ana"
+    _abrir(app)
+    campo = app.achar("campoDoNomeDoJogador")
+    assert campo.property("text") == "Ana"
+    app.preferencias.fechar()
+    shared.schema["nome-do-jogador"] = "Bia"
+    _abrir(app)
+    assert campo.property("text") == "Bia"
+    _digitar(campo, "Carl")
+    shared.schema["cover-autoplay"] = not shared.schema.get_boolean("cover-autoplay")
+    assert campo.property("text") == "Carl"  # outra preferência gravada não apaga o que se digita
+    shared.schema["cover-autoplay"] = not shared.schema.get_boolean("cover-autoplay")
+    shared.schema["nome-do-jogador"] = ""
+
+
 def test_idioma_dos_jogos_grava_o_codigo(app):
     shared.schema["idioma-do-jogador"] = ""
     _abrir(app)

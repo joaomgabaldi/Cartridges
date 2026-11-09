@@ -58,9 +58,12 @@ Column {
             titulo: "Nome do jogador"
             subtitulo: erro ? "Use até 32 caracteres, sem acentos nem símbolos especiais." : "Até 32 caracteres, sem acentos."
             erro: !preferencias.nomeDoJogadorValido(text)
-            // Lido uma vez: com a ligação, o espaço digitado sumiria antes da letra seguinte.
-            Component.onCompleted: text = preferencias.valores["nome-do-jogador"] || ""
             onTerminado: preferencias.definirTexto("nome-do-jogador", text)
+            // Lido a cada abertura, sem ligação: com ela, o espaço digitado sumiria antes da letra seguinte.
+            // A página nasce com o app, antes de `valores` existir; ler só no `onCompleted` deixava o campo vazio.
+            // Propriedade QML, e não o `alterado` do modelo: ela só avisa na troca, não a cada preferência gravada.
+            readonly property bool dialogoAberto: preferencias.aberto
+            onDialogoAbertoChanged: if (dialogoAberto) text = preferencias.valores["nome-do-jogador"] || ""
         }
         LinhaDeEscolha {
             buscavel: true
