@@ -57,6 +57,7 @@ LinhaDoGrupo {
             leftPadding: 0
             rightPadding: 0
             selectByMouse: true
+            ContextMenu.menu: MenuDeTexto { campo: campo }
             placeholderText: linha._rotuloEmCima ? linha.exemplo : ""
             placeholderTextColor: Tema.textoSecundario
             color: linha.erro ? Tema.destrutivoTexto : Tema.texto

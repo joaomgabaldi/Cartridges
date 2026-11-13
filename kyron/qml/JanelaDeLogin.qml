@@ -99,6 +99,7 @@ MolduraDoDialogo {
                     enabled: janela.login !== null && !janela.login.ocupada
                     wrapMode: TextArea.Wrap
                     selectByMouse: true
+                    ContextMenu.menu: MenuDeTexto { campo: campoDeVariasLinhas }
                     padding: 6
                     color: Tema.texto
                     selectionColor: Qt.alpha(Tema.destaque, 0.25)

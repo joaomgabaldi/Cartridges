@@ -34,6 +34,7 @@
           <li>A página de Novidades agora também mostra os lançamentos e as atualizações do ElAmigos.</li>
           <li>Ao abrir e fechar o Big Picture, as capas agora passam com o som de um baralho sendo embaralhado.</li>
           <li>O nome do jogador agora aparece corretamente em Preferências sempre que o aplicativo é aberto.</li>
+          <li>O menu do botão direito nos campos de texto agora está em português e segue o visual do aplicativo.</li>
         </ul>
       </description>
     </release>

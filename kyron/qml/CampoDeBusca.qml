@@ -9,6 +9,7 @@ TextField {
     selectionColor: Qt.alpha(Tema.destaque, 0.25)
     selectedTextColor: Tema.texto
     selectByMouse: true
+    ContextMenu.menu: MenuDeTexto { campo: campo }
     font { family: Tema.fonte; pixelSize: Tema.corpo }
     verticalAlignment: TextInput.AlignVCenter
     implicitHeight: 34

@@ -120,6 +120,7 @@ Item {
             width: Math.min(500, parent.width - 12)
             height: 34
             placeholderText: "Buscar"
+            ContextMenu.menu: MenuDeTexto { campo: campo }
             placeholderTextColor: Tema.textoSecundario
             color: Tema.texto
             selectionColor: Tema.destaque

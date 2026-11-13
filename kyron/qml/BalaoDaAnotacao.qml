@@ -60,6 +60,7 @@ Popup {
                 id: campo
                 objectName: "campoDaAnotacao"
                 readOnly: !raiz.editavel
+                ContextMenu.menu: MenuDeTexto { campo: campo }
                 wrapMode: TextEdit.Wrap
                 textFormat: TextEdit.PlainText
                 padding: 4

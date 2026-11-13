@@ -447,3 +447,57 @@ def test_campo_fora_de_foco_mostra_o_comeco_do_texto(app_qt):
     campo = next(f for f in linha.findChildren(QObject) if f.metaObject().className().startswith("TextField"))
     assert campo.property("cursorPosition") == 0
     linha.deleteLater()
+
+
+_MENU_DE_TEXTO = """
+import QtQuick
+import QtQuick.Controls.Basic
+import "file:///%s"
+Window {
+    width: 400
+    height: 400
+    visible: true
+    LinhaDeTexto { objectName: "normal"; y: 0; width: 300; text: "abc" }
+    LinhaDeTexto { objectName: "senha"; y: 100; width: 300; text: "abc"; echoMode: TextInput.Password }
+    TextArea {
+        id: area
+        objectName: "leitura"
+        y: 200; width: 300; height: 60
+        text: "abc"
+        readOnly: true
+        ContextMenu.menu: MenuDeTexto { campo: area }
+    }
+}
+"""
+
+
+@pytest.mark.parametrize(
+    ("nome", "copiar", "editar"), [("normal", True, True), ("senha", False, True), ("leitura", True, False)]
+)
+def test_botao_direito_abre_o_menu_do_kyron(app_qt, nome, copiar, editar):
+    """O botão direito abre o menu em português; a senha não sai do campo e o somente leitura não muda."""
+    motor = QQmlEngine()
+    motor.addImageProvider("icone", ProvedorDeIcones())
+    componente = QQmlComponent(motor)
+    componente.setData((_MENU_DE_TEXTO % QML.as_posix()).encode("utf-8"), QUrl("file:///menu_de_texto.qml"))
+    raiz = componente.create()
+    assert raiz is not None, componente.errorString()
+    raiz.requestActivate()
+    assert _esperar(lambda: raiz.isExposed())
+    linha = _achar(raiz.contentItem(), nome)
+    campo = linha if nome == "leitura" else next(
+        f for f in linha.findChildren(QObject) if f.metaObject().className().startswith("TextField")
+    )
+    QMetaObject.invokeMethod(campo, "selectAll")
+    centro = campo.mapToScene(QPointF(campo.width() / 2, campo.height() / 2)).toPoint()
+    QTest.mouseClick(raiz, Qt.MouseButton.RightButton, pos=centro)
+    assert _esperar(lambda: _achar(raiz.contentItem(), "selecionarTudo") is not None)
+    rotulos = {n: _achar(raiz.contentItem(), n) for n in ("recortar", "copiar", "colar", "selecionarTudo")}
+    assert [i.property("text") for i in rotulos.values()] == ["Recortar", "Copiar", "Colar", "Selecionar tudo"]
+    assert rotulos["copiar"].property("enabled") is copiar
+    assert rotulos["recortar"].property("enabled") is (copiar and editar)
+    if not editar:
+        assert rotulos["colar"].property("enabled") is False
+    assert rotulos["selecionarTudo"].property("enabled") is True
+    raiz.close()
+    raiz.deleteLater()
