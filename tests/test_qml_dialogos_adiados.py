@@ -70,9 +70,15 @@ def _foco_dentro_de(app, nome):
 
 
 def test_antes_da_cortina_os_dialogos_nao_existem_e_depois_sim(app, cortina):
-    assert not any(_existe(app, nome) for nome in NOMES)
+    antes = [_existe(app, nome) for nome in NOMES]
+    assert not any(antes), f"já existiam antes de revelar: {antes}"
     cortina.revelar()
-    assert _esperar(lambda: all(_existe(app, nome) for nome in NOMES))
+    # A mensagem diz o que faltou: o teste falhou uma vez em nove rodadas da suíte em paralelo, sem deixar a causa (docs/TODO.md).
+    assert _esperar(lambda: all(_existe(app, nome) for nome in NOMES)), "existem=%s status=%s controlador=%s" % (
+        [_existe(app, nome) for nome in NOMES],
+        [_status(app, c) for c in ("carregadorDasPreferencias", "carregadorDaEdicao", "carregadorDoSobre")],
+        app.motor.incubationController(),
+    )
 
 
 def test_pedir_as_preferencias_antes_cria_na_hora_com_o_foco_dentro(app):
