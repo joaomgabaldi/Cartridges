@@ -13,6 +13,8 @@ Rectangle {
     required property bool zerado
     required property bool carregando
     property string capaAnimada: ""
+    // A capa já reduzida ao tamanho da grade (`miniaturas.py`); vazia, ou ilegível, a imagem usa a `capa`.
+    property string miniatura: ""
     property bool naVista: true
     property bool tocarSempre: false
     property bool temAtualizacao: false
@@ -137,11 +139,18 @@ Rectangle {
             id: imagem
             objectName: "capaParada"
             property string ilegivel: ""
+            property string miniaturaIlegivel: ""
             // Para a `CortinaDaAbertura` (Python), que não lê o enum do `status`.
             readonly property bool carregandoArquivo: status === Image.Loading
             anchors.fill: parent
-            source: cartao.capa !== "" && cartao.capa !== ilegivel ? cartao.capa : (cartao.modelo ? cartao.modelo.placeholder : "")
-            onStatusChanged: if (status === Image.Error && source.toString() === cartao.capa) ilegivel = cartao.capa
+            source: cartao.miniatura !== "" && cartao.miniatura !== miniaturaIlegivel ? cartao.miniatura
+                : cartao.capa !== "" && cartao.capa !== ilegivel ? cartao.capa : (cartao.modelo ? cartao.modelo.placeholder : "")
+            onStatusChanged: {
+                if (status !== Image.Error) return
+                const atual = source.toString()
+                if (atual === cartao.miniatura) miniaturaIlegivel = cartao.miniatura
+                else if (atual === cartao.capa) ilegivel = cartao.capa
+            }
             fillMode: Image.Stretch
             asynchronous: true
             sourceSize: Qt.size(cartao.larguraDaCapa * Screen.devicePixelRatio,

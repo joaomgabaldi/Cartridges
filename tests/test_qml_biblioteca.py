@@ -4,6 +4,7 @@
 
 """As páginas da biblioteca e de Jogos Zerados (QML offscreen, sem a ponte do QWindowKit)."""
 
+import os
 import time
 from pathlib import Path
 
@@ -473,6 +474,55 @@ def test_origem_ilegivel_mostra_a_capa_padrao(app_qt):
     app.fechar()
 
 
+def _capa_com_miniatura(corrompida):
+    """Uma capa PNG legível (`.tiff` no nome) e a miniatura dela, boa ou quebrada."""
+    from PySide6.QtGui import QImage
+
+    from kyron.utils import miniaturas
+
+    capa = shared.covers_dir / "imported_1.tiff"
+    imagem = QImage(40, 60, QImage.Format.Format_RGB32)
+    imagem.fill(0xFF2020)
+    assert imagem.save(str(capa), "PNG")
+    destino = miniaturas.caminho_para("imported_1")
+    assert miniaturas.gerar(capa, destino)
+    if corrompida:
+        destino.write_bytes(b"nao e uma imagem")
+    return capa
+
+
+def test_cartao_carrega_a_miniatura_quando_ha(app_qt):
+    _capa_com_miniatura(corrompida=False)
+    app = _App(_jogos((1, "Alfa", {})))
+    cartao, _animada = _cartao_animado(app)
+    parada = _achar(cartao, "capaParada")
+    assert cartao.property("miniatura").startswith("file:///") and cartao.property("miniatura").endswith(tuple("0123456789"))
+    assert _esperar(lambda: parada.property("carregandoArquivo") is False and parada.property("source").toString() == cartao.property("miniatura"))
+    app.fechar()
+
+
+def test_miniatura_ilegivel_cai_na_capa(app_qt):
+    _capa_com_miniatura(corrompida=True)
+    app = _App(_jogos((1, "Alfa", {})))
+    cartao, _animada = _cartao_animado(app)
+    parada = _achar(cartao, "capaParada")
+    assert cartao.property("miniatura") != ""
+    assert _esperar(lambda: parada.property("source").toString() == cartao.property("capa") and parada.property("carregandoArquivo") is False)
+    app.fechar()
+
+
+def test_miniatura_e_capa_ilegiveis_caem_no_placeholder(app_qt):
+    capa = _capa_com_miniatura(corrompida=True)
+    capa.write_bytes(b"nao e uma imagem")
+    os.utime(capa, ns=(10**9, 10**9))  # mais velha que a miniatura, que então continua valendo
+    app = _App(_jogos((1, "Alfa", {})))
+    cartao, _animada = _cartao_animado(app)
+    parada = _achar(cartao, "capaParada")
+    assert cartao.property("miniatura") != ""
+    assert _esperar(lambda: parada.property("source").toString().endswith("library_placeholder.svg"))
+    app.fechar()
+
+
 def test_deve_tocar(app_qt, monkeypatch):
     """Opção, animações do Windows e sessão têm teste próprio; aqui, a janela minimizada para a capa e a devolve."""
     monkeypatch.setattr(aplicativo_modulo, "_animacoes_do_sistema", lambda: True)
@@ -734,8 +784,9 @@ def test_copia_animada_corrompida_deixa_a_capa_parada_visivel(app_qt, monkeypatc
     assert not _esperar(lambda: animada.property("visible"), limite=3.0)
     # A cópia não foi refeita e a capa parada é a capa real, não o espaço vazio.
     assert copia.read_bytes() == LIXO
-    assert parada.property("source").toString() == cartao.property("capa") != ""
-    assert parada.property("source").toString().split("?")[0].endswith(capa.name)
+    # (a miniatura pronta no meio do teste vale como a capa: é a mesma imagem reduzida)
+    assert parada.property("source").toString() in (cartao.property("capa"), cartao.property("miniatura"))
+    assert parada.property("source").toString().split("?")[0].endswith((capa.name, "imported_1-200x300.png"))
     copias_animadas.soltar("imported_1")
     shared.schema.reset("cover-autoplay")
     app.fechar()

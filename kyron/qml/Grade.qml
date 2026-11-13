@@ -207,6 +207,7 @@ GridView {
         required property bool zerado
         required property bool carregando
         required property string capaAnimada
+        required property string miniatura
         required property bool temAtualizacao
         id: celula
         width: grade.cellWidth
@@ -259,6 +260,7 @@ GridView {
             zerado: parent.zerado
             carregando: parent.carregando
             capaAnimada: parent.capaAnimada
+            miniatura: parent.miniatura
             naVista: grade.ativa && grade.visible
                 && parent.y + parent.height > grade.contentYParado && parent.y < grade.contentYParado + grade.height
             tocarSempre: grade.tocarSempre

@@ -120,6 +120,9 @@ def app_dirs(tmp_path, monkeypatch):
     monkeypatch.setattr(
         shared, "capas_animadas_dir", tmp_path / "cache" / "capas_animadas", raising=False
     )
+    monkeypatch.setattr(
+        shared, "miniaturas_dir", tmp_path / "cache" / "miniaturas", raising=False
+    )
     monkeypatch.setattr(shared, "contas_dir", tmp_path / "contas", raising=False)
     monkeypatch.setattr(shared, "fitas_arquivo", tmp_path / "fitas.json", raising=False)
     monkeypatch.setattr(

@@ -32,7 +32,7 @@ from kyron.conquistas import historico
 from kyron.jogo import ANIMATED_SUFFIXES, Jogo
 from kyron.store.managers.manager import Manager
 from kyron.store.pipeline import Pipeline
-from kyron.utils import copias_animadas, session_log
+from kyron.utils import copias_animadas, miniaturas, session_log
 from kyron.utils.gravar_atomico import gravar_atomico
 from kyron.utils.logo_arquivos import IMAGE_SUFFIXES, remove_logo
 from kyron.utils.run_executable import aumid_from_command
@@ -304,6 +304,7 @@ class Store(QObject):
         remove_logo(game.game_id)
 
         copias_animadas.apagar(game.game_id)
+        miniaturas.apagar(game.game_id)
 
         # Um jogo reinstalado com o mesmo id não pode herdar as sessões do apagado (exceto na ligação por appID, em que elas já mudaram de dono).
         if apagar_sessoes:

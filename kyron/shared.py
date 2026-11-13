@@ -101,6 +101,9 @@ conquistas_cache_dir = app_dir / "cache" / "conquistas"
 # levá-las prontas sai mais barato que regerá-las ao restaurar.
 capas_animadas_dir = app_dir / "cache" / "capas_animadas"
 
+# Miniaturas das capas no tamanho da grade (`utils/miniaturas.py`); fora do backup, são refeitas na abertura.
+miniaturas_dir = app_dir / "cache" / "miniaturas"
+
 # Contas de lojas (Microsoft/Xbox, Epic e EA), com a chave de renovação cifrada pelo DPAPI (presa a este PC e usuário do
 # Windows): fora do backup (`utils/backup.py`).
 contas_dir = app_dir / "contas"

@@ -14,7 +14,7 @@ from typing import Any, Iterable
 from PySide6.QtCore import QUrl
 
 from kyron.jogo import ANIMATED_SUFFIXES, Jogo
-from kyron.utils import copias_animadas
+from kyron.utils import copias_animadas, miniaturas
 from kyron.utils.steam import parse_release_date
 
 MODOS = (
@@ -46,6 +46,8 @@ class Linha:
     capa_animada: str = ""
     # Há um patch esperando no feed e o jogo não é um zerado: o halo dourado do cartão (`update-available`).
     tem_atualizacao: bool = False
+    # URL da miniatura da capa no tamanho da grade, quando já existe e está em dia; senão "".
+    miniatura: str = ""
 
     @classmethod
     def de(cls, jogo: Jogo) -> "Linha":
@@ -70,6 +72,7 @@ class Linha:
             jogo.loading > 0,
             url_da_copia(caminho),
             bool(jogo.has_update and not jogo.zerado),
+            miniaturas.url(jogo.game_id, caminho),
         )
 
 

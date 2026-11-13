@@ -72,6 +72,7 @@ from kyron.store.store import Store
 from kyron.utils import (
     backup,
     copias_animadas,
+    miniaturas,
     redefinir,
     restauracao,
     session_fita,
@@ -124,6 +125,7 @@ def _limpar_e_ativar_copias(modelo: ModeloDaBiblioteca) -> None:
 
     def limpar() -> None:
         copias_animadas.limpar(ids)
+        miniaturas.limpar(ids)
         na_thread_principal(modelo.ativar_copias)
 
     threading.Thread(target=limpar, daemon=True).start()

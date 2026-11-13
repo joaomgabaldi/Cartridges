@@ -35,7 +35,7 @@ from kyron import shared
 from kyron.jogo import ANIMATED_SUFFIXES, STATUS_LABELS, Jogo, capas_do_disco
 from kyron.modelos import ordem
 from kyron.modelos.ordem import Linha
-from kyron.utils import copias_animadas, restauracao
+from kyron.utils import copias_animadas, miniaturas, restauracao
 
 # Como em `configuracoes.py`: `kyron` não tem `__init__`, a partir deste arquivo.
 _PLACEHOLDER = Path(__file__).resolve().parent.parent.parent / "data" / "library_placeholder.svg"
@@ -59,6 +59,7 @@ class ModeloDaBiblioteca(QAbstractListModel):
         Carregando = Qt.ItemDataRole.UserRole + 5
         CapaAnimada = Qt.ItemDataRole.UserRole + 6
         TemAtualizacao = Qt.ItemDataRole.UserRole + 7
+        Miniatura = Qt.ItemDataRole.UserRole + 8
 
     # Papel -> campo da `Linha`, montado uma vez: `data` roda por papel e por célula visível.
     _CAMPO_DO_PAPEL = {
@@ -69,6 +70,7 @@ class ModeloDaBiblioteca(QAbstractListModel):
         Papel.Carregando: "carregando",
         Papel.CapaAnimada: "capa_animada",
         Papel.TemAtualizacao: "tem_atualizacao",
+        Papel.Miniatura: "miniatura",
     }
 
     def __init__(self, parent: Any = None) -> None:
@@ -90,6 +92,7 @@ class ModeloDaBiblioteca(QAbstractListModel):
             self.Papel.Carregando: QByteArray(b"carregando"),
             self.Papel.CapaAnimada: QByteArray(b"capaAnimada"),
             self.Papel.TemAtualizacao: QByteArray(b"temAtualizacao"),
+            self.Papel.Miniatura: QByteArray(b"miniatura"),
         }
 
     def rowCount(self, parent: QModelIndex | QPersistentModelIndex = QModelIndex()) -> int:  # noqa: B008
@@ -154,6 +157,9 @@ class ModeloDaBiblioteca(QAbstractListModel):
         # Jogo novo na lista (carga, volta do bloqueio): olha também a cópia grande, como o `ativar_copias`.
         if self._copias_ativas and (i < 0 or not nova.capa_animada) and (caminho := self._capa_animada_sem_copia(nova)):
             copias_animadas.preparar([(jogo.game_id, caminho)])
+        # Sem aviso de volta: a miniatura pronta vale no próximo `atualizar` do jogo ou na próxima abertura (trocar a imagem de um cartão à vista o faria piscar).
+        if self._copias_ativas and nova.capa and not nova.miniatura and (capa := jogo.get_cover_path()) is not None:
+            miniaturas.preparar([(jogo.game_id, capa)])
         if i < 0:
             self.beginInsertRows(QModelIndex(), len(self._linhas), len(self._linhas))
             self._linhas.append(nova)
@@ -177,8 +183,16 @@ class ModeloDaBiblioteca(QAbstractListModel):
         linhas = sorted(self._linhas, key=lambda linha: (linha.zerado, ordem.chave(linha, modo)))
         with capas_do_disco():
             capas = [(linha.jogo_id, caminho) for linha in linhas if (caminho := self._capa_animada_sem_copia(linha))]
+            sem_miniatura = [
+                (linha.jogo_id, caminho)
+                for linha in linhas
+                if linha.capa and not linha.miniatura and (jogo := self._jogos.get(linha.jogo_id)) is not None
+                and (caminho := jogo.get_cover_path()) is not None
+            ]
         if capas:
             copias_animadas.preparar(capas)
+        if sem_miniatura:
+            miniaturas.preparar(sem_miniatura)
 
     def _capa_animada_sem_copia(self, linha: Linha) -> Path | None:
         """O arquivo da capa, se ela é animada (e não falhou antes); o ``preparar`` vê quais cópias faltam."""
