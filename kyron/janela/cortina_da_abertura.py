@@ -13,6 +13,7 @@ import logging
 from typing import Any, Callable
 
 from PySide6.QtCore import QObject, QTimer, Slot
+from PySide6.QtQuick import QQuickItem
 
 _DWMWA_CLOAK = 13
 
@@ -45,6 +46,7 @@ class CortinaDaAbertura(QObject):
         super().__init__()
         self._janela: Any = None
         self._hwnd = 0
+        self._raizes: list[Any] = []
         self._pronta = False
         self._ao_revelar: list[Callable[[], None]] = []
         self._prazo = QTimer(self, singleShot=True, interval=self.PRAZO_MS)
@@ -60,6 +62,8 @@ class CortinaDaAbertura(QObject):
             logging.warning("Não foi possível esconder a janela até o primeiro quadro", exc_info=True)
             return
         self._janela, self._hwnd = janela, hwnd
+        # Só a grade guarda as capas; sem ela na árvore, confere tudo como antes.
+        self._raizes = janela.findChildren(QQuickItem, "grade") or [janela.contentItem()]
         # No laço threaded o `frameSwapped` sai da thread de render; o slot deste objeto roda na principal (fila).
         janela.frameSwapped.connect(self._quadro)
         self._prazo.start()
@@ -75,7 +79,7 @@ class CortinaDaAbertura(QObject):
         if self._janela is None:
             return
         try:
-            carregando = _capa_carregando(self._janela.contentItem())
+            carregando = any(_capa_carregando(raiz) for raiz in self._raizes)
         except Exception:  # pylint: disable=broad-exception-caught
             logging.warning("Não foi possível conferir as capas da abertura", exc_info=True)
             self.revelar()
