@@ -86,6 +86,35 @@ QtObject {
     readonly property bool animacoes: !Qt.application.arguments.includes("--sem-animacao-de-dialogo")
         && (typeof aplicativo === "undefined" || aplicativo === null || aplicativo.animacoesDoSistema !== false)
 
+    // Os anéis de uma lista de camadas, calculados uma vez por lista (cada cartão da grade pede os mesmos).
+    readonly property var _aneisPorCamadas: ({})
+    // Como o `box-shadow` do CSS (GTK): gaussiana de desvio desfoque/2 depois do espalhamento, até 3 desvios.
+    // O anel `d` cobre a faixa de 0 a d e os anéis se compõem (1 - Π(1 - α)), então cada α é o que leva
+    // a composição até a força `forca(d - 1)`.
+    function aneis(camadas) {
+        const chave = JSON.stringify(camadas)
+        if (_aneisPorCamadas[chave]) return _aneisPorCamadas[chave]
+        var aneis = []
+        const fi = z => {  // Φ, a normal acumulada (Abramowitz-Stegun 7.1.26: erro < 1,5e-7)
+            const t = 1 / (1 + 0.3275911 * Math.abs(z) / Math.SQRT2)
+            const erf = 1 - t * (0.254829592 + t * (-0.284496736 + t * (1.421413741 + t * (-1.453152027 + t * 1.061405429)))) * Math.exp(-z * z / 2)
+            return 0.5 * (1 + (z < 0 ? -erf : erf))
+        }
+        for (var c of camadas) {
+            const [dy, desfoque, espalhamento, r, g, b, a] = c
+            const sigma = desfoque / 2
+            const fim = espalhamento + Math.ceil(3 * sigma)
+            const forca = x => x >= fim ? 0 : sigma === 0 ? (x < espalhamento ? a : 0) : a * (1 - fi((x - espalhamento) / sigma))
+            for (var d = 1; d <= fim; ++d) {
+                const alfa = (forca(d - 1) - forca(d)) / Math.max(1e-6, 1 - forca(d))
+                if (alfa * 255 >= 0.5)  // abaixo de meio passo de 8 bits o anel não muda nenhum pixel: não vira Rectangle
+                    aneis.push({ dy: dy, d: d, cor: Qt.rgba(r, g, b, alfa) })
+            }
+        }
+        _aneisPorCamadas[chave] = aneis
+        return aneis
+    }
+
     readonly property SystemPalette sistema: SystemPalette {}
 
     function mistura(alfa) { return Qt.rgba(corBase.r, corBase.g, corBase.b, corBase.a * alfa) }

@@ -9,9 +9,10 @@ from pathlib import Path
 
 import pytest
 from PySide6.QtCore import QEventLoop, QMetaObject, QObject, QPointF, Qt, QTimer, QUrl, Signal
-from PySide6.QtQml import QQmlComponent, QQmlEngine
+from PySide6.QtQml import QQmlComponent, QQmlEngine, QQmlExpression
 from PySide6.QtQuick import QQuickItem, QQuickWindow
 from PySide6.QtQuickControls2 import QQuickStyle
+from PySide6.QtTest import QTest
 
 from kyron import aplicativo as aplicativo_modulo
 from kyron import shared
@@ -285,6 +286,8 @@ def test_cartao_tem_nome_acessivel(app_qt):
 def test_zerado_sem_botoes(app_qt):
     app = _App(_jogos((1, "Alfa", {}), (2, "Zero", {"removed": True, "status": "beaten"})))
     comum = _cartoes(app.achar("grade"))[0]
+    comum.setProperty("passando", True)  # os botões só existem com o ponteiro em cima
+    assert _esperar(lambda: _achar(comum, "botaoJogar") is not None)
     assert _achar(comum, "botaoJogar") is not None and _achar(comum, "botaoMais") is not None
     QMetaObject.invokeMethod(app.achar("botaoZerados"), "click", Qt.ConnectionType.DirectConnection)
     _esperar(lambda: app.janela.property("paginaAtual") == "zerados")
@@ -1007,6 +1010,8 @@ def test_cartao_halo_carregando_e_botoes_da_main(app_qt):
     assert _achar(por_nome["Alfa"], "capaParada").parentItem().property("opacity") == 0
     assert _achar(por_nome["Alfa"], "carregando").property("running") is True
     assert _achar(por_nome["Gama"], "capaParada").parentItem().property("opacity") == 1
+    por_nome["Gama"].setProperty("passando", True)  # os botões só existem com o ponteiro em cima
+    assert _esperar(lambda: _achar(por_nome["Gama"], "botaoJogar") is not None)
     jogar = _achar(por_nome["Gama"], "botaoJogar")
     assert (jogar.width(), jogar.height()) == (34, 34) and jogar.property("dica") == "Iniciar"
     assert _achar(jogar, "dica") is None  # os botões do cartão não têm dica
@@ -1277,4 +1282,82 @@ def test_a_volta_pelo_teclado_acende_o_anel_e_espera_o_proximo_hover(app_qt):
     QMetaObject.invokeMethod(grade, "marcarTeclado", Qt.ConnectionType.DirectConnection)
     assert grade.property("porTeclado") is True
     assert grade.property("_registrarPonteiro") is True
+    app.fechar()
+
+
+def _avaliar_qml(objeto, expressao):
+    valor = QQmlExpression(QQmlEngine.contextForObject(objeto), objeto, expressao).evaluate()[0]
+    return valor.toVariant() if hasattr(valor, "toVariant") else valor
+
+
+def _cartao_solto(app, **extra):
+    """Um `CartaoDoJogo` fora da `Grade`, no motor do `_App`."""
+    componente = QQmlComponent(app.motor, QUrl.fromLocalFile(str(QML / "CartaoDoJogo.qml")))
+    cartao = componente.createWithInitialProperties(
+        {"jogoId": "imported_1", "nome": "Alfa", "capa": "", "zerado": False, "carregando": False, **extra})
+    assert cartao is not None, componente.errorString()
+    cartao._componente = componente  # noqa: SLF001
+    cartao.setParentItem(app.janela.contentItem())
+    _esperar()
+    return cartao
+
+
+def test_aneis_da_sombra_sao_calculados_uma_vez(app_qt):
+    app = _App(_tres())
+    cartao = _cartoes(app.achar("grade"))[0]
+    assert _avaliar_qml(cartao, "Tema.aneis(Tema.sombraCartao).length") == 11
+    assert _avaliar_qml(cartao, "Tema.aneis(Tema.sombraCartao) === Tema.aneis(Tema.sombraCartao)") is True
+    app.fechar()
+
+
+def test_botoes_do_cartao_so_existem_com_o_ponteiro(app_qt):
+    app = _App(_tres())
+    cartao = _cartao_solto(app)
+    assert _achar(cartao, "botaoJogar") is None and _achar(cartao, "botaoMais") is None
+    cartao.setProperty("passando", True)
+    assert _esperar(lambda: _achar(cartao, "botaoJogar") is not None and _achar(cartao, "botaoMais") is not None)
+    pedidos = []
+    cartao.menuPedido.connect(lambda jogo, ancora: pedidos.append((jogo, ancora)))
+    mais = _achar(cartao, "botaoMais")
+    assert _esperar(lambda: mais.parentItem().property("opacity") == 1)
+    QMetaObject.invokeMethod(cartao, "abrirMenu", Qt.ConnectionType.DirectConnection)
+    (jogo, ancora), = pedidos
+    assert jogo == "imported_1" and (ancora.x(), ancora.y(), ancora.width()) == (mais.x(), mais.y(), mais.width())
+    # O clique no botão, de verdade: chega ao `menuPedido` e não ao cartão.
+    pedidos.clear()
+    abertos = []
+    cartao.abrirDetalhes.connect(abertos.append)
+    centro = mais.mapToScene(QPointF(17, 17)).toPoint()
+    QTest.mouseClick(app.janela, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, centro)
+    assert _esperar(lambda: len(pedidos) == 1) and abertos == []
+    # Sai o ponteiro: o fade de 250 ms termina e os botões saem da árvore.
+    cartao.setProperty("passando", False)
+    assert _esperar(lambda: _achar(cartao, "botaoJogar") is None)
+    cartao._componente = None  # noqa: SLF001
+    app.fechar()
+
+
+def test_menu_pelo_teclado_ancora_no_lugar_do_botao_mais(app_qt):
+    app = _App(_tres())
+    cartao = _cartao_solto(app)
+    assert _achar(cartao, "botaoMais") is None
+    pedidos = []
+    cartao.menuPedido.connect(lambda jogo, ancora: pedidos.append((jogo, ancora)))
+    QMetaObject.invokeMethod(cartao, "abrirMenu", Qt.ConnectionType.DirectConnection)
+    (jogo, ancora), = pedidos
+    assert jogo == "imported_1"
+    assert (ancora.x(), ancora.y(), ancora.width(), ancora.height()) == (200 - 34 - 6, 6, 34, 34)
+    assert ancora.parentItem() is cartao
+    app.fechar()
+
+
+def test_cartoes_da_grade_dividem_a_mascara_e_o_solto_tem_a_propria(app_qt):
+    app = _App(_tres())
+    a, b = _cartoes(app.achar("grade"))[:2]
+    mascara = a.property("mascaraCompartilhada")
+    assert mascara is not None and mascara == b.property("mascaraCompartilhada")
+    solto = _cartao_solto(app)
+    assert solto.property("mascaraCompartilhada") is None
+    assert _achar(solto, "mascaraDaCapa") is not None  # a própria
+    assert _achar(a, "mascaraDaCapa") is None
     app.fechar()

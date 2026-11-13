@@ -39,6 +39,8 @@ Rectangle {
     Timer { id: retencao; interval: 30000; onTriggered: cartao.retendo = false }
     property bool focado: false
     property QtObject modelo
+    // A máscara dos cantos da capa que a `Grade` divide entre os cartões; sem ela, o cartão cria a própria.
+    property Item mascaraCompartilhada: null
 
     signal abrirDetalhes(string jogoId)
     signal editar(string jogoId)
@@ -53,7 +55,7 @@ Rectangle {
     readonly property string papelAcessivel: Accessible.role === Accessible.Button ? "Button" : ""
 
     function abrirMenu() {
-        if (!zerado) menuPedido(jogoId, carregadorDosBotoes.item ? carregadorDosBotoes.item.ancoraDoMenu : cartao)
+        if (!zerado) menuPedido(jogoId, ancoraDoMenu)
     }
 
     width: larguraDaCapa
@@ -105,13 +107,17 @@ Rectangle {
         onTapped: cartao.editar(cartao.jogoId)
     }
 
-    Item {
-        id: mascara
-        width: cartao.larguraDaCapa
-        height: cartao.alturaDaCapa
-        visible: false
-        layer.enabled: true
-        Rectangle { width: parent.width; height: parent.height + cartao.radius; radius: cartao.radius }
+    Loader {
+        id: mascaraPropria
+        active: cartao.mascaraCompartilhada === null
+        sourceComponent: Item {
+            objectName: "mascaraDaCapa"
+            width: cartao.larguraDaCapa
+            height: cartao.alturaDaCapa
+            visible: false
+            layer.enabled: true
+            Rectangle { width: parent.width; height: parent.height + cartao.radius; radius: cartao.radius }
+        }
     }
 
     Item {
@@ -122,7 +128,7 @@ Rectangle {
         layer.enabled: true
         layer.effect: MultiEffect {
             maskEnabled: true
-            maskSource: mascara
+            maskSource: cartao.mascaraCompartilhada ?? mascaraPropria.item
             maskThresholdMin: 0.5
             maskSpreadAtMin: 1.0
         }
@@ -175,15 +181,17 @@ Rectangle {
 
     AnelDeFoco { ativo: cartao.focado; raio: cartao.radius; afastamento: -1 }
 
+    // Onde o botão "Mais opções" fica; o menu aberto pelo teclado ou pelo controle nasce aqui, com ou sem o botão criado.
+    Item { id: ancoraDoMenu; x: cartao.larguraDaCapa - width - 6; y: 6; width: 34; height: 34 }
+
+    // Os botões só existem com o ponteiro em cima (ou no fade de saída): são dois ícones e duas áreas por cartão.
     Loader {
         id: carregadorDosBotoes
         anchors.fill: parent
-        active: !cartao.zerado
+        active: !cartao.zerado && (cartao.mostrarBotoes || opacity > 0)
+        opacity: cartao.mostrarBotoes ? 1 : 0
+        Behavior on opacity { NumberAnimation { duration: 250 } }
         sourceComponent: Item {
-            readonly property Item ancoraDoMenu: botaoMais
-            opacity: cartao.mostrarBotoes ? 1 : 0
-            Behavior on opacity { NumberAnimation { duration: 250 } }
-
             component BotaoRedondo: Rectangle {
                 id: botao
                 property string icone
@@ -222,7 +230,7 @@ Rectangle {
             BotaoRedondo {
                 id: botaoMais
                 objectName: "botaoMais"
-                x: cartao.larguraDaCapa - width - 6; y: 6
+                x: ancoraDoMenu.x; y: ancoraDoMenu.y
                 icone: "view-more"
                 dica: "Mais opções"
                 onClicado: cartao.abrirMenu()

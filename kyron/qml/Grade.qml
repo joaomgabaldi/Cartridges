@@ -182,6 +182,16 @@ GridView {
     }
     NumberAnimation { id: rolagemDoControle; objectName: "rolagemDoControle"; target: grade; property: "contentY"; duration: 200; easing.type: Easing.OutCubic }
 
+    // A máscara dos cantos das capas, uma para todos os cartões (cada um criaria a sua, uma camada fora da tela a mais).
+    Item {
+        id: mascaraDosCartoes
+        width: 200
+        height: 300
+        visible: false
+        layer.enabled: true
+        Rectangle { width: parent.width; height: parent.height + 12; radius: 12 }
+    }
+
     MenuDoJogo {
         id: menuDoJogo
         objectName: "menuDoJogo"
@@ -239,6 +249,7 @@ GridView {
             id: cartao
             anchors { centerIn: parent; horizontalCenterOffset: celula.desvioX; verticalCenterOffset: celula.desvioY }
             temAtualizacao: parent.temAtualizacao
+            mascaraCompartilhada: mascaraDosCartoes
             onPausou: CapasPausadas.registrar(cartao)
             Component.onDestruction: CapasPausadas.esquecer(cartao)
             modelo: grade.biblioteca
