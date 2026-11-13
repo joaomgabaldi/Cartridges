@@ -162,3 +162,24 @@ def test_com_o_qml_de_verdade_acha_a_grade_da_biblioteca(app_qt):  # noqa: ARG00
     app = _App(_jogos((0, "Jogo 00", {})))
     nomes = [item.objectName() for item in app.janela.findChildren(QQuickItem, "grade")]
     assert nomes == ["grade"]
+
+
+def test_revelada_nasce_falsa_e_vira_verdadeira_uma_vez_ao_revelar(app_qt, monkeypatch):  # noqa: ARG001
+    cortina, _chamadas = _cortina(monkeypatch)
+    emissoes = []
+    cortina.reveladaMudou.connect(lambda: emissoes.append(1))
+    assert cortina.revelada is False
+    cortina.cobrir(_Janela([]))
+    assert cortina.revelada is False
+    cortina.revelar()
+    cortina.revelar()
+    assert cortina.revelada is True
+    assert emissoes == [1]
+    assert cortina._raizes == []  # noqa: SLF001
+
+
+def test_revelada_vira_verdadeira_quando_o_cloak_falha(app_qt, monkeypatch):  # noqa: ARG001
+    monkeypatch.setattr(modulo, "_cloak", lambda _hwnd, _ligado: False)
+    cortina = CortinaDaAbertura()
+    cortina.cobrir(_Janela([]))
+    assert cortina.revelada is True

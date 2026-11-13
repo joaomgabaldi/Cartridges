@@ -124,7 +124,7 @@ class _LojaFalsa(QObject):
 
 
 class _App:
-    def __init__(self, jogos, animacoes=True, cortina=None):
+    def __init__(self, jogos, animacoes=True, cortina=None, cortina_da_abertura=None):
         self.jogos = jogos
         self.loja = _LojaFalsa(jogos)
         self.detalhes = DetalhesDoJogo(self.loja)
@@ -188,6 +188,8 @@ class _App:
             ("caixaDaAnotacao", self.caixa_da_anotacao),
         ):  # fmt: skip
             contexto.setContextProperty(nome, valor)
+        if cortina_da_abertura is not None:  # ausente nos demais arneses: os diálogos nascem com a janela
+            contexto.setContextProperty("cortinaDaAbertura", cortina_da_abertura)
         componente = QQmlComponent(self.motor, QUrl.fromLocalFile(str(QML / "Aplicativo.qml")))
         self.janela = componente.createWithInitialProperties({"semAgente": True})
         assert self.janela is not None, componente.errorString()

@@ -13,10 +13,19 @@ Principal {
     readonly property bool sobreAberto: servicoDoSobre !== null && servicoDoSobre.aberto
     readonly property QtObject servicoDeZerados: typeof zeradosManuais === "undefined" ? null : zeradosManuais
     readonly property bool zeradosAberto: servicoDeZerados !== null && servicoDeZerados.aberto
+    // Sem cortina (os arneses de teste) os diálogos grandes nascem com a janela, como sempre.
+    readonly property bool comCortina: typeof cortinaDaAbertura !== "undefined"
+    readonly property bool aberturaTerminou: !comCortina || cortinaDaAbertura.revelada
     readonly property QtObject servicoDeNovidades: typeof novidades === "undefined" ? null : novidades
     readonly property string paginaAtual: pilha.depth === 0 ? "todos"
         : (pilha.currentItem && pilha.currentItem.objectName === "paginaDoJogo" ? "jogo"
         : (pilha.currentItem && pilha.currentItem.objectName === "paginaDasNovidades" ? "novidades" : "zerados"))
+
+    // Quem estava no diálogo de edição volta a ele; sem ele criado, o foco vai à grade.
+    function devolverFocoDaEdicao() {
+        if (carregadorDaEdicao.item) carregadorDaEdicao.item.devolverFoco()
+        else paginaDoControle.focarGrade()
+    }
 
     function abrirDetalhes(jogoId) { abrirDetalhesDe(jogoId, false) }
     function abrirDetalhesDe(jogoId, anotar) {
@@ -383,9 +392,21 @@ Principal {
         anchors.fill: parent
     }
 
-    DialogoDeEdicao {
-        id: dialogoDeEdicao
-        onRetornoPerdido: janela.paginaDoControle.focarGrade()
+    // O `aberto` de cada um é repassado pelo `Loader` (`onPedidoChanged`), não ligado por binding dentro do diálogo: um binding criado
+    // depois da carga corre depois dos `enabled` das páginas, que já tiraram o foco que a moldura guarda para devolver.
+    // Os três diálogos grandes nascem depois de a janela aparecer; um pedido antes disso os cria na hora. Mesmo `z` (10)
+    // do `MolduraDoDialogo`: a ordem das camadas é a do arquivo.
+    Loader {
+        id: carregadorDaEdicao
+        anchors.fill: parent
+        z: 10
+        readonly property bool pedido: edicao.aberto
+        onPedidoChanged: if (item) item.aberto = pedido
+        asynchronous: janela.comCortina && !edicao.aberto
+        active: janela.aberturaTerminou || edicao.aberto
+        sourceComponent: DialogoDeEdicao {
+            onRetornoPerdido: janela.paginaDoControle.focarGrade()
+        }
     }
 
     DialogoDoHistorico {
@@ -396,10 +417,18 @@ Principal {
         id: dialogoDeConquistas
     }
 
-    DialogoDePreferencias {
-        id: dialogoDePreferencias
-        avisoAberto: camadaDeAvisos.dialogoAberto
-        onRetornoPerdido: edicao.aberto ? dialogoDeEdicao.devolverFoco() : janela.paginaDoControle.focarGrade()
+    Loader {
+        id: carregadorDasPreferencias
+        anchors.fill: parent
+        z: 10
+        readonly property bool pedido: preferencias.aberto
+        onPedidoChanged: if (item) item.aberto = pedido
+        asynchronous: janela.comCortina && !preferencias.aberto
+        active: janela.aberturaTerminou || preferencias.aberto
+        sourceComponent: DialogoDePreferencias {
+            avisoAberto: camadaDeAvisos.dialogoAberto
+            onRetornoPerdido: edicao.aberto ? janela.devolverFocoDaEdicao() : janela.paginaDoControle.focarGrade()
+        }
     }
 
     DialogoDeVersoes {
@@ -407,11 +436,19 @@ Principal {
         onRetornoPerdido: janela.paginaDoControle.focarGrade()
     }
 
-    DialogoSobre {
-        id: dialogoSobre
-        modelo: janela.servicoDoSobre
-        avisoAberto: camadaDeAvisos.dialogoAberto
-        onRetornoPerdido: janela.paginaDoControle.focarGrade()
+    Loader {
+        id: carregadorDoSobre
+        anchors.fill: parent
+        z: 10
+        readonly property bool pedido: janela.sobreAberto
+        onPedidoChanged: if (item) item.aberto = pedido
+        asynchronous: janela.comCortina && !janela.sobreAberto
+        active: janela.aberturaTerminou || janela.sobreAberto
+        sourceComponent: DialogoSobre {
+            modelo: janela.servicoDoSobre
+            avisoAberto: camadaDeAvisos.dialogoAberto
+            onRetornoPerdido: janela.paginaDoControle.focarGrade()
+        }
     }
 
     SeletorDeZerados {
@@ -446,7 +483,7 @@ Principal {
         dicaDoAtalho: "Mostrar capas animadas"
         atalhoAlterna: true
         onAtalhoClicado: seletor.animadas = !seletor.animadas
-        onRetornoPerdido: dialogoDeEdicao.devolverFoco()
+        onRetornoPerdido: janela.devolverFocoDaEdicao()
     }
     SeletorDeImagens {
         id: seletorDeLogo
@@ -457,27 +494,27 @@ Principal {
         dicaDoAtalho: "Não usar logo neste jogo"
         horizontal: true
         onAtalhoClicado: seletor.usarTitulo()
-        onRetornoPerdido: dialogoDeEdicao.devolverFoco()
+        onRetornoPerdido: janela.devolverFocoDaEdicao()
     }
 
     SeletorDePapelDeParede {
         id: seletorDePapel
         objectName: "seletorDePapel"
         seletor: edicao.seletorDePapelDeParede
-        onRetornoPerdido: dialogoDeEdicao.devolverFoco()
+        onRetornoPerdido: janela.devolverFocoDaEdicao()
     }
 
     SeletorDaSteam {
         id: seletorDaSteam
         objectName: "seletorDaSteam"
         seletor: edicao.seletorDaSteam
-        onRetornoPerdido: dialogoDeEdicao.devolverFoco()
+        onRetornoPerdido: janela.devolverFocoDaEdicao()
     }
     SeletorDoLudusavi {
         id: seletorDoLudusavi
         objectName: "seletorDoLudusavi"
         seletor: edicao.seletorDoLudusavi
-        onRetornoPerdido: dialogoDeEdicao.devolverFoco()
+        onRetornoPerdido: janela.devolverFocoDaEdicao()
     }
 
     BigPicture {
@@ -534,7 +571,8 @@ Principal {
         fila: aplicativo.avisos
         app: aplicativo
         atualizador: janela.servicoDeAtualizacao
-        lugarDoAviso: preferencias.aberto ? dialogoDePreferencias.cartao : janela.sobreAberto ? dialogoSobre.cartao : janela.telaCheia ? null : baseDoAviso
+        lugarDoAviso: preferencias.aberto && carregadorDasPreferencias.item ? carregadorDasPreferencias.item.cartao
+            : janela.sobreAberto && carregadorDoSobre.item ? carregadorDoSobre.item.cartao : janela.telaCheia ? null : baseDoAviso
     }
 
     DropArea {

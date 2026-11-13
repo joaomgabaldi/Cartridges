@@ -12,7 +12,7 @@ import ctypes
 import logging
 from typing import Any, Callable
 
-from PySide6.QtCore import QObject, QTimer, Slot
+from PySide6.QtCore import Property, QObject, QTimer, Signal, Slot
 from PySide6.QtQuick import QQuickItem
 
 _DWMWA_CLOAK = 13
@@ -42,8 +42,11 @@ class CortinaDaAbertura(QObject):
     # Teto da espera: uma capa lenta não segura a janela.
     PRAZO_MS = 2500
 
+    reveladaMudou = Signal()  # noqa: N815
+
     def __init__(self) -> None:
         super().__init__()
+        self._revelada = False
         self._janela: Any = None
         self._hwnd = 0
         self._raizes: list[Any] = []
@@ -52,14 +55,26 @@ class CortinaDaAbertura(QObject):
         self._prazo = QTimer(self, singleShot=True, interval=self.PRAZO_MS)
         self._prazo.timeout.connect(self.revelar)
 
+    # O QML cria os diálogos grandes só depois disto: a abertura não paga por eles.
+    @Property(bool, notify=reveladaMudou)
+    def revelada(self) -> bool:
+        return self._revelada
+
+    def _marcar_revelada(self) -> None:
+        if not self._revelada:
+            self._revelada = True
+            self.reveladaMudou.emit()
+
     @Slot(QObject)
     def cobrir(self, janela: Any) -> None:
         try:
             hwnd = int(janela.winId())
             if not _cloak(hwnd, True):
+                self._marcar_revelada()
                 return
         except Exception:  # pylint: disable=broad-exception-caught
             logging.warning("Não foi possível esconder a janela até o primeiro quadro", exc_info=True)
+            self._marcar_revelada()
             return
         self._janela, self._hwnd = janela, hwnd
         # Só a grade guarda as capas; sem ela na árvore, confere tudo como antes.
@@ -98,6 +113,7 @@ class CortinaDaAbertura(QObject):
         if self._janela is None:
             return
         janela, self._janela = self._janela, None
+        self._raizes = []
         self._prazo.stop()
         try:
             janela.frameSwapped.disconnect(self._quadro)
@@ -105,6 +121,7 @@ class CortinaDaAbertura(QObject):
             pass
         if not _cloak(self._hwnd, False):
             logging.warning("Não foi possível mostrar a janela principal pelo DWM")
+        self._marcar_revelada()
         funcoes, self._ao_revelar = self._ao_revelar, []
         for funcao in funcoes:
             try:

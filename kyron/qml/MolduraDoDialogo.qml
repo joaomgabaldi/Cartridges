@@ -137,7 +137,8 @@ FocusScope {
         }
         _animar()
     }
-    Component.onCompleted: if (aberto) { visible = true; _animar() }
+    // Nascido aberto (o diálogo criado sob demanda): passa pelo mesmo caminho da abertura, que guarda o foco de antes.
+    Component.onCompleted: if (aberto) abertoChanged()
 
     // Alt+Tab tira o foco da janela sem soltar o Alt na moldura: o sublinhado dos mnemônicos não pode ficar preso.
     Connections {
