@@ -584,3 +584,29 @@ def test_pipeline_so_avanca_depois_da_exibicao(app_qt):
     assert ordem == []
     assert _rodar_ate(lambda: len(ordem) == 2)
     assert ordem == ["exibiu", "avancou"]
+
+
+@pytest.fixture
+def miniaturas_pedidas(monkeypatch):
+    feitos = []
+    monkeypatch.setattr(modulo.miniaturas, "preparar", lambda capas: feitos.append(capas))
+    return feitos
+
+
+def test_miniaturas_so_sao_pedidas_depois_de_ativar_e_na_ordem_da_grade(app_qt, pedidos, miniaturas_pedidas):
+    caminhos = {}
+    for game_id in ("z", "a"):
+        caminhos[game_id] = shared.covers_dir / f"{game_id}.tiff"
+        caminhos[game_id].write_bytes(b"x")
+    modelo = ModeloDaBiblioteca()
+    modelo.atualizar(_jogo("z", "Zeta"))
+    modelo.atualizar(_jogo("a", "Alfa"))
+    assert miniaturas_pedidas == [], "sem ativar_copias, a pasta ainda nao foi limpa"
+    shared.state_schema.set_string("sort-mode", "a-z")
+    modelo.ativar_copias()
+    assert miniaturas_pedidas == [[("a", caminhos["a"]), ("z", caminhos["z"])]]
+    shared.state_schema.reset("sort-mode")
+    caminho_n = shared.covers_dir / "n.tiff"
+    caminho_n.write_bytes(b"x")
+    modelo.atualizar(_jogo("n", "Novo"))
+    assert miniaturas_pedidas[-1] == [("n", caminho_n)]

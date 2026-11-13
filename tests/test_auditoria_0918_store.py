@@ -9,7 +9,7 @@ import pytest
 from PIL import Image
 
 from kyron import shared
-from kyron.utils import session_wallpaper
+from kyron.utils import miniaturas, session_wallpaper
 
 # O conftest troca a `_AreaDeTrabalho` por uma guarda a cada teste; a classe de verdade é lida aqui, na importação.
 _AREA_DE_TRABALHO = session_wallpaper._AreaDeTrabalho
@@ -184,3 +184,10 @@ def test_b9_bomba_nao_recursa_no_convert_cover(monkeypatch, tmp_path):
 
 
 # endregion
+
+
+def test_cleanup_game_apaga_a_miniatura(store, make_game, monkeypatch):
+    apagadas = []
+    monkeypatch.setattr(miniaturas, "apagar", apagadas.append)
+    store.cleanup_game(make_game(game_id=OLD_ID))
+    assert apagadas == [OLD_ID]

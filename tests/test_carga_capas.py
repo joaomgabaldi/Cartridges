@@ -77,3 +77,11 @@ def test_capa_da_sessao_continua_valendo_no_indice(app_dirs, tmp_path):
 
     with capas_do_disco():
         assert jogo.get_cover_path() == provisoria
+
+
+def test_indice_ignora_maiusculas_como_o_is_file_do_windows(app_dirs):
+    (app_dirs.covers / "Shortcuts_1.TIFF").write_bytes(b"x")
+
+    with capas_do_disco():
+        # O caminho devolvido é o montado a partir do id, não o nome do disco.
+        assert _jogo().get_cover_path() == app_dirs.covers / "shortcuts_1.tiff"

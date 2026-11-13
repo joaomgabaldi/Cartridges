@@ -17,6 +17,7 @@ from PySide6.QtTest import QTest
 
 from kyron import aplicativo as aplicativo_modulo
 from kyron import shared
+from kyron.utils import miniaturas
 from kyron.utils.app_updater import AppUpdater
 from kyron.utils.news_checker import NewsChecker
 from kyron.aplicativo import Aplicativo
@@ -786,7 +787,7 @@ def test_copia_animada_corrompida_deixa_a_capa_parada_visivel(app_qt, monkeypatc
     assert copia.read_bytes() == LIXO
     # (a miniatura pronta no meio do teste vale como a capa: é a mesma imagem reduzida)
     assert parada.property("source").toString() in (cartao.property("capa"), cartao.property("miniatura"))
-    assert parada.property("source").toString().split("?")[0].endswith((capa.name, "imported_1-200x300.png"))
+    assert parada.property("source").toString().split("?")[0].endswith((capa.name, miniaturas.caminho_para("imported_1").name))
     copias_animadas.soltar("imported_1")
     shared.schema.reset("cover-autoplay")
     app.fechar()
@@ -1411,4 +1412,6 @@ def test_cartoes_da_grade_dividem_a_mascara_e_o_solto_tem_a_propria(app_qt):
     assert solto.property("mascaraCompartilhada") is None
     assert _achar(solto, "mascaraDaCapa") is not None  # a própria
     assert _achar(a, "mascaraDaCapa") is None
+    # A máscara é desenhada no tamanho da capa do cartão: se uma mudar sem a outra, os cantos erram.
+    assert (mascara.width(), mascara.height()) == (a.property("larguraDaCapa"), a.property("alturaDaCapa")) == (200, 300)
     app.fechar()

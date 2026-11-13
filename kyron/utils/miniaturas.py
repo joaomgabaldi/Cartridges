@@ -33,7 +33,8 @@ def caminho_para(game_id: str) -> Path:
 
 def url(game_id: str, capa: Path | None) -> str:
     """URL ``file:`` da miniatura, ou "" se não há capa, miniatura ou ela é mais velha que a capa. O ``?v=`` a recarrega ao ser refeita."""
-    if capa is None:
+    # A capa provisória da sessão (fora de `covers_dir`) não tem miniatura: ela não sobrevive à sessão.
+    if capa is None or capa.parent != shared.covers_dir:
         return ""
     miniatura = caminho_para(game_id)
     try:
@@ -84,10 +85,14 @@ def preparar(capas: list[tuple[str, Path]]) -> None:
     """Gera, numa thread de segundo plano e na ordem dada, as miniaturas que faltam ou estão velhas. Não avisa ao terminar."""
     global _thread  # pylint: disable=global-statement
     for game_id, capa in capas:
+        if capa.parent != shared.covers_dir:
+            continue
         destino = caminho_para(game_id)
         try:
             versao = capa.stat().st_mtime_ns
         except OSError:
+            continue
+        if url(game_id, capa):
             continue
         with _trava:
             if (destino, versao) in _vistos:
@@ -96,8 +101,7 @@ def preparar(capas: list[tuple[str, Path]]) -> None:
             if _thread is None:
                 _thread = threading.Thread(target=_trabalhar, daemon=True)
                 _thread.start()
-        if not url(game_id, capa):
-            _fila.put((capa, destino, versao))
+        _fila.put((capa, destino, versao))
 
 
 def limpar(ids: set[str]) -> None:

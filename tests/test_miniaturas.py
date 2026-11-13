@@ -6,6 +6,7 @@
 
 import os
 import time
+from types import SimpleNamespace
 
 import pytest
 from PySide6.QtGui import QColor, QImage
@@ -134,3 +135,27 @@ def test_capa_trocada_esvazia_a_miniatura_da_linha():
     agora = destino.stat().st_mtime_ns
     os.utime(capa, ns=(agora + 10**9, agora + 10**9))  # capa regravada
     assert Linha.de(_jogo()).miniatura == ""
+
+
+def test_url_ignora_a_capa_de_fora_da_pasta_de_capas(tmp_path):
+    de_sessao = tmp_path / "capa_da_sessao.png"
+    imagem = QImage(60, 90, QImage.Format.Format_RGB32)
+    imagem.save(str(de_sessao), "PNG")
+    miniaturas.gerar(de_sessao, miniaturas.caminho_para("imported_1"))
+    assert miniaturas.url("imported_1", de_sessao) == ""
+
+
+def test_preparar_pula_a_capa_de_fora_da_pasta_de_capas(tmp_path, monkeypatch):
+    de_sessao = tmp_path / "capa_da_sessao.png"
+    QImage(60, 90, QImage.Format.Format_RGB32).save(str(de_sessao), "PNG")
+    pedidos = []
+    monkeypatch.setattr(miniaturas, "_fila", SimpleNamespace(put=pedidos.append))
+    miniaturas.preparar([("imported_1", de_sessao)])
+    assert pedidos == [] and miniaturas._vistos == set()
+
+
+def test_preparar_registra_so_o_que_precisa_de_miniatura(monkeypatch):
+    capa = _capa()
+    miniaturas.gerar(capa, miniaturas.caminho_para("imported_1"))
+    miniaturas.preparar([("imported_1", capa)])
+    assert miniaturas._vistos == set()

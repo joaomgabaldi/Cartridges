@@ -28,7 +28,7 @@ from kyron.utils.gravar_atomico import gravar_atomico
 _MAX_END = 32503680000
 
 # `record` e as reescritas (`delete`, `apagar_jogo`, `mover_jogo`) rodam em threads diferentes sobre o mesmo arquivo:
-# sem a trava, um `record` entre o `read_text` e o `replace` se perde e duas reescritas disputam o `.jsonl.tmp`.
+# sem a trava, um `record` entre o `read_text` e o `replace` se perde (o temporário tem nome único, mas a corrida entre ler e trocar continua).
 _LOCK = threading.Lock()
 
 

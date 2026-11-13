@@ -392,8 +392,7 @@ Principal {
         anchors.fill: parent
     }
 
-    // O `aberto` de cada um é repassado pelo `Loader` (`onPedidoChanged`), não ligado por binding dentro do diálogo: um binding criado
-    // depois da carga corre depois dos `enabled` das páginas, que já tiraram o foco que a moldura guarda para devolver.
+    // O `aberto` do diálogo é declarado com binding, mas a primeira atribuição do `Loader` (`onPedidoChanged`) o desfaz: daí em diante o `Loader` é o dono.
     // Os três diálogos grandes nascem depois de a janela aparecer; um pedido antes disso os cria na hora. Mesmo `z` (10)
     // do `MolduraDoDialogo`: a ordem das camadas é a do arquivo.
     Loader {

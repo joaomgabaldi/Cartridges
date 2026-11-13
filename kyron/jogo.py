@@ -22,8 +22,8 @@
 import logging
 import os
 import threading
-from contextlib import contextmanager
 import weakref
+from contextlib import contextmanager
 from pathlib import Path
 from time import time
 from typing import Any, Callable, Iterator, Optional
@@ -41,7 +41,7 @@ from kyron.utils.thread_principal import na_thread_principal
 # A ordem é a precedência de ``Jogo.get_cover_path``.
 ANIMATED_SUFFIXES = (".gif", ".webp", ".apng")
 
-# Os nomes da pasta de capas, listados uma vez, só na thread que abriu `capas_do_disco`.
+# Os nomes da pasta de capas (em minúsculas, como o Windows os compara), listados uma vez, só na thread que abriu `capas_do_disco`.
 _indice = threading.local()
 
 
@@ -53,7 +53,7 @@ def capas_do_disco() -> Iterator[None]:
     """
     try:
         with os.scandir(shared.covers_dir) as entradas:
-            nomes = {entrada.name for entrada in entradas}
+            nomes = {entrada.name.casefold() for entrada in entradas}
     except OSError:
         nomes = set()
     anterior = getattr(_indice, "nomes", None)
@@ -62,6 +62,7 @@ def capas_do_disco() -> Iterator[None]:
         yield
     finally:
         _indice.nomes = anterior
+
 
 # Tudo o que vai ao JSON do jogo, e a lista do que `update_values` aceita: uma chave arbitrária seria gravada por setattr sobre qualquer coisa da instância.
 PERSISTED_ATTRS = (
@@ -514,7 +515,7 @@ class Jogo(QObject):
         nomes = getattr(_indice, "nomes", None)
         for suffix in (*ANIMATED_SUFFIXES, ".tiff"):
             cover_path = shared.covers_dir / f"{self.game_id}{suffix}"
-            if cover_path.name in nomes if nomes is not None else cover_path.is_file():
+            if cover_path.name.casefold() in nomes if nomes is not None else cover_path.is_file():
                 return cover_path
 
         return None

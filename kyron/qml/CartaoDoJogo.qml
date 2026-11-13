@@ -138,6 +138,7 @@ Rectangle {
         Image {
             id: imagem
             objectName: "capaParada"
+            retainWhileLoading: true
             property string ilegivel: ""
             property string miniaturaIlegivel: ""
             // Para a `CortinaDaAbertura` (Python), que não lê o enum do `status`.
