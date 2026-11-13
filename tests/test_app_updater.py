@@ -14,7 +14,6 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import pytest
-import requests
 
 from kyron import shared
 from kyron.utils import app_updater
@@ -248,7 +247,7 @@ def fake_get(monkeypatch):
         calls.append((url, kwargs.get("headers") or {}))
         return _FakeResponse(_PAYLOAD)
 
-    monkeypatch.setattr(requests, "get", get)
+    monkeypatch.setattr(app_updater.requests, "get", get)
     return calls
 
 
@@ -348,7 +347,7 @@ def test_check_asks_only_for_a_newer_release(tmp_path, monkeypatch, current, ask
         sent.append(kwargs["headers"])
         return response
 
-    monkeypatch.setattr(requests, "get", get)
+    monkeypatch.setattr(app_updater.requests, "get", get)
     queued: list[tuple] = []
     monkeypatch.setattr(app_updater, "na_thread_principal", lambda *args: queued.append(args))
 
@@ -367,7 +366,7 @@ def test_data_antiga_nunca_e_oferecida_a_2_0(tmp_path, monkeypatch):
     monkeypatch.setattr(app_updater.shared, "VERSION", "2.0.0")
     api = dict(_API, tag_name="v2026.10.26")
     resposta = types.SimpleNamespace(raise_for_status=lambda: None, json=lambda: api)
-    monkeypatch.setattr(requests, "get", lambda *_a, **_k: resposta)
+    monkeypatch.setattr(app_updater.requests, "get", lambda *_a, **_k: resposta)
     perguntas: list[tuple] = []
     monkeypatch.setattr(app_updater, "na_thread_principal", lambda *args: perguntas.append(args))
 
@@ -463,7 +462,7 @@ def test_fechar_o_app_no_meio_do_download_descarta_o_resultado(tmp_path, monkeyp
     alvo = app_updater.download_dir() / "Kyron-2026.09.13.exe"
 
     # 1. O download termina, mas o app fecha antes de o resultado ser tratado.
-    monkeypatch.setattr(requests, "get", lambda *_a, **_k: _FakeResponse(_PAYLOAD))
+    monkeypatch.setattr(app_updater.requests, "get", lambda *_a, **_k: _FakeResponse(_PAYLOAD))
     updater._download(_release(hashlib.sha256(_PAYLOAD).hexdigest()))  # pylint: disable=protected-access
     updater.stop()
     for funcao, args in fila:
@@ -482,7 +481,7 @@ def test_fechar_o_app_no_meio_do_download_descarta_o_resultado(tmp_path, monkeyp
             updater.stop()
             yield from pedacos
 
-    monkeypatch.setattr(requests, "get", lambda *_a, **_k: _Fechando(_PAYLOAD))
+    monkeypatch.setattr(app_updater.requests, "get", lambda *_a, **_k: _Fechando(_PAYLOAD))
     updater._download(_release(hashlib.sha256(_PAYLOAD).hexdigest()))  # pylint: disable=protected-access
     assert list(alvo.parent.iterdir()) == []
     assert not any(f.__name__ == "_finish" for f, _a in fila)
@@ -557,7 +556,7 @@ def test_cada_download_tem_o_proprio_part(tmp_path, monkeypatch):
             gravando.wait(5)  # os dois estão com o `.part` aberto ao mesmo tempo
             yield self._payload[4:]
 
-    monkeypatch.setattr(requests, "get", lambda *_a, **_k: _Lento(_PAYLOAD))
+    monkeypatch.setattr(app_updater.requests, "get", lambda *_a, **_k: _Lento(_PAYLOAD))
     alvo = tmp_path / "update" / "Cartridges-2026.09.13.exe"
     erros = []
 
@@ -621,7 +620,7 @@ def test_b1_a_pergunta_da_versao_nova_espera_a_sessao(monkeypatch):
 @pytest.mark.parametrize("informado", [8, 0])
 def test_b25_o_download_do_instalador_tem_teto(tmp_path, monkeypatch, informado):
     payload = b"x" * 64
-    monkeypatch.setattr(requests, "get", lambda *_a, **_k: _FakeResponse(payload))
+    monkeypatch.setattr(app_updater.requests, "get", lambda *_a, **_k: _FakeResponse(payload))
     monkeypatch.setattr(app_updater, "MAX_INSTALLER_BYTES", 16)
     release = Release("2026.09.30", "", "https://x", informado, hashlib.sha256(payload).hexdigest())
     target = tmp_path / "update" / "setup.exe"
@@ -652,7 +651,7 @@ def busca(tmp_path, monkeypatch):
     monkeypatch.setattr(app_updater, "installed_root", lambda: tmp_path)
     monkeypatch.setattr(app_updater.shared, "VERSION", "2026.09.01")
     response = types.SimpleNamespace(raise_for_status=lambda: None, json=lambda: _API)
-    monkeypatch.setattr(requests, "get", lambda _url, **_kw: response)
+    monkeypatch.setattr(app_updater.requests, "get", lambda _url, **_kw: response)
     monkeypatch.setattr(app_updater, "na_thread_principal", lambda fn, *args: fn(*args))
     monkeypatch.setattr(
         app_updater.threading,
@@ -685,9 +684,9 @@ def test_busca_sem_versao_nova_avisa(busca, monkeypatch):
 
 def test_busca_sem_rede_avisa(busca, monkeypatch):
     def get(_url, **_kw):
-        raise requests.ConnectionError("sem rede")
+        raise app_updater.requests.ConnectionError("sem rede")
 
-    monkeypatch.setattr(requests, "get", get)
+    monkeypatch.setattr(app_updater.requests, "get", get)
 
     AppUpdater().buscar_agora(busca.avisos.append)
 

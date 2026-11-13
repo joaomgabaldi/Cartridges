@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Callable, Optional
 
 from PySide6.QtGui import QImageReader
-lazy from requests.exceptions import RequestException
+from requests.exceptions import RequestException
 
 from kyron import shared
 from kyron.conquistas import arquivos

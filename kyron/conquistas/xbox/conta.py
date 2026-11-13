@@ -15,7 +15,7 @@ import time
 from dataclasses import dataclass
 from typing import Any, Callable, Optional
 
-lazy import requests
+import requests
 
 from kyron import shared
 from kyron.conquistas import aviso_da_conta

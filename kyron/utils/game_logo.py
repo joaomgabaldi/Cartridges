@@ -29,7 +29,7 @@ from pathlib import Path
 from typing import Any, Optional
 from urllib.parse import urlparse
 
-lazy import requests
+import requests
 from PIL import Image
 
 from kyron import shared

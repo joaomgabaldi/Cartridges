@@ -42,7 +42,7 @@ from time import time
 from typing import Optional
 from xml.etree import ElementTree
 
-lazy import requests
+import requests
 
 # O TLS importa: tudo o que este módulo devolve é confiado adiante (nomes guiam o casador, URLs vão ao JSON do jogo e ao
 # navegador, corpos são exibidos). Em texto claro um proxy poderia reescrever os três, então o feed só é lido por https.

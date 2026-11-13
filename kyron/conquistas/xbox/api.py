@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any, Optional
 from xml.etree import ElementTree
 
-lazy import requests
+import requests
 
 from kyron import shared
 from kyron.conquistas import arquivos, catalogo

@@ -26,7 +26,7 @@ import logging
 import threading
 from typing import Optional
 
-lazy import requests
+import requests
 
 from kyron import shared
 from kyron.jogo import Jogo

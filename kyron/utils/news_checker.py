@@ -28,7 +28,7 @@ import logging
 import threading
 from typing import Optional
 
-lazy import requests
+import requests
 from PySide6.QtCore import QObject, QTimer, Signal
 
 from kyron import shared

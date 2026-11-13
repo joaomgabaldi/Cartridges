@@ -33,8 +33,8 @@ import threading
 import time
 from typing import Any, Optional, TypedDict
 
-lazy import requests
-lazy from requests.exceptions import RequestException
+import requests
+from requests.exceptions import RequestException
 
 from kyron.utils.download import MAX_RESPONSE_BYTES, read_capped
 from kyron.utils.name_cleaner import clean_for_search

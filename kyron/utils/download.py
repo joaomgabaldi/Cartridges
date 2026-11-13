@@ -27,8 +27,7 @@ import threading
 import time
 from typing import Any, Callable, Optional
 
-lazy import requests
-lazy from kyron.utils.resposta_grande_demais import ResponseTooLargeError
+import requests
 
 MAX_IMAGE_BYTES = 25 * 1024 * 1024
 
@@ -51,6 +50,15 @@ class DownloadCancelado(Exception):
 
     Não é ``requests.RequestException``: quem cancela não quer o aviso de
     falha nem a tela de erro que os seletores mostram para uma falha de rede.
+    """
+
+
+class ResponseTooLargeError(requests.RequestException):
+    """Raised when a body exceeds the allowed size.
+
+    Subclasses ``requests.RequestException`` so existing download error handling
+    (which already catches request failures) treats an oversized body the same
+    way as any other failed request.
     """
 
 

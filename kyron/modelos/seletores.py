@@ -28,7 +28,7 @@ from typing import Any, Optional
 from urllib.parse import urlparse
 from uuid import uuid4
 
-lazy import requests
+import requests
 from PIL import Image, UnidentifiedImageError
 from PySide6.QtCore import (
     Property,
