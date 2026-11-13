@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any, Iterable, Optional
 from urllib.parse import quote
 
-from requests.exceptions import RequestException
+lazy from requests.exceptions import RequestException
 
 from kyron import shared
 from kyron.conquistas import arquivos, keyvalues, schema_da_steam

@@ -20,8 +20,8 @@
 import logging
 from typing import Optional
 
-from requests.exceptions import ConnectionError as RequestsConnectionError
-from requests.exceptions import HTTPError, SSLError, Timeout
+lazy from requests.exceptions import ConnectionError as RequestsConnectionError
+lazy from requests.exceptions import HTTPError, SSLError, Timeout
 
 from kyron import shared
 from kyron.jogo import Jogo
@@ -63,7 +63,11 @@ class SteamAPIManager(AsyncManager):
     """
 
     run_after = (EmuladorManager,)
-    retryable_on = (HTTPError, SSLError, RequestsConnectionError, Timeout)
+
+    # Propriedade: as classes do ``requests`` só são resolvidas na primeira falha, não na abertura.
+    @property
+    def retryable_on(self):
+        return (HTTPError, SSLError, RequestsConnectionError, Timeout)
 
     steam_api_helper: SteamAPIHelper = None
     steam_rate_limiter: SteamRateLimiter = None

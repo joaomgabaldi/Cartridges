@@ -15,7 +15,7 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Any, Callable, Optional
 
-import requests
+lazy import requests
 
 from kyron import shared
 from kyron.conquistas import catalogo

@@ -17,7 +17,7 @@ import time
 from pathlib import Path
 from typing import Any, Optional
 
-import requests
+lazy import requests
 
 from kyron import shared
 from kyron.conquistas import catalogo

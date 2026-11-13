@@ -20,8 +20,8 @@
 from json import JSONDecodeError
 from typing import Any, Callable
 
-from requests.exceptions import ConnectionError as RequestsConnectionError
-from requests.exceptions import HTTPError, SSLError, Timeout
+lazy from requests.exceptions import ConnectionError as RequestsConnectionError
+lazy from requests.exceptions import HTTPError, SSLError, Timeout
 
 from kyron.errors.friendly_error import FriendlyError
 from kyron.jogo import Jogo
@@ -42,14 +42,11 @@ _CANCELLABLE = "sgdb_cancellable"
 class SgdbManager(AsyncManager):
 
     run_after = (SteamAPIManager,)
-    retryable_on = (
-        HTTPError,
-        SSLError,
-        RequestsConnectionError,
-        ConnectionError,
-        JSONDecodeError,
-        Timeout,
-    )
+
+    # Propriedade: as classes do ``requests`` só são resolvidas na primeira falha, não na abertura.
+    @property
+    def retryable_on(self):
+        return (HTTPError, SSLError, RequestsConnectionError, ConnectionError, JSONDecodeError, Timeout)
     continue_on = (SgdbGameNotFound, SgdbNoImageFound)
 
     def process_game(

@@ -30,7 +30,7 @@ import re
 from typing import Any, Optional
 from urllib.parse import urlencode
 
-import requests
+lazy import requests
 
 from kyron import shared
 from kyron.utils.download import get_capped

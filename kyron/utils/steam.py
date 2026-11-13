@@ -24,7 +24,7 @@ import re
 from datetime import date
 from typing import Callable, Optional, TypedDict
 
-from requests.exceptions import HTTPError, RequestException
+lazy from requests.exceptions import HTTPError, RequestException
 
 from kyron import shared
 from kyron.emuladores import idiomas

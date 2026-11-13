@@ -27,8 +27,8 @@ from pathlib import Path
 from typing import Any, Optional
 from urllib.parse import quote
 
-import requests
-from requests.exceptions import HTTPError, RequestException
+lazy import requests
+lazy from requests.exceptions import HTTPError, RequestException
 
 from kyron import shared
 from kyron.jogo import Jogo

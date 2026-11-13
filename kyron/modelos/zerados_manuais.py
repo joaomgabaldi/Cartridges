@@ -16,7 +16,7 @@ import threading
 import weakref
 from typing import Any, Optional
 
-import requests
+lazy import requests
 from PySide6.QtCore import Property, QObject, Signal, Slot
 
 from kyron import shared

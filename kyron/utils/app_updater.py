@@ -36,7 +36,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Optional
 
-import requests
+lazy import requests
 from PySide6.QtCore import Property, QCoreApplication, QObject, QTimer, Signal, Slot
 
 from kyron import shared
