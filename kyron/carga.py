@@ -10,7 +10,7 @@ import re
 from typing import Any
 
 from kyron import shared
-from kyron.jogo import Jogo
+from kyron.jogo import Jogo, capas_do_disco
 
 # O tipo de cada campo que um game_id.json persiste, fora os de identidade (conferidos em `carregar_jogos_do_disco`).
 _NUMBER = (int, float)
@@ -152,11 +152,12 @@ def carregar_jogos_do_disco(store: Any) -> int:
                 logging.exception("Skipping unloadable game record %s", game_file.name)
 
     carregados = 0
-    for game, name in games:
-        try:
-            store.add_game(game, {"skip_save": True})
-        except Exception:  # pylint: disable=broad-exception-caught
-            logging.exception("Skipping unloadable game record %s", name)
-        else:
-            carregados += 1
+    with capas_do_disco():
+        for game, name in games:
+            try:
+                store.add_game(game, {"skip_save": True})
+            except Exception:  # pylint: disable=broad-exception-caught
+                logging.exception("Skipping unloadable game record %s", name)
+            else:
+                carregados += 1
     return carregados

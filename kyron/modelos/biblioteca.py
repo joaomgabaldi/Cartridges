@@ -32,7 +32,7 @@ from PySide6.QtCore import (
 )
 
 from kyron import shared
-from kyron.jogo import ANIMATED_SUFFIXES, STATUS_LABELS, Jogo
+from kyron.jogo import ANIMATED_SUFFIXES, STATUS_LABELS, Jogo, capas_do_disco
 from kyron.modelos import ordem
 from kyron.modelos.ordem import Linha
 from kyron.utils import copias_animadas, restauracao
@@ -59,6 +59,17 @@ class ModeloDaBiblioteca(QAbstractListModel):
         Carregando = Qt.ItemDataRole.UserRole + 5
         CapaAnimada = Qt.ItemDataRole.UserRole + 6
         TemAtualizacao = Qt.ItemDataRole.UserRole + 7
+
+    # Papel -> campo da `Linha`, montado uma vez: `data` roda por papel e por célula visível.
+    _CAMPO_DO_PAPEL = {
+        Papel.JogoId: "jogo_id",
+        Papel.Nome: "nome",
+        Papel.Capa: "capa",
+        Papel.Zerado: "zerado",
+        Papel.Carregando: "carregando",
+        Papel.CapaAnimada: "capa_animada",
+        Papel.TemAtualizacao: "tem_atualizacao",
+    }
 
     def __init__(self, parent: Any = None) -> None:
         super().__init__(parent)
@@ -87,16 +98,8 @@ class ModeloDaBiblioteca(QAbstractListModel):
     def data(self, index: QModelIndex | QPersistentModelIndex, role: int = Qt.ItemDataRole.DisplayRole) -> Any:
         if not index.isValid() or not 0 <= index.row() < len(self._linhas):
             return None
-        linha = self._linhas[index.row()]
-        return {
-            self.Papel.JogoId: linha.jogo_id,
-            self.Papel.Nome: linha.nome,
-            self.Papel.Capa: linha.capa,
-            self.Papel.Zerado: linha.zerado,
-            self.Papel.Carregando: linha.carregando,
-            self.Papel.CapaAnimada: linha.capa_animada,
-            self.Papel.TemAtualizacao: linha.tem_atualizacao,
-        }.get(role)
+        campo = self._CAMPO_DO_PAPEL.get(role)
+        return None if campo is None else getattr(self._linhas[index.row()], campo)
 
     def linha(self, i: int) -> Linha:
         return self._linhas[i]
@@ -172,7 +175,8 @@ class ModeloDaBiblioteca(QAbstractListModel):
         # Na ordem da grade (a biblioteca e depois os zerados): as capas que a pessoa vê primeiro ficam prontas antes.
         modo = shared.state_schema.get_string("sort-mode")
         linhas = sorted(self._linhas, key=lambda linha: (linha.zerado, ordem.chave(linha, modo)))
-        capas = [(linha.jogo_id, caminho) for linha in linhas if (caminho := self._capa_animada_sem_copia(linha))]
+        with capas_do_disco():
+            capas = [(linha.jogo_id, caminho) for linha in linhas if (caminho := self._capa_animada_sem_copia(linha))]
         if capas:
             copias_animadas.preparar(capas)
 

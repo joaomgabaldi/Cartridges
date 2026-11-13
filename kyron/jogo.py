@@ -20,11 +20,13 @@
 """O jogo da biblioteca; emite também nas threads do importador (conectar com `na_thread_principal` ou conexão enfileirada)."""
 
 import logging
+import os
 import threading
+from contextlib import contextmanager
 import weakref
 from pathlib import Path
 from time import time
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Iterator, Optional
 
 from PySide6.QtCore import QObject, Signal
 
@@ -38,6 +40,28 @@ from kyron.utils.thread_principal import na_thread_principal
 # Formatos de capa animada, mantidos na forma original. O APNG guardado vira .apng: a extensão diz ao app que a capa é animada.
 # A ordem é a precedência de ``Jogo.get_cover_path``.
 ANIMATED_SUFFIXES = (".gif", ".webp", ".apng")
+
+# Os nomes da pasta de capas, listados uma vez, só na thread que abriu `capas_do_disco`.
+_indice = threading.local()
+
+
+@contextmanager
+def capas_do_disco() -> Iterator[None]:
+    """Na carga, ``get_cover_path`` consulta uma listagem única de ``covers_dir``, não um ``is_file`` por sufixo e jogo.
+
+    Vale só nesta thread e só dentro do ``with``: uma capa gravada depois da listagem não aparece até ele fechar.
+    """
+    try:
+        with os.scandir(shared.covers_dir) as entradas:
+            nomes = {entrada.name for entrada in entradas}
+    except OSError:
+        nomes = set()
+    anterior = getattr(_indice, "nomes", None)
+    _indice.nomes = nomes
+    try:
+        yield
+    finally:
+        _indice.nomes = anterior
 
 # Tudo o que vai ao JSON do jogo, e a lista do que `update_values` aceita: uma chave arbitrária seria gravada por setattr sobre qualquer coisa da instância.
 PERSISTED_ATTRS = (
@@ -130,7 +154,6 @@ class Jogo(QObject):
     _launch_iniciou: bool = False  # o `launch` mais recente foi o que começou a conferência
     _inis_conferidos: bool = False
     _rodada: Any = None  # ({"decidido"}, jogar, cancelar) da decisão mais recente
-    filtered: bool = False
 
     # Com default, ao contrário dos de identidade: um arquivo antigo sem este campo levantava AttributeError no FileManager e o jogo deixava de ser gravado.
     added: int = 0
@@ -174,8 +197,6 @@ class Jogo(QObject):
     install_size_ts: int = 0
     removed: bool = False
     blacklisted: bool = False
-    # A capa já decodificada para a grade; quem desenha a preenche. Não é gravada.
-    game_cover: Optional[Any] = None
     version: int = 0
     # Data de modificação do atalho de origem; mantida nos jogos removidos para um atalho ainda presente não readicionar um jogo excluído (salvo se mais novo).
     shortcut_mtime: int = 0
@@ -490,9 +511,10 @@ class Jogo(QObject):
     def get_cover_path(self) -> Optional[Path]:
         if self.capa_da_sessao is not None and self.capa_da_sessao.is_file():
             return self.capa_da_sessao
+        nomes = getattr(_indice, "nomes", None)
         for suffix in (*ANIMATED_SUFFIXES, ".tiff"):
             cover_path = shared.covers_dir / f"{self.game_id}{suffix}"
-            if cover_path.is_file():
+            if cover_path.name in nomes if nomes is not None else cover_path.is_file():
                 return cover_path
 
         return None
