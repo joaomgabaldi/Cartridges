@@ -21,6 +21,7 @@ from time import time
 from typing import Any, Optional
 
 from kyron import shared
+from kyron.utils.gravar_atomico import gravar_atomico
 
 
 # Ano 3000: um `end` além disso é lixo, e o fromtimestamp do Windows o recusaria na tela.
@@ -111,17 +112,10 @@ def load(game_id: Optional[str] = None) -> list[dict[str, Any]]:
 
 def _reescrever(path: Path, kept: list[str]) -> bool:
     """Grava ``kept`` por cima do histórico, via temporário + troca (uma queda no meio não deixa um histórico truncado)."""
-    tmp = path.with_suffix(".jsonl.tmp")
     try:
-        tmp.write_text(
-            "".join(line + "\n" for line in kept if line.strip()),
-            encoding="utf-8",
-            errors="surrogateescape",
-        )
-        tmp.replace(path)
+        gravar_atomico(path, "".join(line + "\n" for line in kept if line.strip()).encode("utf-8", errors="surrogateescape"))
     except OSError:
         logging.exception("Não foi possível reescrever o histórico de sessões")
-        tmp.unlink(missing_ok=True)
         return False
     return True
 

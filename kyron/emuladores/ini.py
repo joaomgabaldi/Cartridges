@@ -23,12 +23,12 @@ Trabalha em bytes: só a linha da chave muda, o resto do arquivo (Latin-1, GBK, 
 O arquivo é entrada não confiável: lê no máximo 1 MiB e tolera qualquer byte.
 """
 
-import os
 import re
-import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
+
+from kyron.utils.gravar_atomico import gravar_atomico
 
 LIMITE = 1 << 20
 _BOM = b"\xef\xbb\xbf"
@@ -161,18 +161,7 @@ def dlcs(caminho: Path, formato: Optional[str] = None) -> list[tuple[str, str]]:
 
 
 def _gravar(caminho: Path, dados: bytes) -> None:
-    # temporário na mesma pasta + os.replace: o jogo nunca vê o arquivo pela metade
-    fd, tmp = tempfile.mkstemp(dir=caminho.parent, prefix=caminho.name + ".")
-    try:
-        with os.fdopen(fd, "wb") as f:
-            f.write(dados)
-        os.replace(tmp, caminho)
-    except BaseException:
-        try:
-            os.unlink(tmp)
-        except OSError:
-            pass
-        raise
+    gravar_atomico(caminho, dados)  # o jogo nunca vê o arquivo pela metade
 
 
 def aplicar(caminho: Path, nome: Optional[str], idioma: Optional[str], formato: Optional[str] = None) -> bool:

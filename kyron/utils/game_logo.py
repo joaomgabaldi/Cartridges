@@ -28,7 +28,6 @@ import time
 from pathlib import Path
 from typing import Any, Optional
 from urllib.parse import urlparse
-from uuid import uuid4
 
 import requests
 from PIL import Image
@@ -36,6 +35,7 @@ from PIL import Image
 from kyron import shared
 from kyron.jogo import Jogo as Game
 from kyron.utils.download import download_bytes
+from kyron.utils.gravar_atomico import gravar_atomico
 from kyron.utils.ler_json import ler_json
 from kyron.utils.logo_arquivos import IMAGE_SUFFIXES, remove_logo  # noqa: F401  (reexportados)
 from kyron.utils.logo_arquivos import sidecar_path as _sidecar_path
@@ -139,14 +139,9 @@ def _write_sidecar(
     }
     # Temporário + replace: um sidecar truncado lê como "nunca buscado", e a busca seguinte apagava o logo escolhido.
     # Nome único porque buscas de jogos diferentes (e a do seletor) gravam em paralelo.
-    path = _sidecar_path(game_id)
-    tmp_path = path.with_name(f"{path.name}.{uuid4().hex}.tmp")
     try:
-        shared.logos_dir.mkdir(parents=True, exist_ok=True)
-        tmp_path.write_text(json.dumps(data), encoding="utf-8")
-        tmp_path.replace(path)
+        gravar_atomico(_sidecar_path(game_id), json.dumps(data))
     except OSError as error:
-        tmp_path.unlink(missing_ok=True)
         logging.debug("Could not record logo lookup for %s: %s", game_id, error)
 
 

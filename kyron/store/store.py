@@ -24,7 +24,6 @@ import weakref
 from pathlib import Path
 from threading import RLock
 from typing import Any, Generator, MutableMapping, Optional
-from uuid import uuid4
 
 from PySide6.QtCore import QObject, Qt, Signal
 
@@ -34,6 +33,7 @@ from kyron.jogo import ANIMATED_SUFFIXES, Jogo
 from kyron.store.managers.manager import Manager
 from kyron.store.pipeline import Pipeline
 from kyron.utils import copias_animadas, session_log
+from kyron.utils.gravar_atomico import gravar_atomico
 from kyron.utils.logo_arquivos import IMAGE_SUFFIXES, remove_logo
 from kyron.utils.run_executable import aumid_from_command
 from kyron.utils.wallhaven import IMAGE_SUFFIXES as WALLPAPER_SUFFIXES
@@ -88,14 +88,8 @@ def _is_derived_command(game: Jogo) -> bool:
 
 
 def _dump_json_atomic(path: Path, data: dict, **dump_kwargs: Any) -> None:
-    """Escreve via tmp + replace, como o FileManager: uma queda no meio deixa só um ``.tmp`` órfão (o loader o ignora), não um JSON truncado."""
-    tmp_path = path.with_name(f"{path.name}.{uuid4().hex}.tmp")
-    try:
-        with tmp_path.open("w", encoding="utf-8") as file:
-            json.dump(data, file, **dump_kwargs)
-        tmp_path.replace(path)
-    finally:
-        tmp_path.unlink(missing_ok=True)
+    """Escreve via `gravar_atomico`, como o FileManager: uma queda no meio deixa só um ``.tmp`` órfão (o loader o ignora), não um JSON truncado."""
+    gravar_atomico(path, json.dumps(data, **dump_kwargs))
 
 
 def _migrate_game_files(old_id: str, new_id: str) -> None:

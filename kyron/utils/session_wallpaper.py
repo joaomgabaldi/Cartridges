@@ -33,13 +33,13 @@ from ctypes import POINTER, byref, c_uint, c_void_p, c_wchar_p, wintypes
 from io import BytesIO
 from pathlib import Path
 from typing import Any, NamedTuple, Optional, TYPE_CHECKING
-from uuid import uuid4
 
 from PIL import Image, ImageFilter, ImageOps
 
 from kyron import shared
 from kyron.utils import window_geometry
 from kyron.utils.download import MAX_WALLPAPER_BYTES, download_bytes
+from kyron.utils.gravar_atomico import gravar_atomico
 from kyron.utils.ler_json import ler_json
 from kyron.utils.thread_principal import na_thread_principal
 from kyron.utils.wallhaven import IMAGE_SUFFIXES, melhor_para
@@ -373,16 +373,10 @@ def _gravar_sidecar(
         "locked": travado,
     }
     # tmp + replace: um sidecar truncado se lê como "automático" e entregaria a escolha travada à busca.
-    destino = _sidecar(game_id)
-    tmp = destino.with_name(f"{destino.name}.{uuid4().hex}.tmp")
     try:
-        shared.wallpapers_dir.mkdir(parents=True, exist_ok=True)
-        tmp.write_text(json.dumps(dados), encoding="utf-8")
-        tmp.replace(destino)
+        gravar_atomico(_sidecar(game_id), json.dumps(dados))
     except OSError as erro:
         logging.warning("Não foi possível gravar a escolha de parede: %s", erro)
-    finally:
-        tmp.unlink(missing_ok=True)
 
 
 def _arquivo_do_sidecar(dados: Optional[dict[str, Any]]) -> Optional[Path]:

@@ -76,7 +76,7 @@ class _PoolDaemon:
 
 
 _rede = _PoolDaemon(min(32, (os.cpu_count() or 1) + 4), "rede")
-_gravacao = ThreadPoolExecutor(max_workers=4, thread_name_prefix="gravacao")
+_gravacao = ThreadPoolExecutor(max_workers=1, thread_name_prefix="gravacao")
 
 
 def rodar_na_rede(funcao: Callable[..., Any], *args: Any) -> None:

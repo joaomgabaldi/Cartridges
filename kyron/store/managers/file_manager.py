@@ -18,7 +18,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import json
-from uuid import uuid4
 
 from kyron import shared
 
@@ -27,6 +26,7 @@ from kyron.jogo import PERSISTED_ATTRS, Jogo
 from kyron.store.managers.async_manager import AsyncManager
 from kyron.store.managers.hltb_manager import HLTBManager
 from kyron.store.managers.steam_api_manager import SteamAPIManager
+from kyron.utils.gravar_atomico import gravar_atomico
 
 
 class FileManager(AsyncManager):
@@ -40,24 +40,7 @@ class FileManager(AsyncManager):
         if additional_data.get("skip_save"):  # Skip saving when loading games from disk
             return
 
-        shared.games_dir.mkdir(parents=True, exist_ok=True)
-
-        attrs = PERSISTED_ATTRS
-
-        # Grava num arquivo temporário e troca: uma escrita interrompida não deixa JSON truncado.
-        # O nome tem sufixo único: duas gravações do mesmo jogo ao mesmo tempo (threads) intercalariam as escritas no mesmo `.tmp`.
-        path = shared.games_dir / f"{game.game_id}.json"
-        tmp_path = path.with_name(f"{game.game_id}.{uuid4().hex}.json.tmp")
-        try:
-            with tmp_path.open("w", encoding="utf-8") as file:
-                json.dump(
-                    {attr: getattr(game, attr) for attr in attrs},
-                    file,
-                    indent=4,
-                    sort_keys=True,
-                )
-            tmp_path.replace(path)
-        except BaseException:
-            # Uma escrita que falha não deixa o temporário na pasta de jogos.
-            tmp_path.unlink(missing_ok=True)
-            raise
+        gravar_atomico(
+            shared.games_dir / f"{game.game_id}.json",
+            json.dumps({attr: getattr(game, attr) for attr in PERSISTED_ATTRS}, indent=4, sort_keys=True),
+        )
