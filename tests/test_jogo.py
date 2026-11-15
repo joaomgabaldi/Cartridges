@@ -288,6 +288,9 @@ class _SessaoQueAnota:
     def vibrar_abertura(self):
         self.passos.append("vibrar")
 
+    def cancelar_entrada_do_big_picture(self):
+        pass  # sem Big Picture neste teste
+
 
 @pytest.fixture
 def com_sessao(monkeypatch, schema):

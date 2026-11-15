@@ -21,6 +21,7 @@ from PySide6.QtGui import QColor, QImage, QWindow
 from PySide6.QtQuick import QQuickImageProvider, QSGRendererInterface
 
 from kyron import shared
+from kyron.jogo import Jogo
 from kyron.modelos import regras_do_big_picture as regras
 from kyron.modelos.biblioteca import ModeloDaBiblioteca
 from kyron.modelos.detalhes import DetalhesDoJogo
@@ -336,6 +337,8 @@ class BigPicture(QObject):
     def entrar(self) -> None:
         if self._visivel or self._ocupada or not self._disponivel:
             return
+        if Jogo.abrindo:  # o jogo abriria depois, por cima do Big Picture
+            return
         self._carrossel = regras.Carrossel([])
         self._etapa_bp, self._transicao, self._indo = "carrossel", None, False
         self._logos = {}
@@ -349,6 +352,20 @@ class BigPicture(QObject):
         if self._jogos:
             self.prepararCapas.emit()  # antes de escurecer: o QML decodifica enquanto a cortina desce
         self._trocar_no_escuro(self._entrar_de_fato, ESCURECER_ENTRADA_MS, self._fim_da_entrada)
+
+    def cancelar_entrada(self) -> None:
+        """Um jogo abrindo com a entrada ainda no escuro (controle conectado e Jogar logo depois): o Big Picture não abre por cima dele."""
+        if not self._em_fade or self._visivel:
+            return
+        self._fechar_cortina()
+        # Como na saída: os detalhes compartilhados com a grade deixam de seguir o jogo central.
+        self._espera_do_central.stop()
+        if self._detalhes is not None:
+            self._detalhes.esquecer()
+        self._em_fade = self._ocupada = self._montada = False
+        self._carrossel, self._jogos = regras.Carrossel([]), []
+        self.jogosMudaram.emit()
+        self.alterado.emit()
 
     def _entrar_de_fato(self) -> None:
         self._visivel = True

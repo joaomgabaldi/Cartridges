@@ -154,6 +154,8 @@ class Jogo(QObject):
     _procurando: bool = False  # a busca começou e o diálogo foi pedido
     _launch_iniciou: bool = False  # o `launch` mais recente foi o que começou a conferência
     _inis_conferidos: bool = False
+    # Os jogos com o Jogar já clicado e a conferência dos .ini em curso: abrem depois, e o Big Picture não entra por cima deles.
+    abrindo: "weakref.WeakSet[Jogo]" = weakref.WeakSet()
     _rodada: Any = None  # ({"decidido"}, jogar, cancelar) da decisão mais recente
 
     # Com default, ao contrário dos de identidade: um arquivo antigo sem este campo levantava AttributeError no FileManager e o jogo deixava de ser gravado.
@@ -384,6 +386,7 @@ class Jogo(QObject):
 
     def _fim_da_conferencia(self, falhou: bool = False) -> None:
         self._conferindo = self._procurando = False
+        Jogo.abrindo.discard(self)
         self.inis_procurados.emit()
         # Excluído ou removido durante a busca: não abre um jogo que já saiu da biblioteca.
         if self.removed or (shared.store is not None and shared.store.get(self.game_id) is not self):
@@ -397,6 +400,7 @@ class Jogo(QObject):
         from kyron.emuladores import aplicacao, busca, varredura  # noqa: PLC0415
 
         self._conferindo, self._procurando = True, False
+        Jogo.abrindo.add(self)
         self._launch_iniciou = True
         self._nova_rodada(ao_confirmar)
 
@@ -427,6 +431,9 @@ class Jogo(QObject):
         from kyron.emuladores import aplicacao, busca  # noqa: PLC0415
         from kyron.saves import backup_de_saves  # noqa: PLC0415
 
+        # No clique, antes de qualquer espera (conferência dos .ini, confirmação): o jogo pode abrir só depois de a tela trocar.
+        if shared.sessao is not None:
+            shared.sessao.cancelar_entrada_do_big_picture()
         conferidos, self._inis_conferidos = inis_conferidos or self._inis_conferidos, False
         self._launch_iniciou = False  # um launch ignorado não deixa quem o chamou esperando a conferência de outro
         # Antes do comando a conferir: o jogo não abre no meio da restauração dos saves dele.

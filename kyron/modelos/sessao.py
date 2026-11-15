@@ -148,6 +148,7 @@ class ModeloDaSessao(QObject):
         if self._jogo is game:
             return
         self._jogo = self._anotando = game
+        self.cancelar_entrada_do_big_picture()
         self._logo, self._largura_do_logo = "", 0
         if (caminho := game_logo.cached_logo_path(game)) and (carregado := game_logo.load_logo(caminho, 640, 140)):
             self._logo, self._largura_do_logo = _url_da_capa(carregado[0]), carregado[1]
@@ -168,6 +169,11 @@ class ModeloDaSessao(QObject):
         if self._controle is not None:
             # No Big Picture o Kyron segue lendo o controle com a janela em foco (o "Já terminei de jogar").
             self._controle.suspender(com_foco=self._big_picture is not None and self._big_picture.visivel)
+
+    def cancelar_entrada_do_big_picture(self) -> None:
+        """Um jogo abrindo fora do Big Picture: a entrada automática que ainda está no escuro não termina por cima dele."""
+        if self._big_picture is not None:
+            self._big_picture.cancelar_entrada()
 
     def hide_session_blocker(self) -> None:
         jogo = self._jogo

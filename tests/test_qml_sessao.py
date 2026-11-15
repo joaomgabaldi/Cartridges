@@ -171,7 +171,9 @@ def test_relogio_acompanha_o_tique(app_qt, monkeypatch):
 
 def test_relogio_corre_na_sessao_do_big_picture(app_qt):
     app = _app()
-    app.sessao._big_picture = type("BigPicture", (), {"visivel": True, "voltouDoJogo": lambda self: None})()  # noqa: SLF001
+    app.sessao._big_picture = type(  # noqa: SLF001
+        "BigPicture", (), {"visivel": True, "voltouDoJogo": lambda self: None, "cancelar_entrada": lambda self: None}
+    )()
     _comecar(app)
     assert app.sessao._tique.isActive()  # noqa: SLF001
     assert app.sessao.relogioVisivel is False

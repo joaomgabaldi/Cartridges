@@ -68,6 +68,16 @@ shared.import_time = 1_700_000_000
 
 
 @pytest.fixture(autouse=True)
+def nenhum_jogo_abrindo():
+    """`Jogo.abrindo` é da classe: uma conferência dos .ini deixada em curso por um teste barraria o Big Picture nos seguintes."""
+    from kyron.jogo import Jogo  # noqa: PLC0415
+
+    Jogo.abrindo.clear()
+    yield
+    Jogo.abrindo.clear()
+
+
+@pytest.fixture(autouse=True)
 def import_time_fixo(monkeypatch):
     """Um `Importer` grava `shared.import_time` com a hora de agora; o teste seguinte não pode herdá-la."""
     monkeypatch.setattr(shared, "import_time", 1_700_000_000, raising=False)

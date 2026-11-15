@@ -36,6 +36,7 @@
           <li>O nome do jogador agora aparece corretamente em Preferências sempre que o aplicativo é aberto.</li>
           <li>O menu do botão direito nos campos de texto agora está em português e segue o visual do aplicativo.</li>
           <li>Agora o aplicativo abre mais rápido.</li>
+          <li>O Big Picture não abre mais por cima de um jogo iniciado logo depois de conectar o controle.</li>
         </ul>
       </description>
     </release>

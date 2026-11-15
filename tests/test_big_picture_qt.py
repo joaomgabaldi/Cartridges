@@ -5,6 +5,7 @@
 """A lista do Big Picture sobre o `ModeloDaBiblioteca`: centro, rótulos, tique e fundo."""
 
 import sys
+import threading
 from dataclasses import replace
 from types import SimpleNamespace
 
@@ -1229,6 +1230,84 @@ def test_fim_da_sessao_com_o_big_picture_escondido_nao_chama(app_qt, visivel):
     bp = SimpleNamespace(visivel=visivel, voltouDoJogo=lambda: chamadas.append(1))
     ModeloDaSessao(FilaDeAvisos(), big_picture=bp).hide_session_blocker()
     assert chamadas == ([1] if visivel else [])
+
+
+def test_sessao_que_comeca_durante_a_entrada_cancela_o_big_picture(fade, monkeypatch, schema):
+    """Controle conectado e play logo depois: a sessão começa com a tela ainda escurecendo e o Big Picture não abre por cima dela."""
+    from kyron.modelos.avisos import FilaDeAvisos  # noqa: PLC0415
+    from kyron.modelos.sessao import ModeloDaSessao  # noqa: PLC0415
+
+    bp = fade.bp
+    monkeypatch.setattr("kyron.utils.game_logo.cached_logo_path", lambda _jogo: None)
+    schema.set_boolean("session-wallpaper", False)
+    sessao = ModeloDaSessao(FilaDeAvisos(), big_picture=bp)
+    bp.entrar()  # a entrada automática, ainda escurecendo
+
+    sessao.show_session_blocker(SimpleNamespace(game_id="a", name="A", notes="", zerado=False, status=""))
+
+    assert fade.registro[-1] == "fechou", "a cortina sai na hora: o jogo abre sem o monitor escuro"
+    assert not bp.ocupada and not bp.visivel and fade.pedidos == []
+    bp.capasProntas()  # a espera das capas que chega depois não troca
+    assert fade.janela.chamadas == [] and not bp.visivel
+    sessao.encerrar()
+
+
+def test_play_durante_a_entrada_cancela_antes_da_conferencia_dos_inis(fade, monkeypatch):
+    """O jogo de emulador só abre depois da conferência dos .ini (numa thread): o clique em Jogar já cancela a entrada."""
+    from kyron.emuladores import aplicacao, busca  # noqa: PLC0415
+    from kyron.modelos.avisos import FilaDeAvisos  # noqa: PLC0415
+    from kyron.modelos.sessao import ModeloDaSessao  # noqa: PLC0415
+
+    bp = fade.bp
+    monkeypatch.setattr(modulo.shared, "sessao", ModeloDaSessao(FilaDeAvisos(), big_picture=bp), raising=False)
+    monkeypatch.setattr(busca, "eh_de_loja", lambda _executavel: False)
+    monkeypatch.setattr(aplicacao, "valores_para", lambda _jogo: ("pt-BR", "Jogador"))
+    conferencias = []
+    monkeypatch.setattr(Jogo, "_conferir_inis", lambda jogo, _ao_confirmar: conferencias.append(jogo))  # a thread fica em curso
+    jogo = _jogo("x", executable=r'start "" "D:\Emuladores\x.exe"')
+    bp.entrar()
+
+    assert jogo.launch() is False and conferencias == [jogo]
+
+    assert fade.registro[-1] == "fechou" and not bp.ocupada
+    bp.capasProntas()
+    assert fade.janela.chamadas == [] and not bp.visivel
+
+
+def test_cancelar_entrada_nao_mexe_no_big_picture_ja_trocado(fade):
+    """Com a tela já trocada (pausa no escuro) o Big Picture cobre a grade: cancelar não desfaz nada."""
+    bp = fade.bp
+    bp.entrar()
+    bp.capasProntas()
+    concluir_cortina(bp)
+    registro = list(fade.registro)
+    bp.cancelar_entrada()
+    assert bp.visivel and bp.ocupada and fade.registro == registro
+    concluir_pausa(bp)  # a sequência segue até o fim
+
+
+def test_entrar_espera_o_jogo_que_esta_abrindo(fade, monkeypatch):
+    """Controle conectado durante a conferência dos .ini de um jogo: o Big Picture não começa a entrar por cima dele."""
+    from kyron.emuladores import aplicacao, busca  # noqa: PLC0415
+
+    monkeypatch.setattr(busca, "eh_de_loja", lambda _executavel: False)
+    monkeypatch.setattr(aplicacao, "valores_para", lambda _jogo: ("pt-BR", "Jogador"))
+    liberar = threading.Event()
+    monkeypatch.setattr(aplicacao, "aplicar_no_jogo", lambda _jogo: liberar.wait(5))  # a conferência em curso
+    monkeypatch.setattr(modulo.shared, "store", SimpleNamespace(get=lambda _id: None))  # fora da store: o fim não relança
+    jogo = _jogo("x", executable=r'start "" "D:\Emuladores\x.exe"')
+    assert jogo.launch() is False  # o clique em Jogar: a conferência começou numa thread
+
+    fade.bp.entrar()  # o controle conectado durante a conferência
+    assert not fade.bp.ocupada and fade.registro == []
+    liberar.set()
+    for _ in range(100):  # o fim da conferência volta à thread principal
+        if not Jogo.abrindo:
+            break
+        _esperar()
+    assert not Jogo.abrindo
+    fade.bp.entrar()
+    assert fade.bp.ocupada
 
 
 def test_fim_da_sessao_no_meio_de_um_fade_nao_cria_outra_cortina(fade):
