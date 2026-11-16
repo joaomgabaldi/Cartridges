@@ -306,8 +306,10 @@ def atualizar(raiz: Path, *, gravar: bool, ler=fontes.ler_da_rede, rodar=subproc
         # O hash é da roda daquele Python: mesma versão com outro Python (ou roda republicada) também regrava.
         if any(pinos_de[arq] != {(_normalizado(p.nome), p.versao, p.sha256) for p in pinos}
                for arq, pinos in ((REQ, app), (REQ_DEV, dev))):
-            novos[REQ] = fontes.texto_requirements(app, [])
-            novos[REQ_DEV] = fontes.texto_requirements(dev, [f"-r {REQ}"])
+            # Mantém o fim de linha que o arquivo já tem (core.autocrlf=true deixa CRLF no PC).
+            for arq, texto in ((REQ, fontes.texto_requirements(app, [])),
+                               (REQ_DEV, fontes.texto_requirements(dev, [f"-r {REQ}"]))):
+                novos[arq] = texto.replace("\n", "\r\n") if "\r\n" in textos[arq] else texto
             if not trocas_libs:
                 hashes_mudaram = True
                 avisos.append("Os hashes das bibliotecas mudaram sem mudança de versão; os requirements foram refeitos.")
