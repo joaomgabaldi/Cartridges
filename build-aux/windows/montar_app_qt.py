@@ -267,7 +267,7 @@ def instalar_bibliotecas(cache: Path, raiz: Path = RAIZ) -> Path:
     shutil.rmtree(lib, ignore_errors=True)
     subprocess.run(
         [sys.executable, "-m", "pip", "install", "--target", str(lib), "--only-binary=:all:",
-         "--no-compile", "--disable-pip-version-check", "-r", str(requisitos)],
+         "--no-compile", "--disable-pip-version-check", "--require-hashes", "-r", str(requisitos)],
         check=True,
     )
     marcador.write_text(atual)

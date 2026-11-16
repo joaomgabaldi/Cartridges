@@ -291,7 +291,7 @@ def test_requirements_fixa_tudo():
     fixados = {}
     for linha in linhas:
         assert "==" in linha, linha
-        nome, versao = linha.split("==")
+        nome, versao = linha.split(" --hash=")[0].split("==")
         fixados[_normalizado(nome)] = versao
     infos = list((raiz / "_dist" / "cache-qt" / "lib").glob("*.dist-info"))
     if not infos:
