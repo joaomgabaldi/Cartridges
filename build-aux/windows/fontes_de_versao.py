@@ -9,6 +9,7 @@ Python e a plataforma do app (win_amd64).
 """
 
 import hashlib
+import http.client
 import json
 import os
 import re
@@ -34,7 +35,7 @@ class Pino:
 def resolver_libs(
     arquivos_in: list[Path],
     python: str,
-    restricoes: list[str] = [],
+    restricoes: list[str] | None = None,
     rodar=subprocess.run,
 ) -> list[Pino] | None:
     """Pinos (com SHA-256 da roda escolhida) de tudo o que os `.in` puxam; `None` se o pip não resolver.
@@ -48,7 +49,7 @@ def resolver_libs(
     ]
     for arquivo in arquivos_in:
         cmd += ["-r", str(arquivo)]
-    cmd += restricoes
+    cmd += restricoes or []
     resultado = rodar(cmd, capture_output=True, text=True, encoding="utf-8")
     if resultado.returncode != 0:
         return None
@@ -137,7 +138,7 @@ def ler_da_rede(url: str) -> bytes:
         if erro.code == 404:
             raise NaoEncontrado(f"{url}: não encontrado") from erro
         raise FonteIndisponivel(f"{url}: HTTP {erro.code}") from erro
-    except (urllib.error.URLError, OSError) as erro:
+    except (urllib.error.URLError, OSError, http.client.HTTPException) as erro:  # HTTPException: IncompleteRead etc.
         raise FonteIndisponivel(f"{url}: {erro}") from erro
 
 
@@ -297,10 +298,12 @@ def ffmpeg(ler: Callable[[str], bytes] = ler_da_rede) -> tuple[Arquivo, str]:
     if not re.fullmatch(r"\d+\.\d+(\.\d+)?", versao):
         raise FonteIndisponivel(f"Versão do ffmpeg ilegível: {versao!r}")
     url = f"{_GYAN}packages/ffmpeg-{versao}-essentials_build.zip"
+    # Só a ausência ou um conteúdo ilegível vira SemHash; a rede fora do ar sobe como FonteIndisponivel.
     try:
-        sha = _texto_ascii(ler(url + ".sha256")).split()[0].lower()
-    except (FonteIndisponivel, IndexError):
-        sha = ""
+        partes = ler(url + ".sha256").decode("ascii", "replace").split()
+    except NaoEncontrado:
+        partes = []
+    sha = partes[0].lower() if partes else ""
     if not _SHA256.fullmatch(sha):
         raise SemHash(f"O gyan.dev não publica o SHA-256 do ffmpeg {versao}")
     commit = json.loads(ler(f"https://api.github.com/repos/FFmpeg/FFmpeg/commits/n{versao}"))["sha"]

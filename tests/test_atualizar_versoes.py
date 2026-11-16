@@ -116,6 +116,7 @@ class Mundo:
     })
     inno: tuple = ("is-7_1_0", {"innosetup-7.1.0-x64.exe": SHA_INNO_ATUAL})
     release_topo: object = None  # None: não publicada (404); dict: resposta da API; "fora": fonte fora do ar
+    dev: dict = field(default_factory=lambda: DEV)  # as bibliotecas só de teste que o pip devolve
 
     def respostas(self):
         py = "https://www.python.org/api/v2/downloads/"
@@ -176,7 +177,7 @@ class Mundo:
             xy = cmd[cmd.index("--python-version") + 1]
             fixos = [a for a in cmd if "==" in a]
             if any(a.endswith("requirements-dev.in") for a in cmd):  # devolve o que foi fixado + as de teste
-                pinos = [fontes.Pino(*a.split("=="), hashes[tuple(a.split("=="))]) for a in fixos] + list(DEV.values())
+                pinos = [fontes.Pino(*a.split("=="), hashes[tuple(a.split("=="))]) for a in fixos] + list(self.dev.values())
             else:
                 chave = (xy, fixos[0].split("==")[1] if fixos else None)
                 if chave not in self.resolucoes:
@@ -209,7 +210,7 @@ def repo_tmp(tmp_path):
     for nome, valores in BASE.items():
         for constante, valor in valores.items():
             reescrever(nome, lambda t: av.trocar_constante(t, constante, valor))
-    reescrever("README.md", lambda t: re.sub(r"Python \d+\.\d+ com PySide6 [0-9.]+", "Python 3.15 com PySide6 6.12.0", t))
+    reescrever("README.md", lambda t: re.sub(r"Python \d+\.\d+ com PySide6 \d+(\.\d+)*", "Python 3.15 com PySide6 6.12.0", t))
     reescrever("build-aux/windows/instalar_inno.ps1", lambda t: re.sub(
         r"(\$InnoVersao = ')[0-9.]+'", r"\g<1>7.1.0'",
         re.sub(r"(\$InnoSha256 = ')[0-9A-Fa-f]{64}'", rf"\g<1>{SHA_INNO_ATUAL.upper()}'", t)))
@@ -536,3 +537,80 @@ def test_changelog_preserva_crlf():
     base = METAINFO_BASE.replace("\n", "\r\n")
     texto = av.escrever_changelog(base, [av.Troca("python", "1", "2")])
     assert texto.count("\r\n") == texto.count("\n") and "<li>Python atualizado para 2.</li>\r\n" in texto
+
+
+# --- revisão final ---
+
+
+def test_pyside6_de_quatro_partes_nao_mexe_no_sdk(repo_tmp):
+    mundo = Mundo(resolucoes={("3.15", None): _com(LIBS, PySide6=("6.12.0.1", "c" * 64))})
+    r = av.atualizar(repo_tmp, gravar=True, **mundo.para_kwargs())
+    assert r.trocas == [av.Troca("pyside6", "6.12.0", "6.12.0.1")] and r.avisos == []
+    assert "PySide6==6.12.0.1" in (repo_tmp / "requirements.txt").read_text(encoding="utf-8")
+    assert 'QT_VERSAO = "6.12.0"' in (repo_tmp / "tools/baixar_qt_sdk.py").read_text(encoding="utf-8")
+
+
+def test_pyside6_de_quatro_partes_com_qt_novo_sobe_o_sdk(repo_tmp):
+    mundo = Mundo(resolucoes={("3.15", None): _com(PYSIDE_613, PySide6=("6.13.0.1", "c" * 64))},
+                  qt={"6.13.0": "202612010000"})
+    r = av.atualizar(repo_tmp, gravar=True, **mundo.para_kwargs())
+    assert av.Troca("qt-sdk", "6.12.0", "6.13.0") in r.trocas and av.Troca("pyside6", "6.12.0", "6.13.0.1") in r.trocas
+    assert 'QT_VERSAO = "6.13.0"' in (repo_tmp / "tools/baixar_qt_sdk.py").read_text(encoding="utf-8")
+    assert "Python 3.15 com PySide6 6.13.0 (" in (repo_tmp / "README.md").read_text(encoding="utf-8")
+
+
+def test_readme_nao_engole_o_ponto_final():
+    assert av._README.search("Python 3.15 com PySide6 6.12.0. Depois").group() == "Python 3.15 com PySide6 6.12.0"
+
+
+def test_changelog_ignora_bibliotecas_so_de_teste(repo_tmp):
+    mundo = replace(Mundo(dev=_com(DEV, pytest=("9.3.0", "ee" * 32))), release_topo="fora")
+    r = av.atualizar(repo_tmp, gravar=True, **mundo.para_kwargs())
+    assert r.trocas == [av.Troca("pytest", "9.2.0", "9.3.0")]
+    assert "pytest==9.3.0" in (repo_tmp / "requirements-dev.txt").read_text(encoding="utf-8")
+    assert _metainfo(repo_tmp) == METAINFO_BASE and r.avisos == []  # nem consulta a release
+
+
+def test_changelog_usa_o_nome_como_o_pip_escreve(repo_tmp):
+    libs = dict(LIBS)
+    libs["pillow"] = fontes.Pino("Pillow", "13.1.0", "ef" * 32)
+    av.atualizar(repo_tmp, gravar=True, **Mundo(resolucoes={("3.15", None): libs}).para_kwargs())
+    assert "Pillow atualizada para 13.1.0." in _itens_do_topo(repo_tmp)
+
+
+def test_changelog_qt_e_qwindowkit_nao_se_confundem():
+    texto = av.escrever_changelog(METAINFO_BASE, [av.Troca("qwindowkit", "1.5.0", "1.6")])
+    texto = av.escrever_changelog(texto, [av.Troca("qt-sdk", "6.12.0", "6.13.0")])
+    texto = av.escrever_changelog(texto, [av.Troca("qwindowkit", "1.6", "1.7"), av.Troca("qt-sdk", "6.13.0", "6.14.0")])
+    topo = texto.split("</release>")[0]
+    assert re.findall(r"<li>(.*?)</li>", topo) == [
+        "Novidade do usuário.", "QWindowKit atualizado para 1.7.", "Qt atualizado para 6.14.0."]
+
+
+def test_changelog_release_nova_sem_lista_ganha_a_lista():
+    import xml.etree.ElementTree as ET
+
+    base = METAINFO_BASE.replace(
+        """    <release version="9.0.1">
+      <description translate="no">
+        <ul>
+          <li>Novidade do usuário.</li>
+        </ul>
+      </description>
+    </release>""", """    <release version="9.0.2">
+    </release>""")
+    texto = av.escrever_changelog(base, [av.Troca("python", "1", "2"), av.Troca("tinytuya", "1", "2")])
+    assert texto.startswith("""<releases>
+    <release version="9.0.2">
+      <description translate="no">
+        <ul>
+          <li>Python atualizado para 2.</li>
+          <li>tinytuya atualizada para 2.</li>
+        </ul>
+      </description>
+    </release>
+""")
+    ET.fromstring(texto)
+    # Numa linha só, também vira XML válido.
+    ET.fromstring(av.escrever_changelog(base.replace('9.0.2">\n    </release>', '9.0.2"></release>'),
+                                        [av.Troca("python", "1", "2")]))

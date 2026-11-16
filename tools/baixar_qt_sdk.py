@@ -9,7 +9,7 @@ O SDK (`qtbase` e `qtdeclarative`, MSVC 2022 64 bits) vem direto do download.qt.
 têm o commit fixado e conferido. Tudo vai para `build-aux/windows/qwk/_deps` (fora do git). O que já
 existe e confere não é refeito.
 
-Os .7z são extraídos com o `tar.exe` do Windows.
+Os .7z são extraídos com o 7-Zip, se instalado, ou com o `tar.exe` do Windows.
 
 Uso:  .venv/Scripts/python tools/baixar_qt_sdk.py
 """
@@ -100,10 +100,16 @@ def extrair_qt(pacotes: list[Path], qt: Path, extrair=None) -> None:
 
 
 def _extrair(pacote: Path, destino: Path) -> None:
-    # O tar.exe do Windows (libarchive) lê .7z; assim o script não depende de nenhuma biblioteca do pip.
+    # O 7-Zip vem na imagem da CI; o tar.exe do Windows Server 2022 (bsdtar 3.5) não lê LZMA, o do Windows 11 lê.
+    # Assim o script não depende de nenhuma biblioteca do pip.
     destino.mkdir(parents=True, exist_ok=True)
-    tar = Path(os.environ.get("SystemRoot", r"C:\Windows")) / "System32" / "tar.exe"
-    subprocess.run([str(tar), "-xf", str(pacote), "-C", str(destino)], check=True)
+    sete = Path(os.environ.get("ProgramFiles", r"C:\Program Files")) / "7-Zip" / "7z.exe"
+    if sete.is_file():
+        cmd = [str(sete), "x", "-y", f"-o{destino}", str(pacote)]
+    else:
+        tar = Path(os.environ.get("SystemRoot", r"C:\Windows")) / "System32" / "tar.exe"
+        cmd = [str(tar), "-xf", str(pacote), "-C", str(destino)]
+    subprocess.run(cmd, check=True)
 
 
 def toolset_do_qt(qt: Path) -> str:

@@ -143,7 +143,8 @@ def test_commit_errado_depois_de_clonar_falha_e_limpa(tmp_path, monkeypatch):
 
 
 def test_base_e_marcador_derivados_da_versao():
-    assert "qt6_6120/qt6_6120_msvc2022_64/qt.qt6.6120.win64_msvc2022_64/" in sdk.BASE  # enquanto QT_VERSAO for 6.12.0
+    n = sdk.QT_VERSAO.replace(".", "")
+    assert f"qt6_{n}/qt6_{n}_msvc2022_64/qt.qt6.{n}.win64_msvc2022_64/" in sdk.BASE
     assert sdk.MARCADOR == f".extraido-{sdk.QT_VERSAO}"
     assert sdk.PACOTES["qtbase"][0] == f"{sdk.QT_VERSAO}-0-{sdk.QT_DATA}qtbase-{sdk.SUFIXO}"
 
@@ -172,9 +173,24 @@ def test_preparar_qt_grava_o_toolset(tmp_path, monkeypatch):
     assert (qt / ".vcvars_ver").read_text(encoding="utf-8").strip() == "14.44"
 
 
-def test_extrair_chama_o_tar_do_windows(tmp_path, monkeypatch):
+def test_extrair_usa_o_7zip_quando_instalado(tmp_path, monkeypatch):
     chamadas = []
     monkeypatch.setattr(sdk.subprocess, "run", lambda cmd, **kw: chamadas.append((cmd, kw)))
+    sete = tmp_path / "pf" / "7-Zip" / "7z.exe"
+    sete.parent.mkdir(parents=True)
+    sete.write_bytes(b"")
+    monkeypatch.setenv("ProgramFiles", str(tmp_path / "pf"))
+    destino = tmp_path / "qt"
+    sdk._extrair(tmp_path / "x.7z", destino)
+    cmd, kw = chamadas[0]
+    assert cmd == [str(sete), "x", "-y", f"-o{destino}", str(tmp_path / "x.7z")]
+    assert kw["check"] is True and destino.is_dir()
+
+
+def test_extrair_sem_7zip_chama_o_tar_do_windows(tmp_path, monkeypatch):
+    chamadas = []
+    monkeypatch.setattr(sdk.subprocess, "run", lambda cmd, **kw: chamadas.append((cmd, kw)))
+    monkeypatch.setenv("ProgramFiles", str(tmp_path / "sem-7zip"))
     monkeypatch.setenv("SystemRoot", r"C:\Windows")
     destino = tmp_path / "qt"
     sdk._extrair(tmp_path / "x.7z", destino)

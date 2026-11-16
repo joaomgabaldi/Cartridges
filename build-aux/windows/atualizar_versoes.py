@@ -52,7 +52,7 @@ CONSTANTES = {
 _VERSAO = re.compile(r"\d+(\.\d+){1,3}")
 _INNO_VERSAO = re.compile(r"(\$InnoVersao = ')([0-9.]+)(')")
 _INNO_HASH = re.compile(r"(\$InnoSha256 = ')([0-9A-Fa-f]{64})(')")
-_README = re.compile(r"Python \d+\.\d+ com PySide6 [0-9.]+")
+_README = re.compile(r"Python \d+\.\d+ com PySide6 \d+(\.\d+)*")
 _PINO = re.compile(r"^(\S+)==(\S+) --hash=sha256:([0-9a-f]{64})\r?$", re.M)
 
 
@@ -159,7 +159,8 @@ def _decidir_python_e_libs(raiz, py_atual, qt_atual, libs_atuais, ler, rodar, av
         libs = _resolver(raiz, xy, [], rodar)
         qt = None
         if libs:
-            pyside = _versoes(libs[0]).get("pyside6", qt_atual)
+            # Um PySide6 de 4 partes (6.12.0.1) é revisão do mesmo Qt: só as 3 primeiras dizem qual SDK.
+            pyside = ".".join(_versoes(libs[0]).get("pyside6", qt_atual).split(".")[:3])
             if pyside != qt_atual:
                 if pyside not in sdk_do_qt:
                     try:
@@ -217,20 +218,35 @@ def _topo(metainfo: str) -> re.Match:
     return achado
 
 
-def escrever_changelog(metainfo: str, trocas: list[Troca]) -> str:
-    """Um `<li>` por peça ao fim da `<ul>` da `<release>` do topo; peça que já tem item só troca a versão."""
+def _visiveis(trocas: list[Troca], fora: set[str]) -> list[Troca]:
+    """As trocas que viram item: sem os irmãos do PySide6, sem as removidas e sem as de `fora` (só de teste)."""
+    return [t for t in trocas if t.peca not in IRMAOS_DO_PYSIDE6 and t.para and t.peca not in fora]
+
+
+def escrever_changelog(metainfo: str, trocas: list[Troca], nomes: dict[str, str] | None = None,
+                       fora: set[str] = frozenset()) -> str:
+    """Um `<li>` por peça ao fim da `<ul>` da `<release>` do topo; peça que já tem item só troca a versão.
+
+    `nomes` dá o nome da biblioteca como o pip o escreve; `fora` são as peças que não entram (só de teste).
+    """
     topo = _topo(metainfo)
     bloco = topo.group(0)
+    quebra = "\r\n" if "\r\n" in bloco else "\n"
+    trocas = _visiveis(trocas, fora)
+    if trocas and "</ul>" not in bloco and "<description" not in bloco:
+        # <release> nova, ainda sem itens: ganha a <description><ul> no recuo do arquivo.
+        recuo = re.match(r"[ \t]*", bloco).group()
+        fim = bloco.rindex("</release>")
+        antes = bloco[:fim] if re.search(r"\n[ \t]*\Z", bloco[:fim]) else bloco[:fim] + quebra + recuo
+        bloco = (antes + f'  <description translate="no">{quebra}{recuo}    <ul>{quebra}{recuo}    </ul>{quebra}'
+                 f"{recuo}  </description>{quebra}{recuo}" + bloco[fim:])
     for t in trocas:
-        if t.peca in IRMAOS_DO_PYSIDE6 or not t.para:
-            continue
-        nome = escape(NOMES.get(t.peca, t.peca))
+        nome = escape(NOMES.get(t.peca) or (nomes or {}).get(t.peca, t.peca))
         existente = re.compile(rf"(<li>{re.escape(nome)} atualizad[oa] para )[^<]*(\.</li>)")
         if existente.search(bloco):
             bloco = existente.sub(lambda m: f"{m.group(1)}{escape(t.para)}{m.group(2)}", bloco, 1)
             continue
         fim = _uma(_FIM_DA_LISTA, bloco, METAINFO)
-        quebra = "\r\n" if "\r\n" in bloco else "\n"
         genero = "atualizado" if t.peca in NOMES else "atualizada"
         item = f"{fim.group(1)}  <li>{nome} {genero} para {escape(t.para)}.</li>{quebra}"
         bloco = bloco[:fim.start()] + item + bloco[fim.start():]
@@ -265,6 +281,8 @@ def atualizar(raiz: Path, *, gravar: bool, ler=fontes.ler_da_rede, rodar=subproc
     pinos_de = {arq: {(_normalizado(m[0]), m[1], m[2]) for m in _PINO.findall(textos[arq])} for arq in (REQ, REQ_DEV)}
     libs_atuais = {nome: versao for pinos in pinos_de.values() for nome, versao, _ in pinos}
     hashes_mudaram = False
+    nomes_do_pip: dict[str, str] = {}
+    so_de_teste: set[str] = set()
     n = dict(c)
     python, pyside, inno = py_atual, c["QT_VERSAO"], (inno_atual, None)
 
@@ -282,6 +300,9 @@ def atualizar(raiz: Path, *, gravar: bool, ler=fontes.ler_da_rede, rodar=subproc
             if libs_atuais.get(nome) != libs_novas.get(nome)
         ]
         trocas += trocas_libs
+        nomes_do_pip = {_normalizado(p.nome): p.nome for p in app + dev}
+        do_app = {_normalizado(p.nome) for p in app} | {nome for nome, _, _ in pinos_de[REQ]}
+        so_de_teste = (set(_versoes(dev)) | {nome for nome, _, _ in pinos_de[REQ_DEV]}) - do_app
         # O hash é da roda daquele Python: mesma versão com outro Python (ou roda republicada) também regrava.
         if any(pinos_de[arq] != {(_normalizado(p.nome), p.versao, p.sha256) for p in pinos}
                for arq, pinos in ((REQ, app), (REQ_DEV, dev))):
@@ -343,7 +364,7 @@ def atualizar(raiz: Path, *, gravar: bool, ler=fontes.ler_da_rede, rodar=subproc
         _uma(_INNO_HASH, texto, INNO)
     novos[INNO] = texto
 
-    if trocas:
+    if _visiveis(trocas, so_de_teste):
         versao, publicada = _publicada_como_final(textos[METAINFO], ler)
         if publicada is None:
             avisos.append(f"Não foi possível conferir se a versão {versao} já foi publicada; o changelog não foi atualizado.")
@@ -351,7 +372,7 @@ def atualizar(raiz: Path, *, gravar: bool, ler=fontes.ler_da_rede, rodar=subproc
             avisos.append(f"A versão {versao} já foi publicada: suba a VERSION em kyron/shared.py e abra uma <release> "
                           "nova para registrar as atualizações.")
         else:
-            novos[METAINFO] = escrever_changelog(textos[METAINFO], trocas)
+            novos[METAINFO] = escrever_changelog(textos[METAINFO], trocas, nomes_do_pip, so_de_teste)
 
     if gravar and (trocas or hashes_mudaram):
         for arq, texto in novos.items():

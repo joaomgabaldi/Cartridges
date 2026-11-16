@@ -288,7 +288,10 @@ def versao_do_app(raiz: Path = RAIZ) -> str:
 
 
 def compilar_lancador(cache: Path, raiz: Path = RAIZ) -> Path:
-    """Compila o Kyron.exe com o MSVC 14.44 (o mesmo do compilar.bat do QWindowKit)."""
+    """Compila o Kyron.exe com o MSVC 14.44, fixo de propósito: é /MT e não depende do Qt.
+
+    O conjunto da ponte do QWindowKit vem do SDK do Qt (`_deps/qt/.vcvars_ver`, lido pelo compilar.bat).
+    """
     fonte = raiz / "build-aux" / "windows" / "lancador"
     saida = cache / "lancador"
     shutil.rmtree(saida, ignore_errors=True)

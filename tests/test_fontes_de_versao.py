@@ -344,3 +344,60 @@ def test_sem_token_nao_manda_authorization(monkeypatch):
     monkeypatch.setattr(fontes.urllib.request, "urlopen", lambda p, timeout: pedidos.append(p) or _Resposta(p.full_url))
     fontes.ler_da_rede("https://api.github.com/repos/x/y/tags")
     assert pedidos[0].get_header("Authorization") is None
+
+
+# --- revisão final: rede, hashes malformados e ordenação ---
+
+
+def test_ler_da_rede_recusa_http(monkeypatch):
+    monkeypatch.setattr(fontes.urllib.request, "urlopen", lambda *a, **k: pytest.fail("não podia abrir a conexão"))
+    with pytest.raises(fontes.FonteIndisponivel, match="https"):
+        fontes.ler_da_rede("http://www.python.org/api/v2/downloads/")
+
+
+def test_ler_da_rede_recusa_redirecionamento_para_http(monkeypatch):
+    monkeypatch.setattr(fontes.urllib.request, "urlopen", lambda p, timeout: _Resposta("http://exemplo.com/x"))
+    with pytest.raises(fontes.FonteIndisponivel, match="Redirecionamento"):
+        fontes.ler_da_rede("https://www.gyan.dev/ffmpeg/builds/release-version")
+
+
+def test_ler_da_rede_leitura_incompleta_vira_fonte_indisponivel(monkeypatch):
+    class _Cortada(_Resposta):
+        def read(self):
+            raise fontes.http.client.IncompleteRead(b"meio")
+
+    monkeypatch.setattr(fontes.urllib.request, "urlopen", lambda p, timeout: _Cortada(p.full_url))
+    with pytest.raises(fontes.FonteIndisponivel):
+        fontes.ler_da_rede("https://www.python.org/api/v2/downloads/")
+
+
+@pytest.mark.parametrize("publicado", [b"abc123", b"z" * 64, b"", b"\xff" * 64])
+def test_ffmpeg_hash_malformado_e_semhash(publicado):
+    mapa = {GYAN + "release-version": b"9.0.2", GYAN + "packages/ffmpeg-9.0.2-essentials_build.zip.sha256": publicado}
+    with pytest.raises(fontes.SemHash):
+        fontes.ffmpeg(_ler_de(mapa))
+
+
+def test_ffmpeg_rede_fora_no_sha256_e_indisponivel():
+    def ler(url):
+        if url.endswith(".sha256"):
+            raise fontes.FonteIndisponivel("sem rede")
+        return b"9.0.2"
+
+    with pytest.raises(fontes.FonteIndisponivel) as erro:
+        fontes.ffmpeg(ler)
+    assert not isinstance(erro.value, fontes.SemHash)
+
+
+def test_qt_sdk_sha1_malformado_e_semhash():
+    def ler(url):
+        return b"nao-e-hash" if url.endswith(".sha1") else _ler_qt()(url)
+
+    with pytest.raises(fontes.SemHash):
+        fontes.qt_sdk("6.12.0", ler)
+
+
+def test_versoes_do_python_ordem_numerica():
+    dados = [{"name": f"Python {v}", "pre_release": False} for v in ("3.9.20", "3.14.1", "3.10.0", "3.14.0")]
+    ler = _ler_de({PY + "release/?version=3&is_published=true": json.dumps(dados).encode()})
+    assert fontes.versoes_do_python(ler) == ["3.14.1", "3.14.0", "3.10.0", "3.9.20"]

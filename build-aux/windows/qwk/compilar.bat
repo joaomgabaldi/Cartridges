@@ -8,7 +8,9 @@ set DEPS=%AQUI%_deps
 rem VS 2022 e o conjunto MSVC que o proprio SDK do Qt declara (_deps\qt\.vcvars_ver, gravado por
 rem baixar_qt_sdk.py): um mais novo poderia exigir um runtime mais novo que o msvcp140 que o PySide6 traz.
 if not exist "%DEPS%\qt\.vcvars_ver" (echo Falta _deps\qt\.vcvars_ver: rode tools\baixar_qt_sdk.py antes. & exit /b 1)
+set VCVER=
 set /p VCVER=<"%DEPS%\qt\.vcvars_ver"
+if not defined VCVER (echo Arquivo _deps\qt\.vcvars_ver vazio: rode tools\baixar_qt_sdk.py. & exit /b 1)
 for /f "usebackq delims=" %%i in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -version [17^,18^) -property installationPath`) do set VS=%%i
 call "%VS%\VC\Auxiliary\Build\vcvars64.bat" -vcvars_ver=%VCVER% >nul || (echo Falta o conjunto MSVC %VCVER%: instale-o pelo Visual Studio Installer. & exit /b 1)
 where cmake >nul 2>&1 || (echo Falta o CMake: instale o componente "Ferramentas do CMake do C++" das Ferramentas de Build do Visual Studio 2022. & exit /b 1)
