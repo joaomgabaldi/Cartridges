@@ -3,8 +3,8 @@
 # vem das releases oficiais, com o SHA-256 fixo.
 # A versão e o SHA-256 abaixo são reescritos por build-aux/windows/atualizar_versoes.py.
 $ErrorActionPreference = 'Stop'
-$InnoVersao = '7.1.0'
-$InnoSha256 = '0362A383ED217D4C4239B5933866DD96D3EB2102737DA92F80F6057A4B40DF2F'
+$InnoVersao = '7.1.1'
+$InnoSha256 = '8A5A6711C3766A6E5FB74F280BA0E3551E719CE94538D901FDBD1F8F9920B3F0'
 
 $url = "https://github.com/jrsoftware/issrc/releases/download/is-$($InnoVersao.Replace('.', '_'))/innosetup-$InnoVersao-x64.exe"
 $exe = Join-Path $env:RUNNER_TEMP 'innosetup.exe'

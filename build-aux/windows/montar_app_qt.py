@@ -45,7 +45,7 @@ RAIZ = Path(__file__).resolve().parent.parent.parent
 PYTHON_VERSAO = (RAIZ / ".python-version").read_text(encoding="utf-8").strip()
 PYTHON_URL = f"https://www.python.org/ftp/python/{PYTHON_VERSAO}/python-{PYTHON_VERSAO}-embed-amd64.zip"
 # O mesmo SHA-256 do resumo assinado no .sigstore publicado ao lado do arquivo na página da release.
-PYTHON_SHA256 = "352e232f25b5120508f11a6dfc1bd9076d3e70c30977d552a63338838c2ae8fb"
+PYTHON_SHA256 = "d012f3aa29cf07436dae8aea1fec0fd195c2612a0b059b1f915ae0afb9ad1f62"
 
 # Build "essentials" do gyan.dev, um dos indicados em ffmpeg.org para Windows; traz a libwebp que a capa de vídeo usa.
 # O SHA-256 é o publicado ao lado do arquivo, em <FFMPEG_URL>.sha256.
