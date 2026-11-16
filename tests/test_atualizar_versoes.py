@@ -31,6 +31,26 @@ ARQUIVOS = [
     "tools/baixar_qt_sdk.py",
     "build-aux/windows/instalar_inno.ps1",
 ]
+METAINFO = "data/io.github.joaomgabaldi.Cartridges.metainfo.xml.in"
+# A <release> do topo, fixa: a do repositório real muda a cada versão.
+METAINFO_BASE = """<releases>
+    <release version="9.0.1">
+      <description translate="no">
+        <ul>
+          <li>Novidade do usuário.</li>
+        </ul>
+      </description>
+    </release>
+    <release version="9.0.0" date="2026-01-01">
+      <description translate="no">
+        <ul>
+          <li>Antiga.</li>
+        </ul>
+      </description>
+    </release>
+  </releases>
+"""
+URL_TOPO = "https://api.github.com/repos/joaomgabaldi/Cartridges/releases/tags/v9.0.1"
 SHA_PY_ATUAL = "352e232f25b5120508f11a6dfc1bd9076d3e70c30977d552a63338838c2ae8fb"
 SHA_316 = "16" * 32
 SHA_TINYTUYA_NOVO = "ab" * 32
@@ -95,6 +115,7 @@ class Mundo:
         "ludusavi-v0.31.0-legal.zip": "9fce11fc44942efdd5969928d89b106c229f9a041d7a713c424a6da981660ebf",
     })
     inno: tuple = ("is-7_1_0", {"innosetup-7.1.0-x64.exe": SHA_INNO_ATUAL})
+    release_topo: object = None  # None: não publicada (404); dict: resposta da API; "fora": fonte fora do ar
 
     def respostas(self):
         py = "https://www.python.org/api/v2/downloads/"
@@ -141,6 +162,10 @@ class Mundo:
         respostas = self.respostas()
 
         def ler(url):
+            if url == URL_TOPO and self.release_topo == "fora":
+                raise fontes.FonteIndisponivel("fora do ar")
+            if url == URL_TOPO and self.release_topo is not None:
+                return json.dumps(self.release_topo).encode()
             if url not in respostas:
                 raise fontes.NaoEncontrado(url)
             return respostas[url]
@@ -188,6 +213,8 @@ def repo_tmp(tmp_path):
     reescrever("build-aux/windows/instalar_inno.ps1", lambda t: re.sub(
         r"(\$InnoVersao = ')[0-9.]+'", r"\g<1>7.1.0'",
         re.sub(r"(\$InnoSha256 = ')[0-9A-Fa-f]{64}'", rf"\g<1>{SHA_INNO_ATUAL.upper()}'", t)))
+    (raiz / METAINFO).parent.mkdir(parents=True, exist_ok=True)
+    (raiz / METAINFO).write_text(METAINFO_BASE, encoding="utf-8", newline="")
     return raiz
 
 
@@ -224,7 +251,7 @@ def test_lib_nova_sobe_so_ela(repo_tmp):
     assert r.trocas == [av.Troca("tinytuya", "1.20.0", "1.21.0")]
     assert f"tinytuya==1.21.0 --hash=sha256:{SHA_TINYTUYA_NOVO}" in (repo_tmp / "requirements.txt").read_text(encoding="utf-8")
     mudados = {p.relative_to(repo_tmp).as_posix() for p, b in _tudo(repo_tmp).items() if antes[p] != b}
-    assert mudados == {"requirements.txt"}
+    assert mudados == {"requirements.txt", METAINFO}  # o changelog ganha o item
     assert (repo_tmp / "requirements-dev.txt").read_text(encoding="utf-8").startswith("-r requirements.txt\n")
 
 
@@ -430,3 +457,82 @@ def test_erro_inesperado_sai_2_nunca_1(repo_tmp, capsys):
 
     assert av.main(["--verificar"], raiz=repo_tmp, ler=ler, rodar=Mundo().para_kwargs()["rodar"]) == 2
     assert "inesperado" in capsys.readouterr().err
+
+
+# --- changelog (Task 8) ---
+
+
+def _metainfo(raiz):
+    return (raiz / METAINFO).read_text(encoding="utf-8")
+
+
+def _itens_do_topo(raiz):
+    return re.findall(r"<li>(.*?)</li>", _metainfo(raiz).split("</release>")[0])
+
+
+MUNDO_PATCH = Mundo(pythons={"3.15.2": "22" * 32, "3.15.1": SHA_PY_ATUAL}, setup={"3.15.2", "3.15.1"},
+                    resolucoes={("3.15", None): _com(LIBS, tinytuya=("1.21.0", SHA_TINYTUYA_NOVO))})
+
+
+def test_changelog_um_item_por_peca_no_fim_da_lista_do_topo(repo_tmp):
+    av.atualizar(repo_tmp, gravar=True, **MUNDO_PATCH.para_kwargs())
+    assert _itens_do_topo(repo_tmp) == ["Novidade do usuário.", "Python atualizado para 3.15.2.", "tinytuya atualizada para 1.21.0."]
+    assert "<li>Antiga.</li>" in _metainfo(repo_tmp) and _metainfo(repo_tmp).count("atualizad") == 2
+
+
+def test_changelog_mesma_peca_troca_a_versao_sem_duplicar(repo_tmp):
+    av.atualizar(repo_tmp, gravar=True, **TINYTUYA_NOVO.para_kwargs())
+    mundo = Mundo(resolucoes={("3.15", None): _com(LIBS, tinytuya=("1.22.0", "cd" * 32))})
+    # o requirements já está em 1.21.0 depois da primeira passada; a segunda sobe para 1.22.0
+    r = av.atualizar(repo_tmp, gravar=True, **mundo.para_kwargs())
+    assert r.trocas == [av.Troca("tinytuya", "1.21.0", "1.22.0")]
+    assert _itens_do_topo(repo_tmp) == ["Novidade do usuário.", "tinytuya atualizada para 1.22.0."]
+
+
+def test_changelog_troca_so_de_hash_nao_gera_item(repo_tmp):
+    mundo = Mundo(resolucoes={("3.15", None): _com(LIBS, tinytuya=("1.20.0", "9" * 64))})
+    av.atualizar(repo_tmp, gravar=True, **mundo.para_kwargs())
+    assert _metainfo(repo_tmp) == METAINFO_BASE
+
+
+def test_changelog_nada_novo_deixa_o_metainfo_intocado(repo_tmp):
+    av.atualizar(repo_tmp, gravar=True, **Mundo().para_kwargs())
+    assert _metainfo(repo_tmp) == METAINFO_BASE
+
+
+def test_changelog_release_publicada_nao_escreve_e_avisa(repo_tmp):
+    r = av.atualizar(repo_tmp, gravar=True, **replace(TINYTUYA_NOVO, release_topo={"prerelease": False}).para_kwargs())
+    assert r.trocas and _metainfo(repo_tmp) == METAINFO_BASE
+    assert ("A versão 9.0.1 já foi publicada: suba a VERSION em kyron/shared.py e abra uma <release> nova "
+            "para registrar as atualizações.") in r.avisos
+    assert "tinytuya==1.21.0" in (repo_tmp / "requirements.txt").read_text(encoding="utf-8")
+
+
+def test_changelog_pre_release_ainda_aceita_itens(repo_tmp):
+    av.atualizar(repo_tmp, gravar=True, **replace(TINYTUYA_NOVO, release_topo={"prerelease": True}).para_kwargs())
+    assert "tinytuya atualizada para 1.21.0." in _itens_do_topo(repo_tmp)
+
+
+def test_changelog_fonte_fora_nao_escreve_e_avisa(repo_tmp):
+    r = av.atualizar(repo_tmp, gravar=True, **replace(TINYTUYA_NOVO, release_topo="fora").para_kwargs())
+    assert _metainfo(repo_tmp) == METAINFO_BASE
+    assert any("Não foi possível conferir" in a and "9.0.1" in a for a in r.avisos)
+
+
+def test_changelog_nome_e_escapado_para_xml():
+    t = av.Troca("lib<&>", "1", "2")
+    assert "<li>lib&lt;&amp;&gt; atualizada para 2.</li>" in av.escrever_changelog(METAINFO_BASE, [t])
+
+
+def test_changelog_componentes_no_masculino():
+    trocas = [av.Troca(p, "1", "2") for p in ("pyside6", "qt-sdk", "qwindowkit", "ffmpeg", "ludusavi", "inno-setup", "pyside6-addons")]
+    texto = av.escrever_changelog(METAINFO_BASE, trocas)
+    for nome in ("PySide6", "Qt", "QWindowKit", "FFmpeg", "Ludusavi", "Inno Setup"):
+        assert f"<li>{nome} atualizado para 2.</li>" in texto
+    assert "addons" not in texto
+
+
+def test_changelog_preserva_crlf():
+    base = METAINFO_BASE.replace("\n", "\r\n")
+    texto = av.escrever_changelog(base, [av.Troca("python", "1", "2")])
+    assert texto.count("\r\n") == texto.count("\n") and "<li>Python atualizado para 2.</li>\r\n" in texto

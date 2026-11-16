@@ -19,6 +19,7 @@ import subprocess
 import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
+from xml.sax.saxutils import escape
 
 import fontes_de_versao as fontes
 from fontes_de_versao import FonteIndisponivel, Pino, SemHash, _chave, _normalizado
@@ -32,6 +33,16 @@ REQ, REQ_DEV = "requirements.txt", "requirements-dev.txt"
 MONTAR = "build-aux/windows/montar_app_qt.py"
 QT_SDK = "tools/baixar_qt_sdk.py"
 INNO = "build-aux/windows/instalar_inno.ps1"
+METAINFO = "data/io.github.joaomgabaldi.Cartridges.metainfo.xml.in"
+REPOSITORIO = "joaomgabaldi/Cartridges"
+# Componentes nomeados (masculino); as bibliotecas (feminino) usam o nome do pip. Os pacotes irmãos do PySide6
+# andam com ele e não ganham item próprio.
+NOMES = {"python": "Python", "pyside6": "PySide6", "qt-sdk": "Qt", "qwindowkit": "QWindowKit",
+         "ffmpeg": "FFmpeg", "ludusavi": "Ludusavi", "inno-setup": "Inno Setup"}
+IRMAOS_DO_PYSIDE6 = {"pyside6-addons", "pyside6-essentials", "shiboken6"}
+_TOPO = re.compile(r"^[ \t]*<release\b[^>]*>.*?</release>", re.M | re.S)
+_FIM_DA_LISTA = re.compile(r"^([ \t]*)</ul>", re.M)
+_VERSAO_DO_TOPO = re.compile(r'<release\b[^>]*\bversion="([^"]*)"')
 
 CONSTANTES = {
     MONTAR: ("PYTHON_SHA256", "FFMPEG_VERSAO", "FFMPEG_SHA256", "FFMPEG_FONTE",
@@ -199,9 +210,48 @@ def _hashes(assets: dict[str, str], nomes: list[str], versao: str) -> list[str]:
     return [assets[n] for n in nomes]
 
 
+def _topo(metainfo: str) -> re.Match:
+    achado = _TOPO.search(metainfo)
+    if not achado or not _VERSAO_DO_TOPO.search(achado.group(0)):
+        raise PontoAusente(f"{METAINFO}: sem <release version=...> no topo")
+    return achado
+
+
+def escrever_changelog(metainfo: str, trocas: list[Troca]) -> str:
+    """Um `<li>` por peça ao fim da `<ul>` da `<release>` do topo; peça que já tem item só troca a versão."""
+    topo = _topo(metainfo)
+    bloco = topo.group(0)
+    for t in trocas:
+        if t.peca in IRMAOS_DO_PYSIDE6 or not t.para:
+            continue
+        nome = escape(NOMES.get(t.peca, t.peca))
+        existente = re.compile(rf"(<li>{re.escape(nome)} atualizad[oa] para )[^<]*(\.</li>)")
+        if existente.search(bloco):
+            bloco = existente.sub(lambda m: f"{m.group(1)}{escape(t.para)}{m.group(2)}", bloco, 1)
+            continue
+        fim = _uma(_FIM_DA_LISTA, bloco, METAINFO)
+        quebra = "\r\n" if "\r\n" in bloco else "\n"
+        genero = "atualizado" if t.peca in NOMES else "atualizada"
+        item = f"{fim.group(1)}  <li>{nome} {genero} para {escape(t.para)}.</li>{quebra}"
+        bloco = bloco[:fim.start()] + item + bloco[fim.start():]
+    return metainfo[:topo.start()] + bloco + metainfo[topo.end():]
+
+
+def _publicada_como_final(metainfo: str, ler) -> tuple[str, bool | None]:
+    """(versão do topo, se já é release final no GitHub; None se não deu para conferir)."""
+    versao = _VERSAO_DO_TOPO.search(_topo(metainfo).group(0)).group(1)
+    try:
+        dados = json.loads(ler(f"https://api.github.com/repos/{REPOSITORIO}/releases/tags/v{versao}"))
+        return versao, dados["prerelease"] is False
+    except fontes.NaoEncontrado:
+        return versao, False
+    except (FonteIndisponivel, ValueError, KeyError, TypeError):
+        return versao, None
+
+
 def atualizar(raiz: Path, *, gravar: bool, ler=fontes.ler_da_rede, rodar=subprocess.run) -> Resultado:
     raiz = Path(raiz)
-    caminhos = [PYTHON_VERSION, README, REQ, REQ_DEV, MONTAR, QT_SDK, INNO]
+    caminhos = [PYTHON_VERSION, README, REQ, REQ_DEV, MONTAR, QT_SDK, INNO, METAINFO]
     # newline="" preserva o fim de linha de cada arquivo; o BOM, se houver, volta junto no texto.
     textos = {c: (raiz / c).read_text(encoding="utf-8", newline="") for c in caminhos}
     novos = dict(textos)
@@ -292,6 +342,16 @@ def atualizar(raiz: Path, *, gravar: bool, ler=fontes.ler_da_rede, rodar=subproc
     else:
         _uma(_INNO_HASH, texto, INNO)
     novos[INNO] = texto
+
+    if trocas:
+        versao, publicada = _publicada_como_final(textos[METAINFO], ler)
+        if publicada is None:
+            avisos.append(f"Não foi possível conferir se a versão {versao} já foi publicada; o changelog não foi atualizado.")
+        elif publicada:
+            avisos.append(f"A versão {versao} já foi publicada: suba a VERSION em kyron/shared.py e abra uma <release> "
+                          "nova para registrar as atualizações.")
+        else:
+            novos[METAINFO] = escrever_changelog(textos[METAINFO], trocas)
 
     if gravar and (trocas or hashes_mudaram):
         for arq, texto in novos.items():

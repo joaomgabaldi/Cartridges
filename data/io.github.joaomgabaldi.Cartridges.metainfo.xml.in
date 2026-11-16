@@ -28,6 +28,15 @@
   </requires>
   <content_rating type="oars-1.1" />
   <releases>
+    <release version="2.1.1">
+      <description translate="no">
+        <ul>
+          <li>Python atualizado para 3.15.2.</li>
+          <li>tinytuya atualizada para 1.21.1.</li>
+          <li>Inno Setup atualizado para 7.1.1.</li>
+        </ul>
+      </description>
+    </release>
     <release version="2.1.0" date="2026-11-15">
       <description translate="no">
         <ul>
