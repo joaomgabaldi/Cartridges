@@ -43,7 +43,7 @@ if ($pythonNovo -and $xyAntes -ne $xyDepois) {
     }
     Remove-Item -Recurse -Force (Join-Path $repo '.venv')
     & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $repo 'tools\ambiente_qt.ps1')
-    if ($LASTEXITCODE -ne 0) { Falha 'Não foi possível recriar o ambiente de desenvolvimento.' }
+    if ($LASTEXITCODE -ne 0) { Falha 'Não foi possível recriar o ambiente de desenvolvimento. Rode toolsmbiente_qt.ps1 à mão para recriar o .venv.' }
 } else {
     Etapa 'Instalando as bibliotecas de desenvolvimento'
     & $python -m pip install --require-hashes -r (Join-Path $repo 'requirements-dev.txt')
@@ -58,9 +58,13 @@ if ((Trocou 'pyside6') -or (Trocou 'qt-sdk') -or (Trocou 'qwindowkit') -or -not 
     if ($LASTEXITCODE -ne 0) { Falha 'A compilação da qwk_ponte.dll falhou. Veja a saída acima.' }
 }
 
-$inno = $trocas | Where-Object { $_.peca -eq 'inno-setup' } | Select-Object -First 1
-if ($inno) {
-    Write-Host "Há uma versão nova do Inno Setup ($($inno.para)). O build local segue com a instalada." -ForegroundColor Yellow
+$fixado = [regex]::Match((Get-Content (Join-Path $PSScriptRoot 'instalar_inno.ps1') -Raw), "\`$InnoVersao\s*=\s*'([^']+)'").Groups[1].Value
+$instalado = foreach ($raiz in 'HKLM:\SOFTWARE', 'HKLM:\SOFTWARE\WOW6432Node', 'HKCU:\SOFTWARE') {
+    $v = (Get-ItemProperty "$raiz\Microsoft\Windows\CurrentVersion\Uninstall\Inno Setup 7_is1" -ErrorAction SilentlyContinue).DisplayVersion
+    if ($v) { $v; break }
+}
+if ($instalado -and $fixado -and $instalado -ne $fixado) {
+    Write-Host "O Inno Setup instalado ($instalado) é diferente do fixado ($fixado). O build local segue com o instalado." -ForegroundColor Yellow
 }
 
 Etapa 'Rodando a suíte'
