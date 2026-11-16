@@ -1,12 +1,13 @@
 @echo off
-rem Compila o QWindowKit 1.5.0 (estatico, so Core + Quick) e a qwk_ponte.dll.
-rem Precisa de _deps\qt (SDK do Qt 6.12.0 MSVC 2022, o mesmo do PySide6) e
-rem _deps\qwindowkit (tag 1.5.0 com o submodulo qmsetup).
+rem Compila o QWindowKit (estatico, so Core + Quick) e a qwk_ponte.dll.
+rem Precisa de _deps\qt (SDK do Qt MSVC 2022, o mesmo do PySide6) e
+rem _deps\qwindowkit (com o submodulo qmsetup), ambos de tools\baixar_qt_sdk.py.
 setlocal
 set AQUI=%~dp0
 set DEPS=%AQUI%_deps
-rem VS 2022 e o conjunto 14.44, o mesmo do Qt 6.12.0 (MSVC 19.44): um mais novo
-rem poderia exigir um runtime mais novo que o msvcp140 que o PySide6 traz.
+rem VS 2022 e o conjunto MSVC que o proprio SDK do Qt declara (_deps\qt\.vcvars_ver, gravado por
+rem baixar_qt_sdk.py): um mais novo poderia exigir um runtime mais novo que o msvcp140 que o PySide6 traz.
+set /p VCVER=<"%DEPS%\qt\.vcvars_ver"
 for /f "usebackq delims=" %%i in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -version [17^,18^) -property installationPath`) do set VS=%%i
 call "%VS%\VC\Auxiliary\Build\vcvars64.bat" -vcvars_ver=14.44 >nul || exit /b 1
 

@@ -253,7 +253,7 @@ def test_monta_com_os_pyc_compilados(insumos, tmp_path):
     assert len(fontes) >= 4
     for fonte in fontes:
         # O Python embutido é o 3.15: um `.pyc` de outra versão ele ignoraria, e recompilaria tudo a cada abertura.
-        pyc = fonte.parent / "__pycache__" / f"{fonte.stem}.cpython-315.pyc"
+        pyc = fonte.parent / "__pycache__" / f"{fonte.stem}.{montar_app_qt.cache_tag_do_app()}.pyc"
         assert pyc.is_file(), fonte
         # Bits do cabeçalho (PEP 552): 1 = por hash, sem conferir a fonte.
         assert int.from_bytes(pyc.read_bytes()[4:8], "little") == 1, fonte
@@ -417,3 +417,16 @@ def test_baixar_python_passa_pelo_download_conferido(tmp_path, monkeypatch):
     extraido = montar_app_qt.baixar_python(tmp_path / "cache")
     assert chamadas == [(montar_app_qt.PYTHON_URL, montar_app_qt.PYTHON_SHA256)]
     assert (extraido / "python315.dll").is_file()
+
+
+def test_python_vem_do_arquivo_unico():
+    versao = (montar_app_qt.RAIZ / ".python-version").read_text(encoding="utf-8").strip()
+    assert montar_app_qt.PYTHON_VERSAO == versao
+    assert montar_app_qt.PYTHON_URL == f"https://www.python.org/ftp/python/{versao}/python-{versao}-embed-amd64.zip"
+    maior, menor, _ = versao.split(".")
+    assert montar_app_qt.cache_tag_do_app() == f"cpython-{maior}{menor}"
+
+
+def test_ffmpeg_e_ludusavi_derivados_da_versao():
+    assert montar_app_qt.FFMPEG_URL.endswith(f"ffmpeg-{montar_app_qt.FFMPEG_VERSAO}-essentials_build.zip")
+    assert f"/v{montar_app_qt.LUDUSAVI_VERSAO}/" in montar_app_qt.LUDUSAVI_URL

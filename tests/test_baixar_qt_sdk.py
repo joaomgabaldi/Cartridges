@@ -140,3 +140,33 @@ def test_commit_errado_depois_de_clonar_falha_e_limpa(tmp_path, monkeypatch):
     with pytest.raises(RuntimeError):
         sdk.preparar_qwindowkit(git)
     assert not (tmp_path / "qwindowkit").exists() and not (tmp_path / "qwindowkit.parcial").exists()
+
+
+def test_base_e_marcador_derivados_da_versao():
+    assert "qt6_6120/qt6_6120_msvc2022_64/qt.qt6.6120.win64_msvc2022_64/" in sdk.BASE  # enquanto QT_VERSAO for 6.12.0
+    assert sdk.MARCADOR == f".extraido-{sdk.QT_VERSAO}"
+    assert sdk.PACOTES["qtbase"][0] == f"{sdk.QT_VERSAO}-0-{sdk.QT_DATA}qtbase-{sdk.SUFIXO}"
+
+
+def test_toolset_vem_do_sdk(tmp_path):
+    (tmp_path / "config_qtbase.summary").write_text(
+        "Building for: win32-msvc (x86_64, CPU features: )\nCompiler: msvc 19.44.35227.0\n", encoding="utf-8"
+    )
+    assert sdk.toolset_do_qt(tmp_path) == "14.44"
+
+
+def test_toolset_ausente_no_sdk_falha(tmp_path):
+    (tmp_path / "config_qtbase.summary").write_text("Compiler: gcc 13.2\n", encoding="utf-8")
+    with pytest.raises(RuntimeError, match="MSVC"):
+        sdk.toolset_do_qt(tmp_path)
+
+
+def test_preparar_qt_grava_o_toolset(tmp_path, monkeypatch):
+    qt = tmp_path / "qt"
+    qt.mkdir()
+    (qt / "config_qtbase.summary").write_text("Compiler: msvc 19.44.35227.0\n", encoding="utf-8")
+    monkeypatch.setattr(sdk, "DEPS", tmp_path)
+    monkeypatch.setattr(sdk, "baixar_pacote", lambda *a: tmp_path / "x.7z")
+    monkeypatch.setattr(sdk, "extrair_qt", lambda *a: None)
+    sdk.preparar_qt()
+    assert (qt / ".vcvars_ver").read_text(encoding="utf-8").strip() == "14.44"

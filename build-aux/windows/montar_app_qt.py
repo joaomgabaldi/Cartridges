@@ -41,13 +41,16 @@ from pathlib import Path
 
 RAIZ = Path(__file__).resolve().parent.parent.parent
 
-PYTHON_URL = "https://www.python.org/ftp/python/3.15.1/python-3.15.1-embed-amd64.zip"
+# A versão mora em `.python-version`, lido também pela CI e pelo `ambiente_qt.ps1`.
+PYTHON_VERSAO = (RAIZ / ".python-version").read_text(encoding="utf-8").strip()
+PYTHON_URL = f"https://www.python.org/ftp/python/{PYTHON_VERSAO}/python-{PYTHON_VERSAO}-embed-amd64.zip"
 # O mesmo SHA-256 do resumo assinado no .sigstore publicado ao lado do arquivo na página da release.
 PYTHON_SHA256 = "352e232f25b5120508f11a6dfc1bd9076d3e70c30977d552a63338838c2ae8fb"
 
 # Build "essentials" do gyan.dev, um dos indicados em ffmpeg.org para Windows; traz a libwebp que a capa de vídeo usa.
 # O SHA-256 é o publicado ao lado do arquivo, em <FFMPEG_URL>.sha256.
-_FFMPEG_PASTA = "ffmpeg-9.0.2-essentials_build"
+FFMPEG_VERSAO = "9.0.2"
+_FFMPEG_PASTA = f"ffmpeg-{FFMPEG_VERSAO}-essentials_build"
 FFMPEG_URL = f"https://www.gyan.dev/ffmpeg/builds/packages/{_FFMPEG_PASTA}.zip"
 FFMPEG_SHA256 = "60f467265b1e312373dbcd92200c2618a74850f98d3d078e94296bb3fa2047ba"
 FFMPEG_EXE = f"{_FFMPEG_PASTA}/bin/ffmpeg.exe"
@@ -55,8 +58,9 @@ FFMPEG_LICENCA = f"{_FFMPEG_PASTA}/LICENSE"
 # GPLv3 §6: a fonte correspondente, o commit que a página do build publica para esta versão.
 FFMPEG_FONTE = "https://github.com/FFmpeg/FFmpeg/commit/946fcce07b"
 
-_LUDUSAVI = "ludusavi-v0.31.0"
-_LUDUSAVI_BASE = "https://github.com/mtkennerly/ludusavi/releases/download/v0.31.0"
+LUDUSAVI_VERSAO = "0.31.0"
+_LUDUSAVI = f"ludusavi-v{LUDUSAVI_VERSAO}"
+_LUDUSAVI_BASE = f"https://github.com/mtkennerly/ludusavi/releases/download/v{LUDUSAVI_VERSAO}"
 LUDUSAVI_URL = f"{_LUDUSAVI_BASE}/{_LUDUSAVI}-win64.zip"
 LUDUSAVI_SHA256 = "f47a8ad8c708f01d2eb124704973beffab205e292f5287a10fc4a101f8d68706"
 LUDUSAVI_LEGAL_URL = f"{_LUDUSAVI_BASE}/{_LUDUSAVI}-legal.zip"
@@ -104,12 +108,19 @@ SOBRAS_DO_PYSIDE = (
 )
 
 
+def cache_tag_do_app() -> str:
+    """O `cache_tag` do Python embutido (`cpython-315`), derivado de `PYTHON_VERSAO`."""
+    maior, menor, _ = PYTHON_VERSAO.split(".")
+    return f"cpython-{maior}{menor}"
+
+
 def compilar_pyc(pasta: Path) -> None:
     """Grava os `.pyc` de `pasta` por hash, sem conferir a fonte: em Program Files o Python não os grava, e por data
     deixariam de valer (o Inno Setup repõe a data dos arquivos). O `[InstallDelete]` troca `.py` e `.pyc` juntos."""
-    if sys.implementation.cache_tag != "cpython-315":
+    if sys.implementation.cache_tag != cache_tag_do_app():
         # O Python embutido ignoraria os `.pyc` de outra versão, sem nenhum aviso.
-        sys.exit(f"Os .pyc precisam do Python 3.15, o do app; este é {sys.implementation.cache_tag}.")
+        versao = ".".join(PYTHON_VERSAO.split(".")[:2])
+        sys.exit(f"Os .pyc precisam do Python {versao}, o do app; este é {sys.implementation.cache_tag}.")
     if not compileall.compile_dir(
         pasta, quiet=1, force=True, invalidation_mode=py_compile.PycInvalidationMode.UNCHECKED_HASH
     ):
