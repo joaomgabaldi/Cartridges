@@ -348,7 +348,7 @@ def test_inno_novo_reescreve_url_e_hash(repo_tmp):
         assert "releases/download/is-7_1_1/innosetup-7.1.1-x64.exe'" in texto
         assert f"-ne '{SHA_INNO_711.upper()}'" in texto
         assert "7_1_0" not in texto and SHA_INNO_ATUAL.upper() not in texto
-        assert texto.count("\n") == texto.count("\r\n")
+        assert texto.count("\r\n") in (0, texto.count("\n"))  # sem misturar: LF (CI) ou CRLF (autocrlf do PC)
 
 
 def test_verificar_nao_grava_e_sai_1(repo_tmp, capsys):

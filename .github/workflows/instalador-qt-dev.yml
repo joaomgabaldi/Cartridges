@@ -14,7 +14,7 @@ env:
 jobs:
   instalador:
     runs-on: windows-2022
-    timeout-minutes: 60
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
 
@@ -22,6 +22,22 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version-file: .python-version
+
+      # Só avisa das versões novas; nada é gravado (quem atualiza é o instalador.yml).
+      - name: Versões novas
+        continue-on-error: true
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          python build-aux/windows/atualizar_versoes.py --verificar --json "$RUNNER_TEMP/versoes.json" || [ $? -eq 1 ]  # 1 = há versão nova
+          python - <<'PY'
+          import json, os
+          with open(os.path.join(os.environ["RUNNER_TEMP"], "versoes.json"), encoding="utf-8") as f:
+              dados = json.load(f)
+          for t in dados["trocas"]:
+              print(f"::warning::Versão nova de {t['peca']}: {t['de']} para {t['para']}")
+          PY
 
       # SDK do Qt e QWindowKit baixados por tools/baixar_qt_sdk.py (o script confere o SHA-1 e
       # refaz o que não estiver completo).

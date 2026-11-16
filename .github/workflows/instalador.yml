@@ -2,6 +2,11 @@ name: Gerar instalador (beta)
 
 on:
   workflow_dispatch:
+    inputs:
+      sem_atualizar:
+        type: boolean
+        default: false
+        description: "Montar com as versões já gravadas, sem atualizar"
 
 permissions:
   contents: write
@@ -13,7 +18,7 @@ jobs:
   instalador:
     if: github.ref == 'refs/heads/main'
     runs-on: windows-2022
-    timeout-minutes: 60
+    timeout-minutes: 90
     steps:
       - run: git config --global core.autocrlf false
 
@@ -53,6 +58,35 @@ jobs:
           fi
           echo "VERSAO=$versao" >> "$GITHUB_ENV"
 
+      # Sobe as versões das peças (Python, Qt, bibliotecas, ffmpeg, Ludusavi, Inno) para as mais novas
+      # compatíveis. Só reescreve arquivos do checkout: o commit sai depois da suíte e da montagem.
+      - name: Atualizar versões
+        if: ${{ !inputs.sem_atualizar }}
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          python build-aux/windows/atualizar_versoes.py --json "$RUNNER_TEMP/versoes.json"
+          python - <<'PY'
+          import json, os
+          with open(os.path.join(os.environ["RUNNER_TEMP"], "versoes.json"), encoding="utf-8") as f:
+              dados = json.load(f)
+          for aviso in dados["avisos"]:
+              print("::warning::" + " ".join(aviso.split()).replace("%", "%25"))
+          if dados["linha"]:
+              with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as f:
+                  print("LINHA_DAS_VERSOES=" + dados["linha"], file=f)
+          PY
+          # Também vale quando só os hashes das rodas mudaram (a linha vem vazia).
+          if ! git diff --quiet; then
+            echo "VERSOES_MUDARAM=1" >> "$GITHUB_ENV"
+          fi
+
+      # De novo: se o .python-version subiu, este passo instala o Python novo.
+      - uses: actions/setup-python@v5
+        with:
+          python-version-file: .python-version
+
       # SDK do Qt e QWindowKit baixados por tools/baixar_qt_sdk.py (o script confere o SHA-1 e
       # refaz o que não estiver completo).
       - uses: actions/cache@v4
@@ -75,6 +109,23 @@ jobs:
       # e do que falta na pasta antes de ir para quem instala. Falhou, não sai instalador.
       - name: Verificar a pasta montada
         run: .\_dist\qt-final\python\python.exe -B build-aux\windows\verificar_pasta.py _dist\qt-final
+
+      # A suíte nunca rodou na CI. Falhou, o job termina aqui: nada é commitado nem publicado.
+      - name: Suíte
+        shell: bash
+        run: |
+          python -m pip install --require-hashes -r requirements-dev.txt
+          python -m pytest -n auto -q
+
+      - name: Commit das versões
+        if: env.VERSOES_MUDARAM == '1'
+        shell: bash
+        run: |
+          mensagem="${LINHA_DAS_VERSOES:-Versões atualizadas: hashes das rodas}"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -am "$mensagem"
+          git push origin "HEAD:$GITHUB_REF_NAME"
 
       # A mesma versão do PC do desenvolvedor: o Inno 6 que o runner traz compila
       # o [Code] de outro jeito (recusa Variant onde o 7 aceita). O choco ainda
