@@ -98,16 +98,17 @@ PowerShell, a partir da raiz do projeto.
 
 ### Executar do código-fonte
 
-1. Instale o Python 3.15 e crie o ambiente com as dependências fixadas
-   (`requirements.txt`, mais o `pytest` do `requirements-dev.txt`):
+1. Instale o Python da versão indicada no arquivo `.python-version` e crie o ambiente com as dependências
+   fixadas (`requirements.txt`, mais o `pytest` do `requirements-dev.txt`, ambos com hashes):
 
    ```powershell
    powershell -NoProfile -ExecutionPolicy Bypass -File tools\ambiente_qt.ps1
    ```
 
 2. Gere a `qwk_ponte.dll`. É preciso o Git, o Visual Studio 2022 (ou só as Build Tools) com o conjunto de
-   ferramentas MSVC 14.44, o CMake e o Ninja. O primeiro comando baixa o SDK do Qt 6.12.0 e o
-   QWindowKit para `build-aux\windows\qwk\_deps`; o segundo compila a DLL:
+   ferramentas MSVC do Qt (o conjunto é o do SDK, gravado em `_deps\qt\.vcvars_ver`), o CMake e o Ninja (no
+   Build Tools, o componente "Ferramentas do CMake do C++"). O primeiro comando baixa o SDK do Qt da versão
+   do PySide6 e o QWindowKit para `build-aux\windows\qwk\_deps`; o segundo compila a DLL:
 
    ```powershell
    .venv\Scripts\python tools\baixar_qt_sdk.py
@@ -136,13 +137,16 @@ saves fica indisponível. Para usá-lo, copie para essa pasta o `ludusavi.exe` q
 
 O instalador oficial é gerado pelo workflow **Gerar instalador (beta)** do GitHub Actions
 (`.github/workflows/instalador.yml`), disparado à mão. Ele baixa o Python embutido, o `ffmpeg` e o
-Ludusavi (conferidos por SHA-256), compila a `qwk_ponte.dll`, monta a pasta do aplicativo com
+Ludusavi (conferidos por SHA-256), antes atualiza todas as dependências para as versões mais novas compatíveis
+(`build-aux/windows/atualizar_versoes.py`; o campo `sem_atualizar` do workflow pula esse passo, para uma
+versão urgente), compila a `qwk_ponte.dll`, monta a pasta do aplicativo com
 `build-aux/windows/montar_app_qt.py`, empacota com o [Inno Setup 7](https://jrsoftware.org/isinfo.php)
 (o 6 não serve) e publica uma pré-release. Depois de testada, a pré-release é promovida a versão final.
 
 Para gerar um instalador local de teste, execute `build-installer.bat` e escolha a opção 2. Ele
 monta a pasta do aplicativo no canal final, empacota com o Inno Setup e grava o instalador em
-`_dist\instalador`. Precisa da `qwk_ponte.dll` do passo anterior, do Inno Setup 7 e de internet na
+`_dist\instalador`. Antes de montar, atualiza as versões, recompila a ponte se o Qt mudou e roda a suíte inteira;
+as mudanças ficam sem commit, para você conferir. Precisa da `qwk_ponte.dll` do passo anterior, do Inno Setup 7 e de internet na
 primeira vez (para baixar o Python embutido, o `ffmpeg` e o Ludusavi). A opção 1 dispara o workflow
 no GitHub: não a use para um teste local.
 
