@@ -304,7 +304,8 @@ def test_python_menor_novo_sobe_tudo_junto(repo_tmp):
 
 
 def test_pyside_sem_sdk_do_qt_fica_junto(repo_tmp):
-    mundo = Mundo(resolucoes={("3.15", None): PYSIDE_613, ("3.15", "6.12.0"): _com(LIBS, tinytuya=("1.21.0", SHA_TINYTUYA_NOVO))})
+    # "6.12.0.*": um PySide6 atual de quatro partes (6.12.0.1) continua aceito; "==6.12.0" o rebaixaria.
+    mundo = Mundo(resolucoes={("3.15", None): PYSIDE_613, ("3.15", "6.12.0.*"): _com(LIBS, tinytuya=("1.21.0", SHA_TINYTUYA_NOVO))})
     r = av.atualizar(repo_tmp, gravar=True, **mundo.para_kwargs())
     assert not {"pyside6", "qt-sdk"} & {t.peca for t in r.trocas}
     assert any("Qt" in a for a in r.avisos)

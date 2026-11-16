@@ -118,9 +118,8 @@ def _resolver(raiz: Path, xy: str, restricoes: list[str], rodar) -> tuple[list[P
     app = fontes.resolver_libs([raiz / REQ_IN], xy, restricoes, rodar)
     if app is None:
         return None
-    todas = fontes.resolver_libs(
-        [raiz / REQ_IN, raiz / REQ_DEV_IN], xy, restricoes + [f"{p.nome}=={p.versao}" for p in app], rodar
-    )
+    # Os pinos exatos do app já cumprem as `restricoes`.
+    todas = fontes.resolver_libs([raiz / REQ_IN, raiz / REQ_DEV_IN], xy, [f"{p.nome}=={p.versao}" for p in app], rodar)
     if todas is None:
         return None
     nomes = {_normalizado(p.nome) for p in app}
@@ -171,7 +170,8 @@ def _decidir_python_e_libs(raiz, py_atual, qt_atual, libs_atuais, ler, rodar, av
                 qt = sdk_do_qt[pyside] and (pyside, *sdk_do_qt[pyside])
                 if qt is None:
                     avisos.append(f"O SDK do Qt {pyside} para MSVC 64 bits não está publicado; PySide6 e Qt ficam no {qt_atual}.")
-                    libs = _resolver(raiz, xy, [f"PySide6=={qt_atual}"], rodar)
+                    # ".*": a revisão de quatro partes do mesmo Qt (6.12.0.1) continua valendo.
+                    libs = _resolver(raiz, xy, [f"PySide6=={qt_atual}.*"], rodar)
         if libs:
             novas = _versoes(libs[0] + libs[1])
             menores = [n for n, ver in novas.items() if n in libs_atuais and _lib_menor(ver, libs_atuais[n])]

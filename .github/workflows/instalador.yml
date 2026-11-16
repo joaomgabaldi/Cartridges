@@ -152,8 +152,9 @@ jobs:
           # Só o que o atualizador mexeu (a lista foi guardada antes da montagem e da suíte).
           while IFS= read -r arquivo; do git add -- "$arquivo"; done < "$RUNNER_TEMP/arquivos_das_versoes.txt"
           git commit -m "$mensagem"
-          # Um push de outra pessoa durante o build não pode derrubar o passo.
-          git -c "$auth" pull -q --rebase origin "$GITHUB_REF_NAME"
+          # Um push de outra pessoa durante o build não pode derrubar o passo; --autostash: o rebase recusa
+          # rodar com arquivo rastreado modificado fora da lista acima.
+          git -c "$auth" pull -q --rebase --autostash origin "$GITHUB_REF_NAME"
           git -c "$auth" push origin "HEAD:$GITHUB_REF_NAME"
 
       - name: Publicar pré-release
