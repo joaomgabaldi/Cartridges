@@ -662,6 +662,8 @@ from PySide6.QtCore import Qt, QPoint
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtTest import QTest
 app = QGuiApplication(["x"])  # sem a opção dos testes: a animação de saída roda
+import kyron.aplicativo
+kyron.aplicativo._animacoes_do_sistema = lambda: True  # o Windows Server da CI vem com os "Efeitos de animação" desligados
 from kyron.utils import session_log
 agora = int(time.time())
 session_log.load = lambda gid: [{"end": agora - i * 86400, "seconds": 3600} for i in range(30 if gid.endswith("_1") else 2)]
@@ -725,9 +727,7 @@ def test_saida_do_historico_mantem_o_conteudo_durante_a_animacao(tmp_path):
     from pathlib import Path  # noqa: PLC0415
 
     raiz = Path(__file__).resolve().parent.parent
-    # QSG_FIXED_ANIMATION_STEP: a animação anda um passo por quadro, não pelo relógio; sem isso, num runner lento
-    # o processamento do clique já consome a duração inteira da saída e nenhum quadro visível é amostrado.
-    ambiente = dict(os.environ, QT_QPA_PLATFORM="offscreen", QSG_FIXED_ANIMATION_STEP="1", PYTHONPATH=str(raiz),
+    ambiente = dict(os.environ, QT_QPA_PLATFORM="offscreen", PYTHONPATH=str(raiz),
                     APPDATA=str(tmp_path), LOCALAPPDATA=str(tmp_path), USERPROFILE=str(tmp_path))
     rodou = subprocess.run([sys.executable, "-c", _SAIDA, str(raiz)], env=ambiente, capture_output=True, text=True, timeout=120, check=False, cwd=raiz)
     assert "OK" in rodou.stdout, rodou.stdout + rodou.stderr
