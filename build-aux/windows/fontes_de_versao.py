@@ -10,10 +10,12 @@ Python e a plataforma do app (win_amd64).
 
 import hashlib
 import json
+import os
 import re
 import subprocess
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
@@ -68,12 +70,16 @@ def _normalizado(nome: str) -> str:
     return re.sub(r"[-_.]+", "-", nome).lower()
 
 
-def gravar_requirements(destino: Path, pinos: list[Pino], cabecalho: list[str]) -> None:
+def texto_requirements(pinos: list[Pino], cabecalho: list[str]) -> str:
     """`nome==versao --hash=sha256:…`, por nome normalizado; o `cabecalho` (ex.: "-r requirements.txt") vai antes."""
     linhas = list(cabecalho)
     for p in sorted(pinos, key=lambda p: _normalizado(p.nome)):
         linhas.append(f"{p.nome}=={p.versao} --hash=sha256:{p.sha256}")
-    destino.write_text("\n".join(linhas) + "\n", encoding="utf-8", newline="\n")
+    return "\n".join(linhas) + "\n"
+
+
+def gravar_requirements(destino: Path, pinos: list[Pino], cabecalho: list[str]) -> None:
+    destino.write_text(texto_requirements(pinos, cabecalho), encoding="utf-8", newline="\n")
 
 
 # --- fontes oficiais ---
@@ -105,6 +111,7 @@ _VERSAO = re.compile(r"\d+\.\d+\.\d+")
 _SHA256 = re.compile(r"[0-9a-f]{64}")
 _SHA1 = re.compile(r"[0-9a-f]{40}")
 _TAG = re.compile(r"[A-Za-z0-9._-]{1,64}")
+_ASSET = re.compile(r"[A-Za-z0-9][A-Za-z0-9._+-]{0,127}")
 _REPO = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
 
 URL_MANIFESTO_SETUP_PYTHON = "https://raw.githubusercontent.com/actions/python-versions/main/versions-manifest.json"
@@ -117,6 +124,10 @@ def ler_da_rede(url: str) -> bytes:
     if not url.startswith("https://"):
         raise FonteIndisponivel(f"Endereço sem https: {url}")
     pedido = urllib.request.Request(url, headers={"User-Agent": "Kyron-build"})
+    token = os.environ.get("GITHUB_TOKEN")
+    if token and urllib.parse.urlsplit(url).hostname == "api.github.com":
+        # Sem token a API aceita 60 chamadas por hora; "unredirected" não leva o token a outro host.
+        pedido.add_unredirected_header("Authorization", f"Bearer {token}")
     try:
         with urllib.request.urlopen(pedido, timeout=60) as resposta:
             if not resposta.geturl().startswith("https://"):  # redirecionamento para http
@@ -150,7 +161,9 @@ def _versao_valida(versao: str) -> str:
 
 
 def _chave(versao: str) -> tuple[int, ...]:
-    return tuple(int(n) for n in versao.split("."))
+    """Chave numérica; o patch que falta conta como 0 ("1.6" == "1.6.0")."""
+    numeros = tuple(int(n) for n in versao.split("."))
+    return numeros + (0,) * (3 - len(numeros))
 
 
 def _lista(ler, url: str) -> list:
@@ -252,7 +265,9 @@ def qt_sdk(versao: str, ler: Callable[[str], bytes] = ler_da_rede) -> tuple[str,
     arquivos = [a.strip() for a in pacote.findtext("DownloadableArchives", "").split(",")]
     hashes = []
     for prefixo in ("qtbase-", "qtdeclarative-"):
-        nome = next(a for a in arquivos if a.startswith(prefixo))
+        nome = next((a for a in arquivos if a.startswith(prefixo)), None)
+        if nome is None:
+            raise FonteIndisponivel(f"O pacote do Qt {versao} não traz {prefixo}*.7z")
         if not re.fullmatch(r"[A-Za-z0-9._-]+\.7z", nome):
             raise FonteIndisponivel(f"Nome de arquivo do Qt ilegível: {nome!r}")
         url = f"{pasta}qt.qt6.{n}.win64_msvc2022_64/{versao_do_pacote}{nome}"
@@ -262,9 +277,11 @@ def qt_sdk(versao: str, ler: Callable[[str], bytes] = ler_da_rede) -> tuple[str,
 
 @_formato_conferido
 def qwindowkit(ler: Callable[[str], bytes] = ler_da_rede) -> tuple[str, str, str]:
-    """`(tag, commit, commit_do_qmsetup)`: a tag `X.Y.Z` mais nova de `stdware/qwindowkit`."""
+    """`(tag, commit, commit_do_qmsetup)`: a tag `X.Y[.Z]` mais nova de `stdware/qwindowkit`."""
     base = "https://api.github.com/repos/stdware/qwindowkit/"
-    tags = [t for t in _lista(ler, base + "tags?per_page=100") if _VERSAO.fullmatch(t["name"])]
+    tags = [t for t in _lista(ler, base + "tags?per_page=100") if re.fullmatch(r"\d+\.\d+(\.\d+)?", t["name"])]
+    if not tags:
+        raise FonteIndisponivel("stdware/qwindowkit: nenhuma tag de versão")
     tag = max(tags, key=lambda t: _chave(t["name"]))
     commit = tag["commit"]["sha"]
     qmsetup = json.loads(ler(base + f"contents/qmsetup?ref={tag['name']}"))
@@ -304,7 +321,8 @@ def release_do_github(repo: str, ler: Callable[[str], bytes] = ler_da_rede, pref
         assets = {}
         for a in r["assets"]:
             digest = a.get("digest")
-            if isinstance(digest, str) and digest.startswith("sha256:") and _SHA256.fullmatch(digest[7:]):
+            if (isinstance(digest, str) and digest.startswith("sha256:") and _SHA256.fullmatch(digest[7:])
+                    and isinstance(a["name"], str) and _ASSET.fullmatch(a["name"])):
                 assets[a["name"]] = digest[7:]
         return tag, assets
     raise FonteIndisponivel(f"{repo}: nenhuma release final com a tag {prefixo_da_tag!r}")

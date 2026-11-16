@@ -265,3 +265,82 @@ def test_fontes_de_verdade_respondem():
     assert fontes.qwindowkit(ler)[0]
     assert fontes.ffmpeg(ler)[0].sha256
     assert fontes.release_do_github("mtkennerly/ludusavi", ler)[0].startswith("v")
+
+
+# --- robustez dos leitores (Ruling R8) e token do GitHub (Ruling R7) ---
+
+
+def test_qt_sdk_sem_qtbase_no_pacote_e_indisponivel():
+    xml = (b"<Updates><PackageUpdate><Name>qt.qt6.6120.win64_msvc2022_64</Name>"
+           b"<Version>6.12.0-0-202609280346</Version><DownloadableArchives>qtsvg-x.7z</DownloadableArchives>"
+           b"</PackageUpdate></Updates>")
+    with pytest.raises(fontes.FonteIndisponivel):
+        fontes.qt_sdk("6.12.0", _ler_de({QT + "Updates.xml": xml}))
+
+
+def _ler_qwk(tags):
+    return _ler_de({
+        QWK + "tags?per_page=100": json.dumps([{"name": t, "commit": {"sha": "a" * 40}} for t in tags]).encode(),
+        **{QWK + f"contents/qmsetup?ref={t}": json.dumps({"type": "submodule", "sha": "b" * 40}).encode() for t in tags},
+    })
+
+
+def test_qwindowkit_aceita_tag_de_dois_componentes():
+    assert fontes.qwindowkit(_ler_qwk(["1.5.0", "1.6", "1.5.9"]))[0] == "1.6"
+    assert fontes.qwindowkit(_ler_qwk(["1.5", "1.5.1"]))[0] == "1.5.1"
+
+
+def test_qwindowkit_sem_tag_valida_e_indisponivel():
+    with pytest.raises(fontes.FonteIndisponivel):
+        fontes.qwindowkit(_ler_qwk(["latest", "v-teste"]))
+
+
+def test_release_do_github_descarta_asset_de_nome_estranho():
+    def nomes(d):
+        d[0]["assets"][0]["name"] = "../../x?y=1"
+
+    ler = _ler_github("mtkennerly/ludusavi", "github_ludusavi.json", nomes)
+    _, assets = fontes.release_do_github("mtkennerly/ludusavi", ler)
+    assert all(re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._+-]*", a) for a in assets)
+    assert "ludusavi-v0.31.0-win64.zip" in assets and "../../x?y=1" not in assets
+
+
+class _Resposta:
+    def __init__(self, url):
+        self.url = url
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+    def geturl(self):
+        return self.url
+
+    def read(self):
+        return b"[]"
+
+
+@pytest.mark.parametrize("url, com_token", [
+    ("https://api.github.com/repos/stdware/qwindowkit/tags", True),
+    ("https://www.python.org/api/v2/downloads/", False),
+    ("https://github.com/jrsoftware/issrc/releases/download/x.exe", False),
+    ("https://api.github.com.exemplo.com/repos/x", False),
+])
+def test_token_do_github_so_vai_para_a_api(monkeypatch, url, com_token):
+    pedidos = []
+    monkeypatch.setenv("GITHUB_TOKEN", "segredo")
+    monkeypatch.setattr(fontes.urllib.request, "urlopen", lambda p, timeout: pedidos.append(p) or _Resposta(p.full_url))
+    fontes.ler_da_rede(url)
+    assert pedidos[0].get_header("Authorization") == ("Bearer segredo" if com_token else None)
+    if com_token:  # não segue redirecionamento para outro host
+        assert "Authorization" not in pedidos[0].headers
+
+
+def test_sem_token_nao_manda_authorization(monkeypatch):
+    pedidos = []
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+    monkeypatch.setattr(fontes.urllib.request, "urlopen", lambda p, timeout: pedidos.append(p) or _Resposta(p.full_url))
+    fontes.ler_da_rede("https://api.github.com/repos/x/y/tags")
+    assert pedidos[0].get_header("Authorization") is None
