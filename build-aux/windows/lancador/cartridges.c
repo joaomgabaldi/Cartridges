@@ -18,7 +18,7 @@
 #include <wchar.h>
 #include <windows.h>
 
-/* O nome da DLL (python315) vem do build: compilar_lancador passa /DPYTHON_DLL a partir do .python-version. */
+/* O nome da DLL (pythonXY) vem do build: compilar_lancador passa /DPYTHON_DLL a partir do .python-version. */
 #ifndef PYTHON_DLL
 #error "Compile com /DPYTHON_DLL=pythonXY (o nome da DLL do Python embutido, sem .dll)."
 #endif

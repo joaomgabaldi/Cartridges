@@ -44,8 +44,30 @@ def _pinos(arquivo):
     return {n: fontes.Pino(n, v, h) for n, v, h in achados}
 
 
-LIBS = _pinos("requirements.txt")
-DEV = _pinos("requirements-dev.txt")
+DADOS = RAIZ / "tests" / "dados" / "versoes"
+LIBS = _pinos(DADOS / "requirements_base.txt")
+DEV = _pinos(DADOS / "requirements-dev_base.txt")
+# A situação de partida dos cenários, fixa: o repositório real muda a cada atualização e não pode quebrar a suíte.
+BASE = {
+    "build-aux/windows/montar_app_qt.py": {
+        "PYTHON_SHA256": SHA_PY_ATUAL,
+        "FFMPEG_VERSAO": "9.0.2",
+        "FFMPEG_SHA256": "60f467265b1e312373dbcd92200c2618a74850f98d3d078e94296bb3fa2047ba",
+        "FFMPEG_FONTE": "https://github.com/FFmpeg/FFmpeg/commit/946fcce07b",
+        "LUDUSAVI_VERSAO": "0.31.0",
+        "LUDUSAVI_SHA256": "f47a8ad8c708f01d2eb124704973beffab205e292f5287a10fc4a101f8d68706",
+        "LUDUSAVI_LEGAL_SHA256": "9fce11fc44942efdd5969928d89b106c229f9a041d7a713c424a6da981660ebf",
+    },
+    "tools/baixar_qt_sdk.py": {
+        "QT_VERSAO": "6.12.0",
+        "QT_DATA": "202609280346",
+        "QTBASE_SHA256": "219d1b86def3be418e31d704572bc4acc91b2ec373c65595c9fb12b42bf098dc",
+        "QTDECLARATIVE_SHA256": "258146e9972fadbc1162cda31c7d7ed7e627f5022b2a848f2edb84d9c2ce27db",
+        "QWK_TAG": "1.5.0",
+        "QWK_COMMIT": "35e88f3655720ed0537c7dd1dde243bf4a70c94c",
+        "QMSETUP_COMMIT": "85c6c3c783be8af8d3f2fa492748a82da8ec9bad",
+    },
+}
 
 
 def _com(libs, **novas):
@@ -151,6 +173,24 @@ def repo_tmp(tmp_path):
     for nome in ARQUIVOS:
         (raiz / nome).parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(RAIZ / nome, raiz / nome)
+    # Estrutura real dos arquivos, valores da BASE.
+    (raiz / ".python-version").write_text("3.15.1\n", encoding="utf-8", newline="")
+    shutil.copyfile(DADOS / "requirements_base.txt", raiz / "requirements.txt")
+    shutil.copyfile(DADOS / "requirements-dev_base.txt", raiz / "requirements-dev.txt")
+
+    def reescrever(nome, mudar):
+        p = raiz / nome
+        p.write_text(mudar(p.read_text(encoding="utf-8", newline="")), encoding="utf-8", newline="")
+
+    for nome, valores in BASE.items():
+        for constante, valor in valores.items():
+            reescrever(nome, lambda t: av.trocar_constante(t, constante, valor))
+    reescrever("README.md", lambda t: re.sub(r"Python \d+\.\d+ com PySide6 [0-9.]+", "Python 3.15 com PySide6 6.12.0", t))
+    inno = "https://github.com/jrsoftware/issrc/releases/download/is-7_1_0/innosetup-7.1.0-x64.exe"
+    for yml in ("instalador.yml", "instalador-qt-dev.yml"):
+        reescrever(f".github/workflows/{yml}", lambda t: re.sub(
+            r"(\.Hash -ne ')[0-9A-F]{64}'", rf"\g<1>{SHA_INNO_ATUAL.upper()}'",
+            re.sub(r"https://github\.com/jrsoftware/issrc/releases/download/is-[0-9_]+/innosetup-[0-9.]+-x64\.exe", inno, t)))
     return raiz
 
 

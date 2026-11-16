@@ -51,8 +51,8 @@ def insumos(tmp_path):
     _tocar(raiz / "data" / "icons" / "hicolor" / "scalable" / "apps" / "app.svg")
     _tocar(raiz / "data" / "screenshots" / "grande.png")
     python = tmp_path / "embutido"
-    _tocar(python / "python315.dll")
-    _tocar(python / "python315._pth", "python315.zip\n.\n\n#import site\n")
+    _tocar(python / f"{montar_app_qt.python_do_app()}.dll")
+    _tocar(python / f"{montar_app_qt.python_do_app()}._pth", f"{montar_app_qt.python_do_app()}.zip\n.\n\n#import site\n")
     lib = tmp_path / "pip"
     _tocar(lib / "requests" / "__init__.py")
     _tocar(lib / "PySide6" / "QtCore.pyd")
@@ -80,7 +80,7 @@ def test_monta_a_arvore_do_app(insumos, tmp_path):
     montar_app_qt.montar(destino, "desenvolvimento", **insumos)
 
     assert (destino / "bin" / "Kyron.exe").is_file()
-    assert (destino / "python" / "python315.dll").is_file()
+    assert (destino / "python" / f"{montar_app_qt.python_do_app()}.dll").is_file()
     assert (destino / "lib" / "requests" / "__init__.py").is_file()
     assert (destino / "app" / "kyron" / "qml" / "Aplicativo.qml").is_file()
     assert (destino / "app" / "kyron" / "janela" / "qwk_ponte.dll").is_file()
@@ -104,9 +104,9 @@ def test_grava_o_canal_pedido_e_o_pth(insumos, tmp_path):
 
     gravado = json.loads((destino / "app" / "kyron" / "instalacao.json").read_text(encoding="utf-8"))
     assert gravado == {"canal": "desenvolvimento"}
-    linhas = (destino / "python" / "python315._pth").read_text(encoding="utf-8").splitlines()
+    linhas = (destino / "python" / f"{montar_app_qt.python_do_app()}._pth").read_text(encoding="utf-8").splitlines()
     assert "..\\lib" in linhas and "..\\app" in linhas
-    assert "python315.zip" in linhas
+    assert f"{montar_app_qt.python_do_app()}.zip" in linhas
     # o repositório de origem não é alterado
     assert json.loads((insumos["raiz"] / "kyron" / "instalacao.json").read_text()) == {"canal": "final"}
 
@@ -253,7 +253,7 @@ def test_monta_com_os_pyc_compilados(insumos, tmp_path):
     fontes = [*(destino / "app" / "kyron").rglob("*.py"), *(destino / "lib").rglob("*.py")]
     assert len(fontes) >= 4
     for fonte in fontes:
-        # O Python embutido é o 3.15: um `.pyc` de outra versão ele ignoraria, e recompilaria tudo a cada abertura.
+        # O Python embutido é o do .python-version: um `.pyc` de outra versão ele ignoraria, e recompilaria tudo a cada abertura.
         pyc = fonte.parent / "__pycache__" / f"{fonte.stem}.{montar_app_qt.cache_tag_do_app()}.pyc"
         assert pyc.is_file(), fonte
         # Bits do cabeçalho (PEP 552): 1 = por hash, sem conferir a fonte.
@@ -263,7 +263,7 @@ def test_monta_com_os_pyc_compilados(insumos, tmp_path):
 def test_compilar_pyc_exige_o_python_do_app(tmp_path, monkeypatch):
     _tocar(tmp_path / "modulo.py")
     monkeypatch.setattr(montar_app_qt.sys.implementation, "cache_tag", "cpython-314")
-    with pytest.raises(SystemExit, match="3.15"):
+    with pytest.raises(SystemExit, match=re.escape(".".join(montar_app_qt.PYTHON_VERSAO.split(".")[:2]))):
         montar_app_qt.compilar_pyc(tmp_path)
     assert not (tmp_path / "__pycache__").exists()
 
@@ -408,7 +408,7 @@ def test_baixar_python_passa_pelo_download_conferido(tmp_path, monkeypatch):
     chamadas = []
     pacote = tmp_path / "python.zip"
     with zipfile.ZipFile(pacote, "w") as z:
-        z.writestr("python315.dll", "x")
+        z.writestr(f"{montar_app_qt.python_do_app()}.dll", "x")
 
     def conferido(url, sha256, cache):
         chamadas.append((url, sha256))
@@ -417,7 +417,7 @@ def test_baixar_python_passa_pelo_download_conferido(tmp_path, monkeypatch):
     monkeypatch.setattr(montar_app_qt, "_baixar_conferido", conferido)
     extraido = montar_app_qt.baixar_python(tmp_path / "cache")
     assert chamadas == [(montar_app_qt.PYTHON_URL, montar_app_qt.PYTHON_SHA256)]
-    assert (extraido / "python315.dll").is_file()
+    assert (extraido / f"{montar_app_qt.python_do_app()}.dll").is_file()
 
 
 def test_python_vem_do_arquivo_unico():
@@ -444,7 +444,7 @@ def test_lancador_recebe_o_nome_da_dll_do_build(monkeypatch, tmp_path):
 
     def rodar(cmd, **kw):
         rodados.append(cmd)
-        return subprocess.CompletedProcess(cmd, 0, stdout="C:\VS\n", stderr="")
+        return subprocess.CompletedProcess(cmd, 0, stdout="C:\\VS\n", stderr="")
 
     monkeypatch.setattr(montar_app_qt.subprocess, "run", rodar)
     montar_app_qt.compilar_lancador(tmp_path)
@@ -452,4 +452,4 @@ def test_lancador_recebe_o_nome_da_dll_do_build(monkeypatch, tmp_path):
     assert "/DPYTHON_DLL=python316 " in roteiro
     fonte = (Path(montar_app_qt.RAIZ) / "build-aux" / "windows" / "lancador" / "cartridges.c").read_text(encoding="utf-8")
     assert "#ifndef PYTHON_DLL" in fonte and "#error" in fonte
-    assert "python315.dll\"" not in fonte
+    assert not re.search(r"python3\d+\.dll", fonte)

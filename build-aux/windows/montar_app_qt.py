@@ -6,7 +6,7 @@
 
 """Monta a pasta do app Qt instalado, para o Inno Setup empacotar.
 
-    <destino>\\bin\\Kyron.exe     o lançador (carrega ..\\python\\python315.dll)
+    <destino>\\bin\\Kyron.exe     o lançador (carrega ..\\python\\pythonXY.dll, X.Y do .python-version)
     <destino>\\bin\\ffmpeg.exe         capa de vídeo; `capa_video` o procura ao lado do `sys.executable`
     <destino>\\bin\\ludusavi.exe       backup dos saves; `ludusavi` o procura do mesmo jeito
     <destino>\\python\\               Python embutido do python.org
@@ -16,7 +16,7 @@
     <destino>\\licencas\\             textos das licenças de terceiros que não estão nos `*.dist-info` de `lib`
 
 `data\\` fica ao lado do pacote porque `shared`, `configuracoes` e `modelos.biblioteca`
-a procuram em `<pasta do pacote>\\..\\data`. O `python315._pth` lista `..\\lib` e `..\\app`.
+a procuram em `<pasta do pacote>\\..\\data`. O `pythonXY._pth` lista `..\\lib` e `..\\app`.
 
 O ffmpeg e o Ludusavi são obrigatórios no canal final e opcionais no de desenvolvimento.
 
@@ -109,13 +109,13 @@ SOBRAS_DO_PYSIDE = (
 
 
 def cache_tag_do_app() -> str:
-    """O `cache_tag` do Python embutido (`cpython-315`), derivado de `PYTHON_VERSAO`."""
+    """O `cache_tag` do Python embutido (`cpython-XY`), derivado de `PYTHON_VERSAO`."""
     maior, menor, _ = PYTHON_VERSAO.split(".")
     return f"cpython-{maior}{menor}"
 
 
 def python_do_app() -> str:
-    """`python315`: nome da DLL e do `._pth` do Python embutido, derivado de `PYTHON_VERSAO`."""
+    """`pythonXY`: nome da DLL e do `._pth` do Python embutido, derivado de `PYTHON_VERSAO`."""
     maior, menor, _ = PYTHON_VERSAO.split(".")
     return f"python{maior}{menor}"
 
