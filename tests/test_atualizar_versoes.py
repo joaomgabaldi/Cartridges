@@ -29,8 +29,7 @@ ARQUIVOS = [
     "requirements-dev.txt",
     "build-aux/windows/montar_app_qt.py",
     "tools/baixar_qt_sdk.py",
-    ".github/workflows/instalador.yml",
-    ".github/workflows/instalador-qt-dev.yml",
+    "build-aux/windows/instalar_inno.ps1",
 ]
 SHA_PY_ATUAL = "352e232f25b5120508f11a6dfc1bd9076d3e70c30977d552a63338838c2ae8fb"
 SHA_316 = "16" * 32
@@ -186,12 +185,23 @@ def repo_tmp(tmp_path):
         for constante, valor in valores.items():
             reescrever(nome, lambda t: av.trocar_constante(t, constante, valor))
     reescrever("README.md", lambda t: re.sub(r"Python \d+\.\d+ com PySide6 [0-9.]+", "Python 3.15 com PySide6 6.12.0", t))
-    inno = "https://github.com/jrsoftware/issrc/releases/download/is-7_1_0/innosetup-7.1.0-x64.exe"
-    for yml in ("instalador.yml", "instalador-qt-dev.yml"):
-        reescrever(f".github/workflows/{yml}", lambda t: re.sub(
-            r"(\.Hash -ne ')[0-9A-F]{64}'", rf"\g<1>{SHA_INNO_ATUAL.upper()}'",
-            re.sub(r"https://github\.com/jrsoftware/issrc/releases/download/is-[0-9_]+/innosetup-[0-9.]+-x64\.exe", inno, t)))
+    reescrever("build-aux/windows/instalar_inno.ps1", lambda t: re.sub(
+        r"(\$InnoVersao = ')[0-9.]+'", r"\g<1>7.1.0'",
+        re.sub(r"(\$InnoSha256 = ')[0-9A-Fa-f]{64}'", rf"\g<1>{SHA_INNO_ATUAL.upper()}'", t)))
     return raiz
+
+
+def _estilo(dados: bytes):
+    return dados.count(b"\r\n"), dados.count(b"\n")
+
+
+def _confere_fim_de_linha(raiz, antes):
+    """Cada arquivo reescrito mantém o fim de linha do original (CRLF inteiro continua CRLF, LF continua LF)."""
+    for caminho, dados in _tudo(raiz).items():
+        if antes.get(caminho) not in (None, dados):
+            era, agora = _estilo(antes[caminho]), _estilo(dados)
+            assert (era[0] == era[1] and era[1] > 0) == (agora[0] == agora[1] and agora[1] > 0), caminho
+            assert agora[0] in (0, agora[1]), f"{caminho}: fim de linha misturado"
 
 
 def _tudo(raiz):
@@ -247,6 +257,7 @@ def test_python_novo_sem_hash_publicado_fica(repo_tmp):
 
 
 def test_python_menor_novo_sobe_tudo_junto(repo_tmp):
+    antes = _tudo(repo_tmp)
     mundo = Mundo(
         pythons={"3.16.0": SHA_316, "3.15.1": SHA_PY_ATUAL}, setup={"3.16.0", "3.15.1"},
         resolucoes={("3.16", None): PYSIDE_613, ("3.15", None): LIBS}, qt={"6.13.0": "202612010000"},
@@ -259,6 +270,7 @@ def test_python_menor_novo_sobe_tudo_junto(repo_tmp):
     assert 'QT_VERSAO = "6.13.0"' in qt and 'QT_DATA = "202612010000"' in qt
     assert f'QTBASE_SHA256 = "{hashlib.sha256(b"qtbase-W.7z").hexdigest()}"' in qt
     assert qt.count("\n") == qt.count("\r\n")  # o arquivo é CRLF e continua CRLF
+    _confere_fim_de_linha(repo_tmp, antes)
     assert "Python 3.16 com PySide6 6.13.0" in (repo_tmp / "README.md").read_text(encoding="utf-8")
     assert "PySide6==6.13.0" in (repo_tmp / "requirements.txt").read_text(encoding="utf-8")
 
@@ -339,16 +351,17 @@ def test_bom_e_preservado(repo_tmp):
     assert alvo.read_bytes().startswith(b"\xef\xbb\xbf") and b'FFMPEG_VERSAO = "9.1"' in alvo.read_bytes()
 
 
-def test_inno_novo_reescreve_url_e_hash(repo_tmp):
+def test_inno_novo_reescreve_versao_e_hash(repo_tmp):
+    antes = _tudo(repo_tmp)
     mundo = Mundo(inno=("is-7_1_1", {"innosetup-7.1.1-x64.exe": SHA_INNO_711}))
     r = av.atualizar(repo_tmp, gravar=True, **mundo.para_kwargs())
     assert r.trocas == [av.Troca("inno-setup", "7.1.0", "7.1.1")]
-    for yml in ("instalador.yml", "instalador-qt-dev.yml"):
-        texto = (repo_tmp / ".github/workflows" / yml).read_bytes().decode("utf-8")
-        assert "releases/download/is-7_1_1/innosetup-7.1.1-x64.exe'" in texto
-        assert f"-ne '{SHA_INNO_711.upper()}'" in texto
-        assert "7_1_0" not in texto and SHA_INNO_ATUAL.upper() not in texto
-        assert texto.count("\r\n") in (0, texto.count("\n"))  # sem misturar: LF (CI) ou CRLF (autocrlf do PC)
+    texto = (repo_tmp / "build-aux/windows/instalar_inno.ps1").read_bytes().decode("utf-8")
+    assert "$InnoVersao = '7.1.1'" in texto and f"$InnoSha256 = '{SHA_INNO_711.upper()}'" in texto
+    assert "7.1.0" not in texto and SHA_INNO_ATUAL.upper() not in texto
+    _confere_fim_de_linha(repo_tmp, antes)
+    # Nenhum workflow é tocado: o GITHUB_TOKEN não pode dar push de arquivo em .github/workflows.
+    assert not any(".github" in p.parts for p, b in _tudo(repo_tmp).items() if antes.get(p) != b)
 
 
 def test_verificar_nao_grava_e_sai_1(repo_tmp, capsys):

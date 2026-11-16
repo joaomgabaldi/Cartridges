@@ -73,12 +73,14 @@ jobs:
               dados = json.load(f)
           for aviso in dados["avisos"]:
               print("::warning::" + " ".join(aviso.split()).replace("%", "%25"))
-          if dados["linha"]:
+          linha = " ".join(dados["linha"].split())  # uma linha só: o texto veio da rede
+          if linha:
               with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as f:
-                  print("LINHA_DAS_VERSOES=" + dados["linha"], file=f)
+                  print("LINHA_DAS_VERSOES=" + linha, file=f)
           PY
           # Também vale quando só os hashes das rodas mudaram (a linha vem vazia).
-          if ! git diff --quiet; then
+          git diff --name-only > "$RUNNER_TEMP/arquivos_das_versoes.txt"
+          if [ -s "$RUNNER_TEMP/arquivos_das_versoes.txt" ]; then
             echo "VERSOES_MUDARAM=1" >> "$GITHUB_ENV"
           fi
 
@@ -117,6 +119,11 @@ jobs:
           python -m pip install --require-hashes -r requirements-dev.txt
           python -m pytest -n auto -q
 
+      # Versão e SHA-256 ficam em instalar_inno.ps1 (o atualizador os reescreve; workflow ele não toca).
+      - name: Inno Setup 7
+        shell: pwsh
+        run: ./build-aux/windows/instalar_inno.ps1
+
       - name: Commit das versões
         if: env.VERSOES_MUDARAM == '1'
         shell: bash
@@ -124,22 +131,10 @@ jobs:
           mensagem="${LINHA_DAS_VERSOES:-Versões atualizadas: hashes das rodas}"
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git commit -am "$mensagem"
+          # Só o que o atualizador mexeu (a lista foi guardada antes da montagem e da suíte).
+          while IFS= read -r arquivo; do git add -- "$arquivo"; done < "$RUNNER_TEMP/arquivos_das_versoes.txt"
+          git commit -m "$mensagem"
           git push origin "HEAD:$GITHUB_REF_NAME"
-
-      # A mesma versão do PC do desenvolvedor: o Inno 6 que o runner traz compila
-      # o [Code] de outro jeito (recusa Variant onde o 7 aceita). O choco ainda
-      # não tem o 7; o instalador vem das releases oficiais, com o SHA-256 fixo.
-      - name: Inno Setup 7
-        run: |
-          $url = 'https://github.com/jrsoftware/issrc/releases/download/is-7_1_0/innosetup-7.1.0-x64.exe'
-          $exe = Join-Path $env:RUNNER_TEMP 'innosetup.exe'
-          curl.exe -fsSL -o $exe $url
-          if ((Get-FileHash $exe -Algorithm SHA256).Hash -ne '0362A383ED217D4C4239B5933866DD96D3EB2102737DA92F80F6057A4B40DF2F') {
-            throw 'O SHA-256 do instalador do Inno Setup 7 não confere.'
-          }
-          Start-Process $exe -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-','/ALLUSERS' -Wait
-          if (-not (Test-Path "$env:ProgramFiles\Inno Setup 7\ISCC.exe")) { throw 'O Inno Setup 7 não foi instalado.' }
 
       - name: Instalador
         run: |

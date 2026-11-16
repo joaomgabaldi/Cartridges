@@ -31,7 +31,7 @@ REQ_IN, REQ_DEV_IN = "requirements.in", "requirements-dev.in"
 REQ, REQ_DEV = "requirements.txt", "requirements-dev.txt"
 MONTAR = "build-aux/windows/montar_app_qt.py"
 QT_SDK = "tools/baixar_qt_sdk.py"
-WORKFLOWS = (".github/workflows/instalador.yml", ".github/workflows/instalador-qt-dev.yml")
+INNO = "build-aux/windows/instalar_inno.ps1"
 
 CONSTANTES = {
     MONTAR: ("PYTHON_SHA256", "FFMPEG_VERSAO", "FFMPEG_SHA256", "FFMPEG_FONTE",
@@ -39,8 +39,8 @@ CONSTANTES = {
     QT_SDK: ("QT_VERSAO", "QT_DATA", "QTBASE_SHA256", "QTDECLARATIVE_SHA256", "QWK_TAG", "QWK_COMMIT", "QMSETUP_COMMIT"),
 }
 _VERSAO = re.compile(r"\d+(\.\d+){1,3}")
-_INNO_URL = re.compile(r"https://github\.com/jrsoftware/issrc/releases/download/is-[0-9_]+/innosetup-([0-9.]+)-x64\.exe")
-_INNO_HASH = re.compile(r"(\.Hash -ne ')([0-9A-F]{64})(')")
+_INNO_VERSAO = re.compile(r"(\$InnoVersao = ')([0-9.]+)(')")
+_INNO_HASH = re.compile(r"(\$InnoSha256 = ')([0-9A-Fa-f]{64})(')")
 _README = re.compile(r"Python \d+\.\d+ com PySide6 [0-9.]+")
 _PINO = re.compile(r"^(\S+)==(\S+) --hash=sha256:([0-9a-f]{64})\r?$", re.M)
 
@@ -201,7 +201,7 @@ def _hashes(assets: dict[str, str], nomes: list[str], versao: str) -> list[str]:
 
 def atualizar(raiz: Path, *, gravar: bool, ler=fontes.ler_da_rede, rodar=subprocess.run) -> Resultado:
     raiz = Path(raiz)
-    caminhos = [PYTHON_VERSION, README, REQ, REQ_DEV, MONTAR, QT_SDK, *WORKFLOWS]
+    caminhos = [PYTHON_VERSION, README, REQ, REQ_DEV, MONTAR, QT_SDK, INNO]
     # newline="" preserva o fim de linha de cada arquivo; o BOM, se houver, volta junto no texto.
     textos = {c: (raiz / c).read_text(encoding="utf-8", newline="") for c in caminhos}
     novos = dict(textos)
@@ -211,7 +211,7 @@ def atualizar(raiz: Path, *, gravar: bool, ler=fontes.ler_da_rede, rodar=subproc
     # Valores de hoje, lidos dos próprios arquivos (um ponto ausente para aqui, antes de qualquer rede).
     py_atual = _uma(re.compile(r"\A\d+\.\d+\.\d+(?=\r?\n?\Z)"), textos[PYTHON_VERSION], PYTHON_VERSION).group()
     c = {nome: ler_constante(textos[arq], nome) for arq, nomes in CONSTANTES.items() for nome in nomes}
-    inno_atual = _uma(_INNO_URL, textos[WORKFLOWS[0]], WORKFLOWS[0]).group(1)
+    inno_atual = _uma(_INNO_VERSAO, textos[INNO], INNO).group(2)
     pinos_de = {arq: {(_normalizado(m[0]), m[1], m[2]) for m in _PINO.findall(textos[arq])} for arq in (REQ, REQ_DEV)}
     libs_atuais = {nome: versao for pinos in pinos_de.values() for nome, versao, _ in pinos}
     hashes_mudaram = False
@@ -285,17 +285,13 @@ def atualizar(raiz: Path, *, gravar: bool, ler=fontes.ler_da_rede, rodar=subproc
             novos[arq] = trocar_constante(novos[arq], nome, n[nome])
     novos[README] = _trocar_grupo(textos[README], re.compile(f"({_README.pattern})"), 1,
                                   f"Python {_xy(python)} com PySide6 {pyside}", README)
-    for wf in WORKFLOWS:
-        texto = textos[wf]
-        if inno[1]:
-            v = inno[0]
-            url = f"https://github.com/jrsoftware/issrc/releases/download/is-{v.replace('.', '_')}/innosetup-{v}-x64.exe"
-            texto = _trocar_grupo(texto, re.compile(f"({_INNO_URL.pattern})"), 1, url, wf)
-            texto = _trocar_grupo(texto, _INNO_HASH, 2, inno[1].upper(), wf)
-        else:
-            _uma(_INNO_URL, texto, wf)
-            _uma(_INNO_HASH, texto, wf)
-        novos[wf] = texto
+    texto = textos[INNO]
+    if inno[1]:
+        texto = _trocar_grupo(texto, _INNO_VERSAO, 2, inno[0], INNO)
+        texto = _trocar_grupo(texto, _INNO_HASH, 2, inno[1].upper(), INNO)
+    else:
+        _uma(_INNO_HASH, texto, INNO)
+    novos[INNO] = texto
 
     if gravar and (trocas or hashes_mudaram):
         for arq, texto in novos.items():
