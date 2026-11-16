@@ -43,7 +43,7 @@ if ($pythonNovo -and $xyAntes -ne $xyDepois) {
     }
     Remove-Item -Recurse -Force (Join-Path $repo '.venv')
     & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $repo 'tools\ambiente_qt.ps1')
-    if ($LASTEXITCODE -ne 0) { Falha 'Não foi possível recriar o ambiente de desenvolvimento. Rode toolsmbiente_qt.ps1 à mão para recriar o .venv.' }
+    if ($LASTEXITCODE -ne 0) { Falha 'Não foi possível recriar o ambiente de desenvolvimento. Rode tools\ambiente_qt.ps1 à mão para recriar o .venv.' }
 } else {
     Etapa 'Instalando as bibliotecas de desenvolvimento'
     & $python -m pip install --require-hashes -r (Join-Path $repo 'requirements-dev.txt')
