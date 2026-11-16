@@ -170,3 +170,14 @@ def test_preparar_qt_grava_o_toolset(tmp_path, monkeypatch):
     monkeypatch.setattr(sdk, "extrair_qt", lambda *a: None)
     sdk.preparar_qt()
     assert (qt / ".vcvars_ver").read_text(encoding="utf-8").strip() == "14.44"
+
+
+def test_extrair_chama_o_tar_do_windows(tmp_path, monkeypatch):
+    chamadas = []
+    monkeypatch.setattr(sdk.subprocess, "run", lambda cmd, **kw: chamadas.append((cmd, kw)))
+    monkeypatch.setenv("SystemRoot", r"C:\Windows")
+    destino = tmp_path / "qt"
+    sdk._extrair(tmp_path / "x.7z", destino)
+    cmd, kw = chamadas[0]
+    assert cmd == [str(Path(r"C:\Windows") / "System32" / "tar.exe"), "-xf", str(tmp_path / "x.7z"), "-C", str(destino)]
+    assert kw["check"] is True and destino.is_dir()

@@ -222,7 +222,7 @@ def test_workflow_final_monta_o_canal_final_so_na_main():
     verificacao = r"_dist\qt-final\python\python.exe -B build-aux\windows\verificar_pasta.py _dist\qt-final"
     assert texto.index("--canal final") < texto.index(verificacao) < texto.index("ISCC.exe")
     # Num job com `contents: write`, nada de dependência sem versão.
-    assert "--no-deps py7zr==1.1.4 " in texto
+    assert "py7zr" not in texto
 
 
 def test_verificacao_exige_o_que_a_capa_de_video_usa():

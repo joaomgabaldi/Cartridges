@@ -9,18 +9,19 @@ O SDK (`qtbase` e `qtdeclarative`, MSVC 2022 64 bits) vem direto do download.qt.
 têm o commit fixado e conferido. Tudo vai para `build-aux/windows/qwk/_deps` (fora do git). O que já
 existe e confere não é refeito.
 
+Os .7z são extraídos com o `tar.exe` do Windows.
+
 Uso:  .venv/Scripts/python tools/baixar_qt_sdk.py
 """
 
 import hashlib
+import os
 import re
 import shutil
 import subprocess
 import sys
 import urllib.request
 from pathlib import Path
-
-import py7zr
 
 DEPS = Path(__file__).resolve().parent.parent / "build-aux" / "windows" / "qwk" / "_deps"
 QT_VERSAO = "6.12.0"
@@ -99,8 +100,10 @@ def extrair_qt(pacotes: list[Path], qt: Path, extrair=None) -> None:
 
 
 def _extrair(pacote: Path, destino: Path) -> None:
-    with py7zr.SevenZipFile(pacote) as arquivo:
-        arquivo.extractall(destino)
+    # O tar.exe do Windows (libarchive) lê .7z; assim o script não depende de nenhuma biblioteca do pip.
+    destino.mkdir(parents=True, exist_ok=True)
+    tar = Path(os.environ.get("SystemRoot", r"C:\Windows")) / "System32" / "tar.exe"
+    subprocess.run([str(tar), "-xf", str(pacote), "-C", str(destino)], check=True)
 
 
 def toolset_do_qt(qt: Path) -> str:

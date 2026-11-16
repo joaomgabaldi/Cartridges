@@ -23,9 +23,6 @@ jobs:
         with:
           python-version-file: .python-version
 
-      - name: Ferramentas do script
-        run: python -m pip install py7zr==1.1.4
-
       # SDK do Qt e QWindowKit baixados por tools/baixar_qt_sdk.py (o script confere o SHA-1 e
       # refaz o que não estiver completo).
       - uses: actions/cache@v4

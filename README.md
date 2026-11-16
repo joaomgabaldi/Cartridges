@@ -99,7 +99,7 @@ PowerShell, a partir da raiz do projeto.
 ### Executar do código-fonte
 
 1. Instale o Python 3.15 e crie o ambiente com as dependências fixadas
-   (`requirements.txt`, mais o `pytest` e o `py7zr` do `requirements-dev.txt`):
+   (`requirements.txt`, mais o `pytest` do `requirements-dev.txt`):
 
    ```powershell
    powershell -NoProfile -ExecutionPolicy Bypass -File tools\ambiente_qt.ps1
