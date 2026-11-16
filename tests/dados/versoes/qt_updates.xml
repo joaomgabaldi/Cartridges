@@ -1,0 +1,17 @@
+<Updates>
+ <PackageUpdate>
+  <Name>qt.qt6.6120.win64_msvc2022_64</Name>
+  <DisplayName>MSVC 2022 64-bit</DisplayName>
+  <Description>Qt 6.12.0 Prebuilt Components for MSVC 2022 64-bit &lt;br>&lt;br>sha1: ef25002ed292b132d1ed3246bfcee1d24a9cd966</Description>
+  <Version>6.12.0-0-202609280346</Version>
+  <ReleaseDate>2026-09-28</ReleaseDate>
+  <Dependencies>qt.tools.qtcreator, qt.qt6.6120.doc, qt.qt6.6120.examples</Dependencies>
+  <AutoDependOn/>
+  <Default>false</Default>
+  <Script>installscript.qs</Script>
+  <SortingPriority>590</SortingPriority>
+  <DownloadableArchives>qtbase-Windows-Windows_11_24H2-MSVC2022-Windows-Windows_11_24H2-X86_64.7z, qtsvg-Windows-Windows_11_24H2-MSVC2022-Windows-Windows_11_24H2-X86_64.7z, qtdeclarative-Windows-Windows_11_24H2-MSVC2022-Windows-Windows_11_24H2-X86_64.7z, qtdoc-Windows-Windows_11_24H2-MSVC2022-Windows-Windows_11_24H2-X86_64.7z, qttools-Windows-Windows_11_24H2-MSVC2022-Windows-Windows_11_24H2-X86_64.7z, qttranslations-Windows-Windows_11_24H2-MSVC2022-Windows-Windows_11_24H2-X86_64.7z, d3dcompiler_47-x64.7z, opengl32sw-64-mesa_11_2_2-signed_sha256.7z</DownloadableArchives>
+  <UpdateFile CompressedSize="278542090" OS="Any" UncompressedSize="2592069328"/>
+  <SHA1>545af171bd29a9c8637a1273437a981fa24a115f</SHA1>
+ </PackageUpdate>
+</Updates>

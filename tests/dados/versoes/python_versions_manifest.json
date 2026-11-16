@@ -1,0 +1,166 @@
+[
+ {
+  "version": "3.16.0-alpha.2",
+  "stable": false,
+  "files": [
+   {
+    "filename": "python-3.16.0-alpha.2-win32-arm64-freethreaded.zip",
+    "arch": "arm64-freethreaded",
+    "platform": "win32"
+   },
+   {
+    "filename": "python-3.16.0-alpha.2-win32-arm64.zip",
+    "arch": "arm64",
+    "platform": "win32"
+   },
+   {
+    "filename": "python-3.16.0-alpha.2-win32-x64-freethreaded.zip",
+    "arch": "x64-freethreaded",
+    "platform": "win32"
+   },
+   {
+    "filename": "python-3.16.0-alpha.2-win32-x64.zip",
+    "arch": "x64",
+    "platform": "win32"
+   },
+   {
+    "filename": "python-3.16.0-alpha.2-win32-x86-freethreaded.zip",
+    "arch": "x86-freethreaded",
+    "platform": "win32"
+   },
+   {
+    "filename": "python-3.16.0-alpha.2-win32-x86.zip",
+    "arch": "x86",
+    "platform": "win32"
+   },
+   {
+    "filename": "python-3.16.0-alpha.2-linux-22.04-arm64-freethreaded.tar.gz",
+    "arch": "arm64-freethreaded",
+    "platform": "linux"
+   }
+  ]
+ },
+ {
+  "version": "3.15.2",
+  "stable": true,
+  "files": [
+   {
+    "filename": "python-3.15.2-win32-arm64-freethreaded.zip",
+    "arch": "arm64-freethreaded",
+    "platform": "win32"
+   },
+   {
+    "filename": "python-3.15.2-win32-arm64.zip",
+    "arch": "arm64",
+    "platform": "win32"
+   },
+   {
+    "filename": "python-3.15.2-win32-x64-freethreaded.zip",
+    "arch": "x64-freethreaded",
+    "platform": "win32"
+   },
+   {
+    "filename": "python-3.15.2-win32-x64.zip",
+    "arch": "x64",
+    "platform": "win32"
+   },
+   {
+    "filename": "python-3.15.2-win32-x86-freethreaded.zip",
+    "arch": "x86-freethreaded",
+    "platform": "win32"
+   },
+   {
+    "filename": "python-3.15.2-win32-x86.zip",
+    "arch": "x86",
+    "platform": "win32"
+   },
+   {
+    "filename": "python-3.15.2-linux-22.04-arm64-freethreaded.tar.gz",
+    "arch": "arm64-freethreaded",
+    "platform": "linux"
+   }
+  ]
+ },
+ {
+  "version": "3.15.1",
+  "stable": true,
+  "files": [
+   {
+    "filename": "python-3.15.1-win32-arm64-freethreaded.zip",
+    "arch": "arm64-freethreaded",
+    "platform": "win32"
+   },
+   {
+    "filename": "python-3.15.1-win32-arm64.zip",
+    "arch": "arm64",
+    "platform": "win32"
+   },
+   {
+    "filename": "python-3.15.1-win32-x64-freethreaded.zip",
+    "arch": "x64-freethreaded",
+    "platform": "win32"
+   },
+   {
+    "filename": "python-3.15.1-win32-x64.zip",
+    "arch": "x64",
+    "platform": "win32"
+   },
+   {
+    "filename": "python-3.15.1-win32-x86-freethreaded.zip",
+    "arch": "x86-freethreaded",
+    "platform": "win32"
+   },
+   {
+    "filename": "python-3.15.1-win32-x86.zip",
+    "arch": "x86",
+    "platform": "win32"
+   },
+   {
+    "filename": "python-3.15.1-linux-22.04-arm64-freethreaded.tar.gz",
+    "arch": "arm64-freethreaded",
+    "platform": "linux"
+   }
+  ]
+ },
+ {
+  "version": "3.15.0-rc.3",
+  "stable": false,
+  "files": [
+   {
+    "filename": "python-3.15.0-rc.3-win32-arm64-freethreaded.zip",
+    "arch": "arm64-freethreaded",
+    "platform": "win32"
+   },
+   {
+    "filename": "python-3.15.0-rc.3-win32-arm64.zip",
+    "arch": "arm64",
+    "platform": "win32"
+   },
+   {
+    "filename": "python-3.15.0-rc.3-win32-x64-freethreaded.zip",
+    "arch": "x64-freethreaded",
+    "platform": "win32"
+   },
+   {
+    "filename": "python-3.15.0-rc.3-win32-x64.zip",
+    "arch": "x64",
+    "platform": "win32"
+   },
+   {
+    "filename": "python-3.15.0-rc.3-win32-x86-freethreaded.zip",
+    "arch": "x86-freethreaded",
+    "platform": "win32"
+   },
+   {
+    "filename": "python-3.15.0-rc.3-win32-x86.zip",
+    "arch": "x86",
+    "platform": "win32"
+   },
+   {
+    "filename": "python-3.15.0-rc.3-linux-22.04-arm64-freethreaded.tar.gz",
+    "arch": "arm64-freethreaded",
+    "platform": "linux"
+   }
+  ]
+ }
+]

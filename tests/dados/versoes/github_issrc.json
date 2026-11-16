@@ -1,0 +1,102 @@
+[
+ {
+  "tag_name": "is-7_1_1",
+  "prerelease": false,
+  "draft": false,
+  "assets": [
+   {
+    "name": "innosetup-7.1.1-x64.exe",
+    "digest": "sha256:8a5a6711c3766a6e5fb74f280ba0e3551e719ce94538d901fdbd1f8f9920b3f0"
+   },
+   {
+    "name": "innosetup-7.1.1-x64.exe.issig",
+    "digest": "sha256:7d5b2443aa696254b6075311a77a6b838b3aa34f1db856a0873b2c73076bea69"
+   },
+   {
+    "name": "innosetup-7.1.1-x86.exe",
+    "digest": "sha256:03446e46f5da932e408881168c01afc59cc667cb5bc927d839c5526ace5cc0d3"
+   },
+   {
+    "name": "innosetup-7.1.1-x86.exe.issig",
+    "digest": "sha256:b66aaed22a0d94f87e8597dc2a3df8720715be4aa46b72f4163354351318f9d9"
+   },
+   {
+    "name": "whatsnew.htm",
+    "digest": "sha256:90eabbb97691768e1209a8cf321d98d1751bab48d9aa7a81ded2f6e2d31de31b"
+   }
+  ]
+ },
+ {
+  "tag_name": "is-6_7_4",
+  "prerelease": false,
+  "draft": false,
+  "assets": [
+   {
+    "name": "innosetup-6.7.4.exe",
+    "digest": "sha256:a549929319f9120716677c685535ca4671e4b937b5fdc87e2585f32d8eb30e8c"
+   },
+   {
+    "name": "innosetup-6.7.4.exe.issig",
+    "digest": "sha256:da04c2bd518c3c316f8783560ede99bd74973721c20d316f25370408673cc036"
+   },
+   {
+    "name": "whatsnew.htm",
+    "digest": "sha256:96378d795343107de424d7339b5f0e2cf8979ff0fffa00e309c8c9b80de5f892"
+   }
+  ]
+ },
+ {
+  "tag_name": "is-7_1_0",
+  "prerelease": false,
+  "draft": false,
+  "assets": [
+   {
+    "name": "innosetup-7.1.0-x64.exe",
+    "digest": "sha256:0362a383ed217d4c4239b5933866dd96d3eb2102737da92f80f6057a4b40df2f"
+   },
+   {
+    "name": "innosetup-7.1.0-x64.exe.issig",
+    "digest": "sha256:3f95d2c22f657b6064b6f1447cbca41ba61a765f6157f0b4995a795d3828b929"
+   },
+   {
+    "name": "innosetup-7.1.0-x86.exe",
+    "digest": "sha256:f9671174e0d15ba9b4f6b56564c6aed32ea8db9c3cb9bf6f2af0850fe7894f60"
+   },
+   {
+    "name": "innosetup-7.1.0-x86.exe.issig",
+    "digest": "sha256:4e4b17167aa341e9f4f37ac5a9c4ecca0c47bbdd15b01904bc1fd9c3352043c5"
+   },
+   {
+    "name": "whatsnew.htm",
+    "digest": "sha256:e32cd285149081cec382bad08db5cc9d3d89001aef5dc638e4dca79b712bdd94"
+   }
+  ]
+ },
+ {
+  "tag_name": "is-7_0_2",
+  "prerelease": false,
+  "draft": false,
+  "assets": [
+   {
+    "name": "innosetup-7.0.2-x64.exe",
+    "digest": "sha256:5ad54ca3def786f8f4212552e54cc6d8d61329e2d24a1cfee0571d42c2684ff1"
+   },
+   {
+    "name": "innosetup-7.0.2-x64.exe.issig",
+    "digest": "sha256:b85f4a9c527ee573d308840e859ff3ca99c8a750acb259d51f111301c7ef71bd"
+   },
+   {
+    "name": "innosetup-7.0.2-x86.exe",
+    "digest": "sha256:2b8734490a83f1ed074022b85d46c5ce9c3e2fbe9b63a45c28a74b478ac3a94f"
+   },
+   {
+    "name": "innosetup-7.0.2-x86.exe.issig",
+    "digest": "sha256:dce477cb266446d07a0e86d0338461472a96e14e1c503db5a056efeba774690e"
+   },
+   {
+    "name": "whatsnew.htm",
+    "digest": "sha256:c94ee3a31f828e7454efe967f7682c4cbd2847d68e0bf8b21be968e60ef0418a"
+   }
+  ]
+ }
+]

@@ -1,0 +1,224 @@
+[
+ {
+  "name": "Python 3.10.0a1",
+  "pre_release": true,
+  "is_published": true,
+  "resource_uri": "https://www.python.org/api/v2/downloads/release/521/"
+ },
+ {
+  "name": "Python 3.14.0",
+  "pre_release": false,
+  "is_published": true,
+  "resource_uri": "https://www.python.org/api/v2/downloads/release/1066/"
+ },
+ {
+  "name": "Python 3.14.0a1",
+  "pre_release": true,
+  "is_published": true,
+  "resource_uri": "https://www.python.org/api/v2/downloads/release/929/"
+ },
+ {
+  "name": "Python 3.14.0a2",
+  "pre_release": true,
+  "is_published": true,
+  "resource_uri": "https://www.python.org/api/v2/downloads/release/930/"
+ },
+ {
+  "name": "Python 3.14.0a3",
+  "pre_release": true,
+  "is_published": true,
+  "resource_uri": "https://www.python.org/api/v2/downloads/release/936/"
+ },
+ {
+  "name": "Python 3.14.0a4",
+  "pre_release": true,
+  "is_published": true,
+  "resource_uri": "https://www.python.org/api/v2/downloads/release/937/"
+ },
+ {
+  "name": "Python 3.14.0a5",
+  "pre_release": true,
+  "is_published": true,
+  "resource_uri": "https://www.python.org/api/v2/downloads/release/1003/"
+ },
+ {
+  "name": "Python 3.14.0a6",
+  "pre_release": true,
+  "is_published": true,
+  "resource_uri": "https://www.python.org/api/v2/downloads/release/1004/"
+ },
+ {
+  "name": "Python 3.14.0a7",
+  "pre_release": true,
+  "is_published": true,
+  "resource_uri": "https://www.python.org/api/v2/downloads/release/1006/"
+ },
+ {
+  "name": "Python 3.14.0b1",
+  "pre_release": true,
+  "is_published": true,
+  "resource_uri": "https://www.python.org/api/v2/downloads/release/1011/"
+ },
+ {
+  "name": "Python 3.14.0b2",
+  "pre_release": true,
+  "is_published": true,
+  "resource_uri": "https://www.python.org/api/v2/downloads/release/1013/"
+ },
+ {
+  "name": "Python 3.14.0b3",
+  "pre_release": true,
+  "is_published": true,
+  "resource_uri": "https://www.python.org/api/v2/downloads/release/1053/"
+ },
+ {
+  "name": "Python 3.14.0b4",
+  "pre_release": true,
+  "is_published": true,
+  "resource_uri": "https://www.python.org/api/v2/downloads/release/1055/"
+ },
+ {
+  "name": "Python 3.14.0rc1",
+  "pre_release": true,
+  "is_published": true,
+  "resource_uri": "https://www.python.org/api/v2/downloads/release/1056/"
+ },
+ {
+  "name": "Python 3.14.0rc2",
+  "pre_release": true,
+  "is_published": true,
+  "resource_uri": "https://www.python.org/api/v2/downloads/release/1059/"
+ },
+ {
+  "name": "Python 3.14.0rc3",
+  "pre_release": true,
+  "is_published": true,
+  "resource_uri": "https://www.python.org/api/v2/downloads/release/1063/"
+ },
+ {
+  "name": "Python 3.14.5",
+  "pre_release": false,
+  "is_published": true,
+  "resource_uri": "https://www.python.org/api/v2/downloads/release/1106/"
+ },
+ {
+  "name": "Python 3.15.0",
+  "pre_release": false,
+  "is_published": true,
+  "resource_uri": "https://www.python.org/api/v2/downloads/release/1162/"
+ },
+ {
+  "name": "Python 3.15.0a1",
+  "pre_release": true,
+  "is_published": true,
+  "resource_uri": "https://www.python.org/api/v2/downloads/release/1073/"
+ },
+ {
+  "name": "Python 3.15.0a2",
+  "pre_release": true,
+  "is_published": true,
+  "resource_uri": "https://www.python.org/api/v2/downloads/release/1077/"
+ },
+ {
+  "name": "Python 3.15.0a3",
+  "pre_release": true,
+  "is_published": true,
+  "resource_uri": "https://www.python.org/api/v2/downloads/release/1086/"
+ },
+ {
+  "name": "Python 3.15.0a4",
+  "pre_release": true,
+  "is_published": true,
+  "resource_uri": "https://www.python.org/api/v2/downloads/release/1087/"
+ },
+ {
+  "name": "Python 3.15.0a5",
+  "pre_release": true,
+  "is_published": true,
+  "resource_uri": "https://www.python.org/api/v2/downloads/release/1088/"
+ },
+ {
+  "name": "Python 3.15.0a6",
+  "pre_release": true,
+  "is_published": true,
+  "resource_uri": "https://www.python.org/api/v2/downloads/release/1093/"
+ },
+ {
+  "name": "Python 3.15.0a7",
+  "pre_release": true,
+  "is_published": true,
+  "resource_uri": "https://www.python.org/api/v2/downloads/release/1098/"
+ },
+ {
+  "name": "Python 3.15.0a8",
+  "pre_release": true,
+  "is_published": true,
+  "resource_uri": "https://www.python.org/api/v2/downloads/release/1100/"
+ },
+ {
+  "name": "Python 3.15.0b1",
+  "pre_release": true,
+  "is_published": true,
+  "resource_uri": "https://www.python.org/api/v2/downloads/release/1105/"
+ },
+ {
+  "name": "Python 3.15.0b2",
+  "pre_release": true,
+  "is_published": true,
+  "resource_uri": "https://www.python.org/api/v2/downloads/release/1108/"
+ },
+ {
+  "name": "Python 3.15.0b3",
+  "pre_release": true,
+  "is_published": true,
+  "resource_uri": "https://www.python.org/api/v2/downloads/release/1112/"
+ },
+ {
+  "name": "Python 3.15.0b4",
+  "pre_release": true,
+  "is_published": true,
+  "resource_uri": "https://www.python.org/api/v2/downloads/release/1114/"
+ },
+ {
+  "name": "Python 3.15.0rc1",
+  "pre_release": true,
+  "is_published": true,
+  "resource_uri": "https://www.python.org/api/v2/downloads/release/1115/"
+ },
+ {
+  "name": "Python 3.15.0rc2",
+  "pre_release": true,
+  "is_published": true,
+  "resource_uri": "https://www.python.org/api/v2/downloads/release/1122/"
+ },
+ {
+  "name": "Python 3.15.0rc3",
+  "pre_release": true,
+  "is_published": true,
+  "resource_uri": "https://www.python.org/api/v2/downloads/release/1161/"
+ },
+ {
+  "name": "Python 3.15.1",
+  "pre_release": false,
+  "is_published": true,
+  "resource_uri": "https://www.python.org/api/v2/downloads/release/1165/"
+ },
+ {
+  "name": "Python 3.15.2",
+  "pre_release": false,
+  "is_published": true,
+  "resource_uri": "https://www.python.org/api/v2/downloads/release/1170/"
+ },
+ {
+  "name": "Python 3.16.0a1",
+  "pre_release": true,
+  "is_published": true,
+  "resource_uri": "https://www.python.org/api/v2/downloads/release/1164/"
+ },
+ {
+  "name": "Python 3.16.0a2",
+  "pre_release": true,
+  "is_published": true,
+  "resource_uri": "https://www.python.org/api/v2/downloads/release/1173/"
+ }
+]

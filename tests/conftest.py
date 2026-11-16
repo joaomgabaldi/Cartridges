@@ -44,6 +44,7 @@ os.environ["KYRON_LOG_DETALHADO"] = "0"
 
 
 def pytest_configure(config):
+    config.addinivalue_line("markers", "rede: chama as fontes oficiais de verdade; fora da suíte padrão (`pytest -m rede`)")
     config.addinivalue_line("markers", "varredura_real: o teste prova a `enderecos_na_rede` de verdade (com a tinytuya falsa)")
 
 

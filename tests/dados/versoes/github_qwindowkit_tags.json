@@ -1,0 +1,32 @@
+[
+ {
+  "name": "1.5.0",
+  "commit": {
+   "sha": "35e88f3655720ed0537c7dd1dde243bf4a70c94c"
+  }
+ },
+ {
+  "name": "1.4.0",
+  "commit": {
+   "sha": "5c04046acae6e61280fba7fef31401edd7c36087"
+  }
+ },
+ {
+  "name": "1.3.2",
+  "commit": {
+   "sha": "bc03db3759e0d8644e626adcbda066ccb2c30062"
+  }
+ },
+ {
+  "name": "1.3.1",
+  "commit": {
+   "sha": "5f3f1b31b16eb402b91fa3e0632346fa7830c778"
+  }
+ },
+ {
+  "name": "1.3",
+  "commit": {
+   "sha": "295230fdda3feb81d2e1b797eefcfadc405df742"
+  }
+ }
+]

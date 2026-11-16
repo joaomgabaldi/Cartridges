@@ -1,0 +1,83 @@
+[
+ {
+  "tag_name": "v0.31.0",
+  "prerelease": false,
+  "draft": false,
+  "assets": [
+   {
+    "name": "ludusavi-v0.31.0-legal.zip",
+    "digest": "sha256:9fce11fc44942efdd5969928d89b106c229f9a041d7a713c424a6da981660ebf"
+   },
+   {
+    "name": "ludusavi-v0.31.0-linux.tar.gz",
+    "digest": "sha256:7322ff45d41eae7ae064a80d8c9ecccc5b8fb6fc090a603a66369cd4b054068d"
+   },
+   {
+    "name": "ludusavi-v0.31.0-mac.tar.gz",
+    "digest": "sha256:5787e64d4c795180ab485535cae0b0ef6ee14d4fbe3813797a86913a37cc47f1"
+   },
+   {
+    "name": "ludusavi-v0.31.0-win32.zip",
+    "digest": "sha256:2f009245801ff1da0f7bb5d10253e1e4a2677b2a063cfdf3297775955622419c"
+   },
+   {
+    "name": "ludusavi-v0.31.0-win64.zip",
+    "digest": "sha256:f47a8ad8c708f01d2eb124704973beffab205e292f5287a10fc4a101f8d68706"
+   }
+  ]
+ },
+ {
+  "tag_name": "v0.30.0",
+  "prerelease": false,
+  "draft": false,
+  "assets": [
+   {
+    "name": "ludusavi-v0.30.0-legal.zip",
+    "digest": "sha256:689e5adbdde3c7b60b041609be5388bcf9099f9a2acf687a3f293504bf32ec6b"
+   },
+   {
+    "name": "ludusavi-v0.30.0-linux.tar.gz",
+    "digest": "sha256:bc9437da7f80b67f9d1907b5bff549885a81097cce5e7b83bcedc5faf7986083"
+   },
+   {
+    "name": "ludusavi-v0.30.0-mac.tar.gz",
+    "digest": "sha256:95651fec467fa2f3a3833745f8109fb09e9a02dc5b9df6123a2e9762182f1324"
+   },
+   {
+    "name": "ludusavi-v0.30.0-win32.zip",
+    "digest": "sha256:522d4245e08567762ca2d8a14c981788feb146da2b52064a3664704df31f5fa0"
+   },
+   {
+    "name": "ludusavi-v0.30.0-win64.zip",
+    "digest": "sha256:04d13cf68d3436c3cfe07dd5d8d6b946d5ae08787fcac0a59808b13f55ba754d"
+   }
+  ]
+ },
+ {
+  "tag_name": "v0.29.1",
+  "prerelease": false,
+  "draft": false,
+  "assets": [
+   {
+    "name": "ludusavi-v0.29.1-legal.zip",
+    "digest": null
+   },
+   {
+    "name": "ludusavi-v0.29.1-linux.tar.gz",
+    "digest": null
+   },
+   {
+    "name": "ludusavi-v0.29.1-mac.tar.gz",
+    "digest": null
+   },
+   {
+    "name": "ludusavi-v0.29.1-win32.zip",
+    "digest": null
+   },
+   {
+    "name": "ludusavi-v0.29.1-win64.zip",
+    "digest": null
+   }
+  ]
+ }
+]

@@ -1,0 +1,20 @@
+[
+ {
+  "name": "Windows embeddable package (32-bit)",
+  "url": "https://www.python.org/ftp/python/3.15.1/python-3.15.1-embed-win32.zip",
+  "sha256_sum": "ef9ed8348e9b752c54503d494b8a42efd7cf115082ca88a778735bddba967187",
+  "release": "https://www.python.org/api/v2/downloads/release/1165/"
+ },
+ {
+  "name": "Windows embeddable package (64-bit)",
+  "url": "https://www.python.org/ftp/python/3.15.1/python-3.15.1-embed-amd64.zip",
+  "sha256_sum": "352e232f25b5120508f11a6dfc1bd9076d3e70c30977d552a63338838c2ae8fb",
+  "release": "https://www.python.org/api/v2/downloads/release/1165/"
+ },
+ {
+  "name": "Windows embeddable package (ARM64)",
+  "url": "https://www.python.org/ftp/python/3.15.1/python-3.15.1-embed-arm64.zip",
+  "sha256_sum": "f652bba7398abbccbba28b60175c2f22587b3f205a2686998d68a06b2605f57c",
+  "release": "https://www.python.org/api/v2/downloads/release/1165/"
+ }
+]
