@@ -8,6 +8,7 @@ import hashlib
 import importlib.util
 import json
 import re
+import subprocess
 import zipfile
 from pathlib import Path
 
@@ -430,3 +431,25 @@ def test_python_vem_do_arquivo_unico():
 def test_ffmpeg_e_ludusavi_derivados_da_versao():
     assert montar_app_qt.FFMPEG_URL.endswith(f"ffmpeg-{montar_app_qt.FFMPEG_VERSAO}-essentials_build.zip")
     assert f"/v{montar_app_qt.LUDUSAVI_VERSAO}/" in montar_app_qt.LUDUSAVI_URL
+
+
+def test_nome_do_python_segue_a_versao(monkeypatch):
+    monkeypatch.setattr(montar_app_qt, "PYTHON_VERSAO", "3.16.2")
+    assert montar_app_qt.python_do_app() == "python316"
+
+
+def test_lancador_recebe_o_nome_da_dll_do_build(monkeypatch, tmp_path):
+    monkeypatch.setattr(montar_app_qt, "PYTHON_VERSAO", "3.16.2")
+    rodados = []
+
+    def rodar(cmd, **kw):
+        rodados.append(cmd)
+        return subprocess.CompletedProcess(cmd, 0, stdout="C:\VS\n", stderr="")
+
+    monkeypatch.setattr(montar_app_qt.subprocess, "run", rodar)
+    montar_app_qt.compilar_lancador(tmp_path)
+    roteiro = (tmp_path / "lancador" / "compilar.bat").read_text(encoding="ascii")
+    assert "/DPYTHON_DLL=python316 " in roteiro
+    fonte = (Path(montar_app_qt.RAIZ) / "build-aux" / "windows" / "lancador" / "cartridges.c").read_text(encoding="utf-8")
+    assert "#ifndef PYTHON_DLL" in fonte and "#error" in fonte
+    assert "python315.dll\"" not in fonte

@@ -92,6 +92,12 @@ def _maior(nova: str, atual: str) -> bool:
     return _chave(nova) > _chave(atual)
 
 
+def _lib_menor(nova: str, atual: str) -> bool:
+    """Compara só a parte numérica de versões do PyPI ("1.0.post1", "6.12.0.140"); o que não tem número não conta."""
+    a, b = (re.match(r"\d+(\.\d+)*", v) for v in (nova, atual))
+    return bool(a and b) and _chave(a.group()) < _chave(b.group())
+
+
 def _xy(versao: str) -> str:
     return ".".join(versao.split(".")[:2])
 
@@ -156,7 +162,7 @@ def _decidir_python_e_libs(raiz, py_atual, qt_atual, libs_atuais, ler, rodar, av
                     libs = _resolver(raiz, xy, [f"PySide6=={qt_atual}"], rodar)
         if libs:
             novas = _versoes(libs[0] + libs[1])
-            menores = [n for n, ver in novas.items() if n in libs_atuais and _maior(libs_atuais[n], ver)]
+            menores = [n for n, ver in novas.items() if n in libs_atuais and _lib_menor(ver, libs_atuais[n])]
             if menores:
                 avisos.append(f"Com o Python {xy}, o pip escolheria versões menores que as atuais ({', '.join(menores)}).")
                 libs = None
@@ -206,8 +212,9 @@ def atualizar(raiz: Path, *, gravar: bool, ler=fontes.ler_da_rede, rodar=subproc
     py_atual = _uma(re.compile(r"\A\d+\.\d+\.\d+(?=\r?\n?\Z)"), textos[PYTHON_VERSION], PYTHON_VERSION).group()
     c = {nome: ler_constante(textos[arq], nome) for arq, nomes in CONSTANTES.items() for nome in nomes}
     inno_atual = _uma(_INNO_URL, textos[WORKFLOWS[0]], WORKFLOWS[0]).group(1)
-    pinos_atuais = [Pino(*m) for arq in (REQ, REQ_DEV) for m in _PINO.findall(textos[arq])]
-    libs_atuais = _versoes(pinos_atuais)
+    pinos_de = {arq: {(_normalizado(m[0]), m[1], m[2]) for m in _PINO.findall(textos[arq])} for arq in (REQ, REQ_DEV)}
+    libs_atuais = {nome: versao for pinos in pinos_de.values() for nome, versao, _ in pinos}
+    hashes_mudaram = False
     n = dict(c)
     python, pyside, inno = py_atual, c["QT_VERSAO"], (inno_atual, None)
 
@@ -225,9 +232,14 @@ def atualizar(raiz: Path, *, gravar: bool, ler=fontes.ler_da_rede, rodar=subproc
             if libs_atuais.get(nome) != libs_novas.get(nome)
         ]
         trocas += trocas_libs
-        if trocas_libs:
+        # O hash é da roda daquele Python: mesma versão com outro Python (ou roda republicada) também regrava.
+        if any(pinos_de[arq] != {(_normalizado(p.nome), p.versao, p.sha256) for p in pinos}
+               for arq, pinos in ((REQ, app), (REQ_DEV, dev))):
             novos[REQ] = fontes.texto_requirements(app, [])
             novos[REQ_DEV] = fontes.texto_requirements(dev, [f"-r {REQ}"])
+            if not trocas_libs:
+                hashes_mudaram = True
+                avisos.append("Os hashes das bibliotecas mudaram sem mudança de versão; os requirements foram refeitos.")
         if qt:
             pyside = qt[0]
             trocas.append(Troca("qt-sdk", c["QT_VERSAO"], pyside))
@@ -285,7 +297,7 @@ def atualizar(raiz: Path, *, gravar: bool, ler=fontes.ler_da_rede, rodar=subproc
             _uma(_INNO_HASH, texto, wf)
         novos[wf] = texto
 
-    if gravar and trocas:
+    if gravar and (trocas or hashes_mudaram):
         for arq, texto in novos.items():
             if texto != textos[arq]:
                 temporario = raiz / (arq + ".novo")
@@ -314,6 +326,9 @@ def main(argv=None, *, raiz: Path = RAIZ, ler=fontes.ler_da_rede, rodar=subproce
         r = atualizar(raiz, gravar=not args.verificar, ler=ler, rodar=rodar)
     except PontoAusente as erro:
         print(f"Erro: ponto a reescrever ausente ou repetido. {erro}", file=sys.stderr)
+        return 2
+    except Exception as erro:  # o código 1 quer dizer "há novidade"; um defeito nunca pode sair com ele
+        print(f"Erro inesperado: {erro!r}", file=sys.stderr)
         return 2
     for t in r.trocas:
         print(f"{t.peca}: {_de_para(t)}")

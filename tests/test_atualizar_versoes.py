@@ -343,3 +343,37 @@ def test_json_tem_linha_do_commit(repo_tmp, tmp_path, capsys):
 def test_linha_do_commit():
     r = av.Resultado([av.Troca("tinytuya", "1.20.0", "1.21.0"), av.Troca("ffmpeg", "9.0.2", "9.0.3")], [])
     assert av.linha_do_commit(r) == "Versões atualizadas: tinytuya 1.20.0 → 1.21.0, ffmpeg 9.0.2 → 9.0.3"
+
+
+# --- rodada de correção 1 ---
+
+
+def test_python_novo_com_mesmas_versoes_regrava_os_hashes(repo_tmp):
+    outros = {n: fontes.Pino(p.nome, p.versao, "9" * 64) for n, p in LIBS.items()}
+    mundo = Mundo(pythons={"3.16.0": SHA_316, "3.15.1": SHA_PY_ATUAL}, setup={"3.16.0", "3.15.1"},
+                  resolucoes={("3.16", None): outros, ("3.15", None): LIBS})
+    r = av.atualizar(repo_tmp, gravar=True, **mundo.para_kwargs())
+    assert r.trocas == [av.Troca("python", "3.15.1", "3.16.0")]
+    texto = (repo_tmp / "requirements.txt").read_text(encoding="utf-8")
+    assert f"tinytuya==1.20.0 --hash=sha256:{'9' * 64}" in texto and SHA_TINYTUYA_NOVO not in texto
+
+
+def test_mesmo_python_com_hash_novo_regrava_e_avisa(repo_tmp):
+    mundo = Mundo(resolucoes={("3.15", None): _com(LIBS, tinytuya=("1.20.0", "9" * 64))})
+    r = av.atualizar(repo_tmp, gravar=True, **mundo.para_kwargs())
+    assert f"tinytuya==1.20.0 --hash=sha256:{'9' * 64}" in (repo_tmp / "requirements.txt").read_text(encoding="utf-8")
+    assert any("hash" in a.lower() for a in r.avisos)
+
+
+def test_versao_de_lib_com_post_nao_quebra(repo_tmp):
+    mundo = Mundo(resolucoes={("3.15", None): _com(LIBS, tinytuya=("1.20.0.post1", SHA_TINYTUYA_NOVO))})
+    r = av.atualizar(repo_tmp, gravar=False, **mundo.para_kwargs())
+    assert r.trocas == [av.Troca("tinytuya", "1.20.0", "1.20.0.post1")]
+
+
+def test_erro_inesperado_sai_2_nunca_1(repo_tmp, capsys):
+    def ler(url):
+        raise RuntimeError("inesperado")
+
+    assert av.main(["--verificar"], raiz=repo_tmp, ler=ler, rodar=Mundo().para_kwargs()["rodar"]) == 2
+    assert "inesperado" in capsys.readouterr().err

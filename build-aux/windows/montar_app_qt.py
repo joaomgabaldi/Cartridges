@@ -114,6 +114,12 @@ def cache_tag_do_app() -> str:
     return f"cpython-{maior}{menor}"
 
 
+def python_do_app() -> str:
+    """`python315`: nome da DLL e do `._pth` do Python embutido, derivado de `PYTHON_VERSAO`."""
+    maior, menor, _ = PYTHON_VERSAO.split(".")
+    return f"python{maior}{menor}"
+
+
 def compilar_pyc(pasta: Path) -> None:
     """Grava os `.pyc` de `pasta` por hash, sem conferir a fonte: em Program Files o Python não os grava, e por data
     deixariam de valer (o Inno Setup repõe a data dos arquivos). O `[InstallDelete]` troca `.py` e `.pyc` juntos."""
@@ -168,7 +174,7 @@ def montar(
             shutil.copy2(exe.parent / "LICENSE", destino / "licencas" / f"{nome}.txt")
 
     shutil.copytree(python, destino / "python")
-    pth = destino / "python" / "python315._pth"
+    pth = destino / "python" / f"{python_do_app()}._pth"
     linhas = [l for l in pth.read_text(encoding="utf-8").splitlines() if l.strip() not in ("..\\lib", "..\\app")]
     pth.write_text("\n".join([*linhas, "..\\lib", "..\\app", ""]), encoding="utf-8")
 
@@ -304,7 +310,7 @@ def compilar_lancador(cache: Path, raiz: Path = RAIZ) -> Path:
         f'set "PATH={Path(pf86) / "Microsoft Visual Studio" / "Installer"};%PATH%"\r\n'
         f'call "{vs}\\VC\\Auxiliary\\Build\\vcvars64.bat" -vcvars_ver=14.44 >nul || exit /b 1\r\n'
         f'rc /nologo /DVERSAO={versao} /DVERSAO_NUM={versao.replace(".", ",")},0 /fo cartridges.res "{fonte}\\cartridges.rc" || exit /b 1\r\n'
-        f'cl /nologo /O2 /MT /utf-8 /W3 "{fonte}\\cartridges.c" cartridges.res /Fe:Kyron.exe '
+        f'cl /nologo /O2 /MT /utf-8 /W3 /DPYTHON_DLL={python_do_app()} "{fonte}\\cartridges.c" cartridges.res /Fe:Kyron.exe '
         "/link /SUBSYSTEM:WINDOWS user32.lib || exit /b 1\r\n",
         encoding="ascii",
     )

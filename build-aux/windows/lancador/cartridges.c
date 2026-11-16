@@ -4,7 +4,7 @@
  *
  * SPDX-License-Identifier: GPL-3.0-or-later
  *
- * Kyron.exe: abre o Python embutido do app (..\python\python315.dll) já
+ * Kyron.exe: abre o Python embutido do app (..\python\pythonXY.dll) já
  * rodando `-m kyron`. O Python roda dentro deste processo, então é
  * "Kyron.exe" que o Windows mostra no Gerenciador de Tarefas, na barra de
  * tarefas e nas configurações de GPU, e não "pythonw.exe".
@@ -17,6 +17,16 @@
 #include <stdlib.h>
 #include <wchar.h>
 #include <windows.h>
+
+/* O nome da DLL (python315) vem do build: compilar_lancador passa /DPYTHON_DLL a partir do .python-version. */
+#ifndef PYTHON_DLL
+#error "Compile com /DPYTHON_DLL=pythonXY (o nome da DLL do Python embutido, sem .dll)."
+#endif
+#define TEXTO_(x) #x
+#define TEXTO(x) TEXTO_(x)
+#define LARGO_(s) L##s
+#define LARGO(s) LARGO_(s)
+#define CAMINHO_DA_DLL L"\\..\\python\\" LARGO(TEXTO(PYTHON_DLL)) L".dll"
 
 typedef int (*PyMainFn)(int, wchar_t **);
 
@@ -48,9 +58,9 @@ int WINAPI wWinMain(HINSTANCE instancia, HINSTANCE anterior, PWSTR linha, int ex
 
     wcscpy_s(dll, MAX_PATH, exe);
     barra = wcsrchr(dll, L'\\');
-    if (!barra || (barra - dll) + wcslen(L"\\..\\python\\python315.dll") >= MAX_PATH)
+    if (!barra || (barra - dll) + wcslen(CAMINHO_DA_DLL) >= MAX_PATH)
         return falha();
-    wcscpy_s(barra, MAX_PATH - (barra - dll), L"\\..\\python\\python315.dll");
+    wcscpy_s(barra, MAX_PATH - (barra - dll), CAMINHO_DA_DLL);
 
     /* Com o caminho alterado, o Windows procura as dependências da DLL
        (vcruntime140.dll, ...) na pasta dela. */
