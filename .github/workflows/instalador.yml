@@ -22,7 +22,11 @@ jobs:
     steps:
       - run: git config --global core.autocrlf false
 
+      # Sem credencial no disco: o código recém-atualizado roda na montagem e na suíte. Só os passos que
+      # dão push recebem o token, no cabeçalho do próprio comando git.
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       # O mesmo Python do app (o de .python-version): roda os scripts e o pip --target.
       - uses: actions/setup-python@v5
@@ -38,7 +42,8 @@ jobs:
         run: |
           metainfo=data/io.github.joaomgabaldi.Cartridges.metainfo.xml.in
           # Ponta atual do branch: num Re-run o checkout volta ao commit de antes da "Data da release".
-          git fetch -q --depth=1 origin "$GITHUB_REF_NAME"
+          auth="http.https://github.com/.extraheader=AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          git -c "$auth" fetch -q --depth=1 origin "$GITHUB_REF_NAME"
           git reset -q --hard FETCH_HEAD
           versao=$(sed -n 's/^VERSION = "\(.*\)"$/\1/p' kyron/shared.py)
           if [ -z "$versao" ]; then
@@ -54,7 +59,7 @@ jobs:
             git config user.name 'github-actions[bot]'
             git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
             git commit -am "Data da release $versao"
-            git push origin "HEAD:$GITHUB_REF_NAME"
+            git -c "$auth" push origin "HEAD:$GITHUB_REF_NAME"
           fi
           echo "VERSAO=$versao" >> "$GITHUB_ENV"
 
@@ -124,23 +129,29 @@ jobs:
         shell: pwsh
         run: ./build-aux/windows/instalar_inno.ps1
 
-      - name: Commit das versões
-        if: env.VERSOES_MUDARAM == '1'
-        shell: bash
-        run: |
-          mensagem="${LINHA_DAS_VERSOES:-Versões atualizadas: hashes das rodas}"
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          # Só o que o atualizador mexeu (a lista foi guardada antes da montagem e da suíte).
-          while IFS= read -r arquivo; do git add -- "$arquivo"; done < "$RUNNER_TEMP/arquivos_das_versoes.txt"
-          git commit -m "$mensagem"
-          git push origin "HEAD:$GITHUB_REF_NAME"
-
       - name: Instalador
         run: |
           $repo = (Get-Location).Path
           & "$env:ProgramFiles\Inno Setup 7\ISCC.exe" "/DRepo=$repo" "/DPastaApp=$repo\_dist\qt-final" "/O$repo\_dist\instalador" "$repo\_dist\qt-final.iss"
           if ($LASTEXITCODE -ne 0) { throw 'O ISCC falhou.' }
+
+      # Depois do ISCC: um Inno novo que não compile o [Code] nunca chega à main.
+      - name: Commit das versões
+        if: env.VERSOES_MUDARAM == '1'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mensagem="${LINHA_DAS_VERSOES:-Versões atualizadas: hashes das rodas}"
+          auth="http.https://github.com/.extraheader=AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          # Só o que o atualizador mexeu (a lista foi guardada antes da montagem e da suíte).
+          while IFS= read -r arquivo; do git add -- "$arquivo"; done < "$RUNNER_TEMP/arquivos_das_versoes.txt"
+          git commit -m "$mensagem"
+          # Um push de outra pessoa durante o build não pode derrubar o passo.
+          git -c "$auth" pull -q --rebase origin "$GITHUB_REF_NAME"
+          git -c "$auth" push origin "HEAD:$GITHUB_REF_NAME"
 
       - name: Publicar pré-release
         shell: bash
@@ -159,7 +170,8 @@ jobs:
               exit 1
             fi
             git tag -f "$tag"
-            git push -f origin "refs/tags/$tag"
+            auth="http.https://github.com/.extraheader=AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+            git -c "$auth" push -f origin "refs/tags/$tag"
             gh release edit "$tag" --notes-file notas.md
             gh release upload "$tag" Kyron.Windows.exe --clobber
           else

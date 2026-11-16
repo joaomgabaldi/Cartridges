@@ -16,7 +16,10 @@ jobs:
     runs-on: windows-2022
     timeout-minutes: 90
     steps:
+      # Sem credencial no disco: o código atualizado roda depois deste passo.
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       # O mesmo Python do app (o de .python-version): roda os scripts e o pip --target.
       - uses: actions/setup-python@v5
