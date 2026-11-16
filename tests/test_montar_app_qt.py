@@ -297,6 +297,9 @@ def test_requirements_fixa_tudo():
     infos = list((raiz / "_dist" / "cache-qt" / "lib").glob("*.dist-info"))
     if not infos:
         pytest.skip("sem o cache das bibliotecas")
+    marcador = raiz / "_dist" / "cache-qt" / "lib" / ".requirements.sha256"
+    if not marcador.is_file() or marcador.read_text() != montar_app_qt._sha256(raiz / "requirements.txt"):
+        pytest.skip("o cache é de outro requirements.txt; a próxima montagem o refaz")
     instalados = {}
     for info in infos:
         nome, versao = info.name.removesuffix(".dist-info").rsplit("-", 1)
