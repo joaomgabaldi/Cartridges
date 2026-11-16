@@ -297,7 +297,7 @@ def test_python_menor_novo_sobe_tudo_junto(repo_tmp):
     qt = (repo_tmp / "tools/baixar_qt_sdk.py").read_bytes().decode("utf-8")
     assert 'QT_VERSAO = "6.13.0"' in qt and 'QT_DATA = "202612010000"' in qt
     assert f'QTBASE_SHA256 = "{hashlib.sha256(b"qtbase-W.7z").hexdigest()}"' in qt
-    assert qt.count("\n") == qt.count("\r\n")  # o arquivo é CRLF e continua CRLF
+    _confere_fim_de_linha(repo_tmp, antes)  # CRLF no PC (core.autocrlf), LF na CI: vale o do original
     _confere_fim_de_linha(repo_tmp, antes)
     assert "Python 3.16 com PySide6 6.13.0" in (repo_tmp / "README.md").read_text(encoding="utf-8")
     assert "PySide6==6.13.0" in (repo_tmp / "requirements.txt").read_text(encoding="utf-8")

@@ -693,15 +693,16 @@ def sair(como):
         x = _achar(d, "fecharDoCabecalho")
         p = x.mapToScene(x.boundingRect().center()).toPoint()
         QTest.mouseClick(j, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, QPoint(p.x(), p.y()))
-    amostras, inicio = [], time.monotonic()
+    amostras, voltas, inicio = [], 0, time.monotonic()
     # Amostra antes de esperar: com a CPU disputada (suíte em paralelo), um só qWait pode durar a saída inteira.
     while d.property("visible") and time.monotonic() - inicio < 3:
+        voltas += 1
         if cartao.property("opacity") > 0:  # à vista: é o que a pessoa vê durante a saída
             amostras.append(barato())
         QTest.qWait(1)
     assert not app_.historico.aberto
     if como == "x":  # a primeira rodada aquece o renderizador (o primeiro quadro leva quase 1 s)
-        assert amostras, "a saída tem de durar alguns quadros"
+        assert amostras, ("a saída tem de durar alguns quadros", voltas, round(time.monotonic() - inicio, 3))
     assert set(amostras) <= {esperado}, (como, esperado, sorted(set(amostras)))
 
 for como in ("esc", "x"):
@@ -724,7 +725,10 @@ def test_saida_do_historico_mantem_o_conteudo_durante_a_animacao(tmp_path):
     from pathlib import Path  # noqa: PLC0415
 
     raiz = Path(__file__).resolve().parent.parent
-    ambiente = dict(os.environ, QT_QPA_PLATFORM="offscreen", PYTHONPATH=str(raiz), APPDATA=str(tmp_path), LOCALAPPDATA=str(tmp_path), USERPROFILE=str(tmp_path))
+    # QSG_FIXED_ANIMATION_STEP: a animação anda um passo por quadro, não pelo relógio; sem isso, num runner lento
+    # o processamento do clique já consome a duração inteira da saída e nenhum quadro visível é amostrado.
+    ambiente = dict(os.environ, QT_QPA_PLATFORM="offscreen", QSG_FIXED_ANIMATION_STEP="1", PYTHONPATH=str(raiz),
+                    APPDATA=str(tmp_path), LOCALAPPDATA=str(tmp_path), USERPROFILE=str(tmp_path))
     rodou = subprocess.run([sys.executable, "-c", _SAIDA, str(raiz)], env=ambiente, capture_output=True, text=True, timeout=120, check=False, cwd=raiz)
     assert "OK" in rodou.stdout, rodou.stdout + rodou.stderr
 

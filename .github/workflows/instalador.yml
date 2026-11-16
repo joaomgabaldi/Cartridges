@@ -121,6 +121,8 @@ jobs:
       - name: Suíte
         shell: bash
         run: |
+          # Os testes de data esperam o fuso de quem desenvolve (o runner vem em UTC).
+          tzutil //s "E. South America Standard Time"
           python -m pip install --require-hashes -r requirements-dev.txt
           python -m pytest -n auto -q
 
