@@ -146,8 +146,8 @@ versão urgente), compila a `qwk_ponte.dll`, monta a pasta do aplicativo com
 Para gerar um instalador local de teste, execute `build-installer.bat` e escolha a opção 2. Ele
 monta a pasta do aplicativo no canal final, empacota com o Inno Setup e grava o instalador em
 `_dist\instalador`. Antes de montar, atualiza as versões, recompila a ponte se o Qt mudou e roda a suíte inteira;
-as mudanças ficam sem commit, para você conferir. Precisa da `qwk_ponte.dll` do passo anterior, do Inno Setup 7 e de internet na
-primeira vez (para baixar o Python embutido, o `ffmpeg` e o Ludusavi). A opção 1 dispara o workflow
+as mudanças ficam sem commit, para você conferir. Precisa da `qwk_ponte.dll` do passo anterior, do Inno Setup 7 e de internet
+(para atualizar as versões e baixar o Python embutido, o `ffmpeg` e o Ludusavi). A opção 1 dispara o workflow
 no GitHub: não a use para um teste local.
 
 ### Testes

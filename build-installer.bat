@@ -1,11 +1,11 @@
 :inicio
 @echo off
-rem Gera o instalador do Kyron: online pelo workflow do GitHub ou offline aqui.
+rem Gera o instalador do Kyron: pelo workflow do GitHub ou localmente, neste PC.
 rem A logica esta nos .ps1 de build-aux\windows; este arquivo existe para dar dois cliques.
 
 title Kyron - build do instalador
 echo [1] Online: gera a pre-release pelo GitHub Actions e faz o git pull
-echo [2] Offline: compila e empacota neste PC
+echo [2] Local: compila e empacota neste PC (precisa de internet)
 choice /c 12 /n /m "Escolha 1 ou 2: "
 rem choice devolve 0 se interrompido: so o 1 explicito dispara o workflow.
 if errorlevel 2 (
